@@ -19,14 +19,16 @@ export function EstimateBuilder() {
   const { estimates, customers, materials, laborRates, assemblies, templates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer } = useApp();
   const { showToast } = useToast();
   
-  const estimate = id === 'new' ? null : estimates.find(e => e.id === id);
+  const isNew = id === 'new';
+  const estimate = isNew ? null : estimates.find(e => e.id === id);
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
   
-  const [isEditing, setIsEditing] = useState(true);
+  const [isEditing, setIsEditing] = useState(!estimate);
   const [showAddSection, setShowAddSection] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAssemblyPicker, setShowAssemblyPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showNewEstimateModal, setShowNewEstimateModal] = useState(isNew);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EstimateLineItem | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -92,27 +94,94 @@ export function EstimateBuilder() {
     }
   }, [formData.markupPercent]);
 
+  const handleCreateNewEstimate = () => {
+    if (!formData.name || !formData.customerId) {
+      showToast('Name and customer are required', 'error');
+      return;
+    }
+    
+    const newId = addEstimate({
+      estimateNumber: `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`,
+      customerId: formData.customerId,
+      name: formData.name,
+      address: formData.address,
+      type: formData.type as JobType,
+      status: 'draft',
+      sections: [],
+      markupPercent: parseFloat(formData.markupPercent) || 20,
+      taxable: formData.taxable as EstimateTaxable,
+      notes: formData.notes,
+      validUntil: formData.validUntil,
+    });
+    
+    showToast('Estimate created');
+    setShowNewEstimateModal(false);
+    navigate(`/estimates/${newId}`);
+  };
+
   if (!estimate) {
-    if (id === 'new') {
-      if (!formData.name) {
-        return (
-          <div className="page-container">
-            <div className="empty-state">
-              <h3>Create New Estimate</h3>
-              <p>Select or create an estimate to begin</p>
-              <Link to="/estimates" className="btn btn-primary">Go to Estimates</Link>
+    return (
+      <div>
+        <Modal isOpen={showNewEstimateModal} onClose={() => navigate('/estimates')} title="New Estimate" size="md">
+          <div className="form-group">
+            <label className="form-label">Estimate Name *</label>
+            <input
+              className="form-input"
+              value={formData.name}
+              onChange={e => setFormData({...formData, name: e.target.value})}
+              placeholder="e.g., Smith Kitchen Remodel"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Customer *</label>
+            <select
+              className="form-select"
+              value={formData.customerId}
+              onChange={e => setFormData({...formData, customerId: e.target.value})}
+            >
+              <option value="">Select customer...</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Project Address</label>
+            <input
+              className="form-input"
+              value={formData.address}
+              onChange={e => setFormData({...formData, address: e.target.value})}
+              placeholder="Project address"
+            />
+          </div>
+          <div className="grid-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Project Type</label>
+              <select
+                className="form-select"
+                value={formData.type}
+                onChange={e => setFormData({...formData, type: e.target.value as JobType})}
+              >
+                {JOB_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Markup %</label>
+              <input
+                className="form-input"
+                type="number"
+                value={formData.markupPercent}
+                onChange={e => setFormData({...formData, markupPercent: e.target.value})}
+              />
             </div>
           </div>
-        );
-      }
-    }
-    return (
-      <div className="page-container">
-        <div className="empty-state">
-          <FileText size={48} />
-          <h3>Estimate not found</h3>
-          <Link to="/estimates" className="btn btn-primary">Back to Estimates</Link>
-        </div>
+          <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
+            <button className="btn btn-secondary" onClick={() => navigate('/estimates')}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleCreateNewEstimate}>Create Estimate</button>
+          </div>
+        </Modal>
       </div>
     );
   }
