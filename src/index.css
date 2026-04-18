@@ -164,24 +164,13 @@ body {
 }
 
 @media print {
-  body { background: white; color: #000; }
-  .sidebar, .topbar { display: none !important; }
-  .app-layout { display: block !important; }
-  .page-content { padding: 0; margin: 0; color: #000; }
-  .page-header { display: none !important; }
-  .branding-preview { display: none !important; }
-  .bottom-bar, .mobile-nav, .footer { display: none !important; }
-  .card { border: 1px solid #ccc; border-radius: 6px; background: #fff; page-break-inside: avoid; }
+  /* Print-only regions: print only elements wrapped with .print-region */
+  body * { display: none !important; visibility: hidden; }
+  .print-region, .print-region * { display: block !important; visibility: visible !important; }
+  .print-region { position: relative; left: 0; top: 0; width: auto; padding: 0; margin: 0; box-shadow: none; }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; }
   img { max-width: 100%; height: auto; }
-}
-
-@media print {
-  /* Hide sensitive internal content on print by default */
-  .internal, .cost-breakdown, .profit-info, .print-ghost { display: none !important; }
-  /* Ensure print uses a clean monochrome look if desired */
-  body { color: #000; }
 }
 
 .card {

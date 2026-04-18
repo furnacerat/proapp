@@ -886,7 +886,7 @@ export function EstimateBuilder() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="page-content p-6">
+      <div className="page-content p-6 print-area">
         {allScopes.length === 0 && legacySections.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">📋</div>

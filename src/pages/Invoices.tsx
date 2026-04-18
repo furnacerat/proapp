@@ -7,6 +7,8 @@ import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, Trash2 } from 'lucide-react';
+import { PrintRegion } from '../components/PrintRegion';
+import { PrintRegion } from '../components/PrintRegion';
 
 export function Invoices() {
   const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice } = useApp();
@@ -65,6 +67,7 @@ export function Invoices() {
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
   return (
+  <PrintRegion title="Invoices">
     <div>
       <div className="page-header">
         <h1 className="page-title">Invoices & Payments</h1>
@@ -131,6 +134,6 @@ export function Invoices() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
       </Modal>
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
-    </div>
+    </PrintRegion>
   );
 }
