@@ -67,7 +67,7 @@ export function Invoices() {
 
   return (
   <PrintRegion title="Invoices">
-  <div className="no-print">
+    <div className="print-area">
       <div className="page-header no-print">
         <h1 className="page-title">Invoices & Payments</h1>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={18} /> Create Invoice</button>
@@ -133,6 +133,7 @@ export function Invoices() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
       </Modal>
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
+    </div>
     </PrintRegion>
   );
 }
