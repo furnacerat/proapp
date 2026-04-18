@@ -10,6 +10,7 @@ import {
   FileText,
   Calendar,
   BarChart3,
+  Calculator,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -22,6 +23,12 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="sidebar-nav">
+        <div className="nav-section">
+          <NavLink to="/estimates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Calculator size={20} />
+            <span>Estimates</span>
+          </NavLink>
+        </div>
         <div className="nav-section">
           <div className="nav-section-title">Operations</div>
           <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} end>
