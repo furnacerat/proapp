@@ -433,6 +433,77 @@ export interface ChangeOrder {
   updatedAt: string;
 }
 
+// ============ FIELD OPERATION ENTITIES ============
+
+export type TimelineEntryType = 'note' | 'photo' | 'expense' | 'time_entry' | 'issue' | 'update' | 'change_order' | 'invoice' | 'payment';
+export type TimelinePhotoCategory = 'progress' | 'before' | 'after' | 'issue' | 'punch_list' | 'other';
+
+export interface JobTimelineEntry {
+  id: string;
+  jobId: string;
+  type: TimelineEntryType;
+  title: string;
+  description?: string;
+  timestamp: string;
+  createdBy?: string;
+  linkedId?: string;
+  photoUrl?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface JobLog {
+  id: string;
+  jobId: string;
+  date: string;
+  workCompleted: string;
+  workers: string[];
+  issues: string;
+  notes: string;
+  hoursWorked: number;
+  createdAt: string;
+}
+
+export type PunchListStatus = 'open' | 'in_progress' | 'done';
+
+export interface PunchListItem {
+  id: string;
+  jobId: string;
+  description: string;
+  status: PunchListStatus;
+  photoUrl?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export type IssueSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type IssueStatus = 'open' | 'in_progress' | 'resolved';
+
+export interface JobIssue {
+  id: string;
+  jobId: string;
+  title: string;
+  description: string;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  estimatedCost?: number;
+  estimatedHours?: string;
+  photoUrl?: string;
+  resolution?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface FileAttachment {
+  id: string;
+  jobId: string;
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+  category: string;
+  createdAt: string;
+}
+
 export interface Alert {
   id: string;
   type: AlertType;
@@ -469,6 +540,11 @@ export interface AppData {
   photos: Photo[];
   changeOrders: ChangeOrder[];
   alerts: Alert[];
+  timeline?: JobTimelineEntry[];
+  jobLogs?: JobLog[];
+  punchLists?: PunchListItem[];
+  jobIssues?: JobIssue[];
+  fileAttachments?: FileAttachment[];
 }
 
 // ============ CONSTANTS ============
