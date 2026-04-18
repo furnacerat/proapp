@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import { PrintRegion } from '../components/PrintRegion';
+import InvoicePrint from '../components/InvoicePrint';
 
 export function Invoices() {
   const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice } = useApp();
@@ -19,6 +20,7 @@ export function Invoices() {
   const [showModal, setShowModal] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [printInvoice, setPrintInvoice] = useState<{ invoice: any; job?: any; payments: any[] } | null>(null);
   
   const [formData, setFormData] = useState({
     jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: ''
@@ -64,6 +66,12 @@ export function Invoices() {
 
   const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+
+  const handlePrintInvoice = (inv: any) => {
+    const invPayments = getInvoicePayments(inv.id);
+    setPrintInvoice({ invoice: inv, job: jobs.find(j => j.id === inv.jobId), payments: invPayments });
+  };
 
   return (
   <PrintRegion title="Invoices">
@@ -101,7 +109,13 @@ export function Invoices() {
                       <td className="text-success">{formatCurrency(paid)}</td>
                       <td className="font-medium">{formatCurrency(inv.amount - paid)}</td>
                       <td><span className={`badge ${inv.status === 'paid' ? 'badge-green' : inv.status === 'partial' ? 'badge-yellow' : 'badge-blue'}`}>{inv.status}</span></td>
-                      <td><div className="flex gap-2"><button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button><button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button></div></td>
+                      <td>
+                        <div className="flex gap-2">
+                          <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handlePrintInvoice(inv)} style={{ marginLeft: 6 }}>Print</button>
+                          <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -134,6 +148,11 @@ export function Invoices() {
       </Modal>
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
     </div>
+    {printInvoice && (
+      <PrintRegion title={`Invoice ${printInvoice.invoice.invoiceNumber}`}>
+        <InvoicePrint invoice={printInvoice.invoice} job={printInvoice.job} payments={printInvoice.payments} />
+      </PrintRegion>
+    )}
     </PrintRegion>
   );
 }
