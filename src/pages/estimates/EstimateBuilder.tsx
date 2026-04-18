@@ -163,7 +163,8 @@ export function EstimateBuilder() {
       return;
     }
     
-    const estNumber = `EST-${new Date().getFullYear()}-${String((estimates?.length || 0) + 1).padStart(3, '0')}`;
+    const estList = estimates || [];
+    const estNumber = `EST-${new Date().getFullYear()}-${String(estList.length + 1).padStart(3, '0')}`;
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
@@ -182,10 +183,8 @@ export function EstimateBuilder() {
       validUntil: formData.validUntil,
     });
     
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
     showToast('Estimate created');
-    navigate(`/estimates/${newId}`, { replace: true });
+    navigate('/estimates');
   };
 
   const handleSave = () => {
