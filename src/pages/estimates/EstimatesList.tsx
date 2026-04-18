@@ -26,7 +26,8 @@ export function EstimatesList() {
   const [showActions, setShowActions] = useState<string | null>(null);
 
   const filteredEstimates = useMemo(() => {
-    let result = [...estimates];
+    const estList = estimates || [];
+    let result = [...estList];
     
     if (search) {
       const s = search.toLowerCase();
@@ -76,8 +77,9 @@ export function EstimatesList() {
       return;
     }
 
+    const allEstimates = estimates || [];
     const id = addEstimate({
-      estimateNumber: `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`,
+      estimateNumber: `EST-${new Date().getFullYear()}-${String(allEstimates.length + 1).padStart(3, '0')}`,
       customerId: newEstimate.customerId,
       name: newEstimate.name,
       address: '',
@@ -182,7 +184,7 @@ export function EstimatesList() {
           </select>
         </div>
 
-        {!estimates.length ? (
+        {!estimates || estimates.length === 0 ? (
           <div className="empty-state">
             <FileText size={48} />
             <h3>No estimates yet</h3>
