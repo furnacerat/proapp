@@ -18,7 +18,7 @@ import { renderEmailHTML, renderEmailAll } from '../../utils/emailTemplates';
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer } = useApp();
+  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer, sendEmail } = useApp();
   const { showToast } = useToast();
   
   const isNew = id === 'new';
@@ -76,9 +76,13 @@ export function EstimateBuilder() {
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     if (!emailForm.email) { showToast('Enter email address', 'error'); return; }
-    window.location.href = `mailto:${emailForm.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.body)}`;
+    // Try SMTP-based delivery first; fall back to mailto if unavailable
+    const result = await sendEmail({ to: emailForm.email, subject: emailForm.subject, text: emailForm.body, html: emailHtmlPreview?.html });
+    if (!result) {
+      window.location.href = `mailto:${emailForm.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.body)}`;
+    }
     setShowEmailModal(false);
     setEmailForm({ email: '', subject: '', body: '' });
   };
