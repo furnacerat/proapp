@@ -756,65 +756,38 @@ export function EstimateBuilder() {
 
   if (!estimate) {
     return (
-      <div>
+      <div className="estimate-builder">
         <div className="page-header">
           <h1 className="page-title">New Estimate</h1>
         </div>
         <div className="page-content">
-          <div className="card" style={{maxWidth: '600px'}}>
+          <div className="card" style={{ maxWidth: '600px' }}>
             <div className="card-body">
               <div className="form-group">
                 <label className="form-label">Estimate Name *</label>
-                <input
-                  className="form-input"
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
-                  placeholder="e.g., Smith Kitchen Remodel"
-                />
+                <input className="form-input" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Smith Kitchen Remodel" />
               </div>
               <div className="form-group">
                 <label className="form-label">Customer *</label>
-                <select
-                  className="form-select"
-                  value={formData.customerId}
-                  onChange={e => setFormData({...formData, customerId: e.target.value})}
-                >
+                <select className="form-select" value={formData.customerId} onChange={e => setFormData({ ...formData, customerId: e.target.value })}>
                   <option value="">Select customer...</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Project Address</label>
-                <input
-                  className="form-input"
-                  value={formData.address}
-                  onChange={e => setFormData({...formData, address: e.target.value})}
-                  placeholder="Project address"
-                />
+                <input className="form-input" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Project address" />
               </div>
               <div className="grid-2 gap-4">
                 <div className="form-group">
                   <label className="form-label">Project Type</label>
-                  <select
-                    className="form-select"
-                    value={formData.type}
-                    onChange={e => setFormData({...formData, type: e.target.value as JobType})}
-                  >
-                    {JOB_TYPES.map(t => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
+                  <select className="form-select" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as JobType })}>
+                    {JOB_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Markup %</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={formData.markupPercent}
-                    onChange={e => setFormData({...formData, markupPercent: e.target.value})}
-                  />
+                  <input className="form-input" type="number" value={formData.markupPercent} onChange={e => setFormData({ ...formData, markupPercent: e.target.value })} />
                 </div>
               </div>
               <div className="flex gap-2 mt-6">
@@ -1635,17 +1608,6 @@ export function EstimateBuilder() {
               <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailAllPreview.html)}>Copy HTML</button>
               <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailAllPreview.text)}>Copy Text</button>
               <button className="btn btn-primary" onClick={() => { window.location.href = `mailto:${emailForm.email || ''}?subject=${encodeURIComponent(emailAllPreview.subject)}&body=${encodeURIComponent(emailAllPreview.text)}`; }}>Open Email</button>
-            </div>
-          </div>
-        )}
-      </Modal>
-        {emailHtmlPreview && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div><strong>Subject:</strong> {emailHtmlPreview.subject}</div>
-            <iframe title="Email HTML" srcDoc={emailHtmlPreview.html} style={{ width: '100%', height: 420, border: '1px solid #ddd', borderRadius: 6 }} />
-            <div className="modal-footer" style={{ padding: 0, borderTop: 'none' }}>
-              <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailHtmlPreview.html).then(()=> {})}>Copy HTML</button>
-              <button className="btn btn-primary" onClick={() => setEmailHtmlOpen(false)}>Close</button>
             </div>
           </div>
         )}
