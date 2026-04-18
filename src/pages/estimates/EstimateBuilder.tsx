@@ -21,7 +21,8 @@ export function EstimateBuilder() {
   const { showToast } = useToast();
   
   const isNew = id === 'new';
-  const estimate = isNew || !estimates ? null : estimates.find(e => e.id === id);
+  const estimateList = estimates || [];
+  const estimate = (isNew || !id) ? null : estimateList.find(e => e.id === id);
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
   
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(isNew);
