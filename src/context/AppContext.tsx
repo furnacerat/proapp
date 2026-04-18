@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 
 interface AppContextType {
@@ -7,6 +7,9 @@ interface AppContextType {
   setData: React.Dispatch<React.SetStateAction<AppData>>;
   branding: BrandingSettings;
   updateBranding: (updates: Partial<BrandingSettings>) => void;
+  smtpSettings: SmtpSettings;
+  updateSmtpSettings: (updates: Partial<SmtpSettings>) => void;
+  sendEmail: (payload: { to: string; subject: string; html?: string; text?: string; }) => Promise<boolean>;
   
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
@@ -168,6 +171,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateBranding = (updates: Partial<BrandingSettings>) => {
     setBranding(prev => ({ ...prev, ...updates }));
+  };
+
+  // SMTP settings (global)
+  const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>({
+    host: '', port: 587, user: '', password: '', secure: true,
+    fromName: '', fromEmail: ''
+  });
+
+  const updateSmtpSettings = (updates: Partial<SmtpSettings>) => {
+    setSmtpSettings(prev => ({ ...prev, ...updates }));
+  };
+
+  const sendEmail = async (payload: { to: string; subject: string; html?: string; text?: string; }): Promise<boolean> => {
+    const { to, subject, html, text } = payload;
+    // If SMTP is configured (host present), attempt server-side delivery
+    if (smtpSettings.host && smtpSettings.fromEmail) {
+      try {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to, subject, html, text, smtp: smtpSettings, from: smtpSettings.fromEmail, fromName: smtpSettings.fromName })
+        }) as Response;
+        return res.ok;
+      } catch {
+        // fall through to mailto as a fallback
+      }
+    }
+    // Fallback: open mail client (plaintext) via mailto with the provided text
+    const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text || '')}`;
+    window.location.href = mailto;
+    return false;
   };
 
   // Apply branding to CSS variables globally for a premium feel
@@ -967,6 +1001,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setData,
       branding,
       updateBranding,
+      smtpSettings,
+      updateSmtpSettings,
+      sendEmail,
       addCustomer,
       updateCustomer,
       deleteCustomer,

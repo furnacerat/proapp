@@ -504,6 +504,17 @@ export interface FileAttachment {
   createdAt: string;
 }
 
+// SMTP settings for outbound emails
+export interface SmtpSettings {
+  host: string;
+  port: number;
+  user: string;
+  password?: string;
+  secure: boolean; // true for TLS/SSL
+  fromName?: string;
+  fromEmail?: string;
+}
+
 // Branding configuration for emails, invoices, estimates, etc.
 export interface BrandingSettings {
   brandName: string;
