@@ -140,6 +140,22 @@ export function EstimateBuilder() {
     }
   }, [formData.markupPercent]);
 
+  useEffect(() => {
+    if (id && id !== 'new' && estimate) {
+      setFormData({
+        name: estimate.name,
+        customerId: estimate.customerId,
+        address: estimate.address || '',
+        status: estimate.status,
+        type: estimate.type || '',
+        markupPercent: estimate.markupPercent?.toString() || '20',
+        taxable: estimate.taxable || 'none',
+        notes: estimate.notes || '',
+        validUntil: estimate.validUntil || '',
+      });
+    }
+  }, [id]);
+
   const handleCreateNewEstimate = () => {
     if (!formData.name || !formData.customerId) {
       showToast('Name and customer are required', 'error');
@@ -161,8 +177,7 @@ export function EstimateBuilder() {
     });
     
     showToast('Estimate created');
-    setShowNewEstimateModal(false);
-    navigate(`/estimates/${newId}`);
+    navigate(`/estimates/${newId}`, { replace: true });
   };
 
   const handleSave = () => {
