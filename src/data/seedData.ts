@@ -365,16 +365,16 @@ function generateSeedNotes(jobs: Job[]) {
 
 function generateSeedPhotos(jobs: Job[]) {
   return [
-    { id: uuidv4(), jobId: jobs[0].id, url: '/photos/kitchen-before-1.jpg', category: 'before', description: 'Original kitchen before demo', createdAt: now },
-    { id: uuidv4(), jobId: jobs[0].id, url: '/photos/kitchen-progress-1.jpg', category: 'progress', description: 'Cabinets installed', createdAt: now },
-    { id: uuidv4(), jobId: jobs[6].id, url: '/photos/deck-complete.jpg', category: 'after', description: 'Final deck view', createdAt: now },
+    { id: uuidv4(), jobId: jobs[0].id, url: '/photos/kitchen-before-1.jpg', category: 'before' as const, description: 'Original kitchen before demo', createdAt: now },
+    { id: uuidv4(), jobId: jobs[0].id, url: '/photos/kitchen-progress-1.jpg', category: 'progress' as const, description: 'Cabinets installed', createdAt: now },
+    { id: uuidv4(), jobId: jobs[6].id, url: '/photos/deck-complete.jpg', category: 'after' as const, description: 'Final deck view', createdAt: now },
   ];
 }
 
 function generateSeedChangeOrders(jobs: Job[]) {
   return [
-    { id: uuidv4(), jobId: jobs[0].id, description: 'Cabinet color upgrade - white shaker', amount: 1200, status: 'approved', createdAt: now, updatedAt: now },
-    { id: uuidv4(), jobId: jobs[1].id, description: 'Shower tile repair', amount: 2400, status: 'pending', createdAt: now, updatedAt: now },
+    { id: uuidv4(), jobId: jobs[0].id, description: 'Cabinet color upgrade - white shaker', amount: 1200, status: 'approved' as const, createdAt: now, updatedAt: now },
+    { id: uuidv4(), jobId: jobs[1].id, description: 'Shower tile repair', amount: 2400, status: 'pending' as const, createdAt: now, updatedAt: now },
   ];
 }
 

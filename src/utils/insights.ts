@@ -1,4 +1,4 @@
-import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task } from '../../data/types';
+import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task } from '../data/types';
 
 export interface Insight {
   id: string;

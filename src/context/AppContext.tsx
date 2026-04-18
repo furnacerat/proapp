@@ -188,7 +188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const paymentMap = new Map<string, number>();
     data.payments.forEach(p => {
-      paymentMap.set(p.invoiceId, (paymentMap.get(p.invoiceId) || 0) + p.amount;
+      paymentMap.set(p.invoiceId, (paymentMap.get(p.invoiceId) || 0) + p.amount);
     });
 
     data.invoices.forEach(inv => {

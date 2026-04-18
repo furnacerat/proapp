@@ -8,7 +8,7 @@ import { useToast } from '../components/common/Toast';
 import { Modal } from '../components/common/Modal';
 import {
   Plus, AlertTriangle, TrendingUp, DollarSign, Clock, CheckSquare, Users,
-  Briefcase, Receipt, Activity, Zap, Target, Warning, AlertCircle
+  Briefcase, Receipt, Activity, Zap, Target, AlertCircle
 } from 'lucide-react';
 
 export function Dashboard() {

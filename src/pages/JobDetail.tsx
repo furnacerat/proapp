@@ -14,9 +14,9 @@ export function JobDetail() {
   const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, 
     updateJob, deleteJob, duplicateJob,
     addTimeEntry, deleteTimeEntry, addExpense, deleteExpense,
-    addTask, deleteTask, addInvoice, addPayment, addNote, addPhoto,
+    addTask, deleteTask, addInvoice, updateInvoice, deleteInvoice, addPayment, addNote, deleteNote, addPhoto, deletePhoto,
     addChangeOrder, updateChangeOrder, deleteChangeOrder, approveChangeOrder,
-    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobProfit, getJobBalance, getJobProgress } = useApp();
+    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobActualCost, getJobProfit, getJobBalance, getJobProgress } = useApp();
   const { showToast } = useToast();
   
   const job = jobs.find(j => j.id === id);
@@ -25,11 +25,11 @@ export function JobDetail() {
 
   const [timeEntryForm, setTimeEntryForm] = useState({ workerId: '', date: new Date().toISOString().split('T')[0], startTime: '07:00', endTime: '16:00', notes: '' });
   const [expenseForm, setExpenseForm] = useState({ date: new Date().toISOString().split('T')[0], vendor: '', amount: '', category: 'materials', paymentSource: 'company_card', notes: '' });
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '', priority: 'medium', status: 'open' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '', priority: 'medium' as const, status: 'open' as const });
   const [invoiceForm, setInvoiceForm] = useState({ invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: '' });
   const [paymentForm, setPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: 'check', checkNumber: '', notes: '' });
   const [noteForm, setNoteForm] = useState('');
-  const [photoForm, setPhotoForm] = useState({ url: '', description: '', category: 'progress' as const });
+  const [photoForm, setPhotoForm] = useState({ url: '', description: '', category: 'progress' as string });
   const [changeOrderForm, setChangeOrderForm] = useState({ description: '', amount: '', status: 'pending' as const });
   
   const [showModal, setShowModal] = useState<string | null>(null);
@@ -125,7 +125,7 @@ export function JobDetail() {
 
   const handleAddPhoto = () => {
     if (!photoForm.url) { showToast('Enter photo URL', 'error'); return; }
-    addPhoto({ jobId: job.id, url: photoForm.url, description: photoForm.description, category: photoForm.category });
+    addPhoto({ jobId: job.id, url: photoForm.url, description: photoForm.description, category: photoForm.category as any });
     showToast('Photo added');
     setShowModal(null);
     setPhotoForm({ url: '', description: '', category: 'progress' });
@@ -157,7 +157,7 @@ export function JobDetail() {
     const map: Record<string, string> = {
       lead: 'badge-gray', estimate_sent: 'badge-blue', approved: 'badge-purple', scheduled: 'badge-indigo',
       active: 'badge-green', awaiting_materials: 'badge-yellow', awaiting_payment: 'badge-orange',
-      completed: 'badge-emerald', closed: 'badge-slate', pending: 'badge-yellow', approved: 'badge-green', rejected: 'badge-red',
+      completed: 'badge-emerald', closed: 'badge-slate', pending: 'badge-yellow', rejected: 'badge-red',
       open: 'badge-blue', in_progress: 'badge-yellow', blocked: 'badge-red', done: 'badge-green',
       draft: 'badge-gray', sent: 'badge-blue', paid: 'badge-green', partial: 'badge-yellow', overdue: 'badge-red',
     };
@@ -644,7 +644,7 @@ export function JobDetail() {
           </div>
           <div className="form-group">
             <label className="form-label">Priority</label>
-            <select className="form-select" value={taskForm.priority} onChange={e => setTaskForm({...taskForm, priority: e.target.value})}>
+            <select className="form-select" value={taskForm.priority} onChange={e => setTaskForm({...taskForm, priority: e.target.value as any})}>
               {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
@@ -738,7 +738,7 @@ export function JobDetail() {
         </div>
         <div className="form-group">
           <label className="form-label">Category</label>
-          <select className="form-select" value={photoForm.category} onChange={e => setPhotoForm({...photoForm, category: e.target.value})}>
+          <select className="form-select" value={photoForm.category} onChange={e => setPhotoForm({...photoForm, category: e.target.value as any})}>
             {PHOTO_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </div>
