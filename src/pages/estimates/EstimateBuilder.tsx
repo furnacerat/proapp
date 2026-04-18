@@ -1177,7 +1177,7 @@ export function EstimateBuilder() {
         {templatePickerStep === 'select' ? (
           <>
             <div className="form-group">
-              <label className="form-label">Scope Name</label>
+              <label className="form-label">Scope Name *</label>
               <input
                 className="form-input"
                 value={newScopeName}
@@ -1186,8 +1186,37 @@ export function EstimateBuilder() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Select Template</label>
+              <label className="form-label">How would you like to create this scope?</label>
               <div className="space-y-2">
+                <button
+                  className="w-full text-left p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50"
+                  onClick={() => {
+                    if (!newScopeName.trim()) {
+                      showToast('Please enter a scope name', 'error');
+                      return;
+                    }
+                    const newScope: EstimateScope = {
+                      id: crypto.randomUUID(),
+                      name: newScopeName,
+                      projectType: 'remodel',
+                      sections: [],
+                      subtotal: 0,
+                      isOptional: false,
+                      sortOrder: allScopes.length,
+                    };
+                    updateEstimate(estimate!.id, {
+                      scopes: [...allScopes, newScope],
+                    });
+                    setNewScopeName('');
+                    setShowAddScope(false);
+                    setActiveScopeId(newScope.id);
+                    showToast('Scope created');
+                  }}
+                >
+                  <div className="font-medium">Create Empty Scope</div>
+                  <div className="text-sm text-muted">Start with a blank scope and add items manually</div>
+                </button>
+                <div className="text-center text-muted my-2">— or select a template —</div>
                 {projectTypeTemplates.length === 0 ? (
                   <div className="text-center py-4 text-muted">No templates available.</div>
                 ) : (
@@ -1196,6 +1225,10 @@ export function EstimateBuilder() {
                       key={template.id}
                       className="w-full text-left p-4 border rounded-lg hover:bg-gray-50"
                       onClick={() => {
+                        if (!newScopeName.trim()) {
+                          showToast('Please enter a scope name', 'error');
+                          return;
+                        }
                         setSelectedTemplate(template);
                         const defaults: Record<string, boolean> = {};
                         const quantities: Record<string, number> = {};
