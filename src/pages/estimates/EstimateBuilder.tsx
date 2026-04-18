@@ -156,25 +156,32 @@ export function EstimateBuilder() {
     }
   }, [id]);
 
-  const handleCreateNewEstimate = () => {
+  const handleCreateNewEstimate = async () => {
     if (!formData.name || !formData.customerId) {
       showToast('Name and customer are required', 'error');
       return;
     }
     
-    const newId = addEstimate({
-      estimateNumber: `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`,
+    const estNumber = `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`;
+    
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    const newId = await addEstimate({
+      estimateNumber: estNumber,
       customerId: formData.customerId,
       name: formData.name,
       address: formData.address,
       type: formData.type as JobType,
       status: 'draft',
       sections: [],
+      scopes: [],
       markupPercent: parseFloat(formData.markupPercent) || 20,
       taxable: formData.taxable as EstimateTaxable,
       notes: formData.notes,
       validUntil: formData.validUntil,
     });
+    
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     showToast('Estimate created');
     navigate(`/estimates/${newId}`, { replace: true });
