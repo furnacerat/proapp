@@ -21,7 +21,7 @@ export function EstimateBuilder() {
   const { showToast } = useToast();
   
   const isNew = id === 'new';
-  const estimate = isNew ? null : estimates.find(e => e.id === id);
+  const estimate = isNew || !estimates ? null : estimates.find(e => e.id === id);
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
   
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(isNew);
@@ -67,8 +67,8 @@ export function EstimateBuilder() {
     materialCost: '0', laborCost: '0', markup: '0',
   });
 
-  const allScopes = estimate?.scopes || [];
-  const legacySections = estimate?.sections || [];
+  const allScopes = estimate?.scopes ?? [];
+  const legacySections = estimate?.sections ?? [];
   
   const getScopeTotals = (scope: EstimateScope) => {
     let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0;
@@ -162,7 +162,7 @@ export function EstimateBuilder() {
       return;
     }
     
-    const estNumber = `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`;
+    const estNumber = `EST-${new Date().getFullYear()}-${String((estimates?.length || 0) + 1).padStart(3, '0')}`;
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
