@@ -8,7 +8,6 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import { PrintRegion } from '../components/PrintRegion';
-import { PrintRegion } from '../components/PrintRegion';
 
 export function Invoices() {
   const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice } = useApp();
@@ -68,8 +67,8 @@ export function Invoices() {
 
   return (
   <PrintRegion title="Invoices">
-    <div>
-      <div className="page-header">
+  <div className="no-print">
+      <div className="page-header no-print">
         <h1 className="page-title">Invoices & Payments</h1>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={18} /> Create Invoice</button>
       </div>

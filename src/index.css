@@ -168,6 +168,8 @@ body {
   body * { display: none !important; visibility: hidden; }
   .print-region, .print-region * { display: block !important; visibility: visible !important; }
   .print-region { position: relative; left: 0; top: 0; width: auto; padding: 0; margin: 0; box-shadow: none; }
+  /* Ensure nested print-region children won't reveal non-printable subparts */
+  .print-region .no-print { display: none !important; visibility: hidden !important; }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; }
   img { max-width: 100%; height: auto; }
