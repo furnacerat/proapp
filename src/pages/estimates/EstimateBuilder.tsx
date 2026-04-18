@@ -1596,6 +1596,12 @@ export function EstimateBuilder() {
       <Modal isOpen={showEmailAllPreview} onClose={() => { setShowEmailAllPreview(false); }} title="Email Preview" size="lg">
         {emailAllPreview && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="branding-preview" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderBottom: '1px solid #ddd' }}>
+              {branding.brandName && <strong>{branding.brandName}</strong>}
+              {branding.logoUrl || branding.logoDataUrl ? (
+                <img src={branding.logoUrl || branding.logoDataUrl} alt="logo" style={{ height: 20 }} />
+              ) : null}
+            </div>
             <div><strong>Subject:</strong> {emailAllPreview.subject}</div>
             <div style={{ display: 'flex', gap: 12 }}>
               <iframe title="Email HTML" srcDoc={emailAllPreview.html} style={{ width: '100%', height: 300, border: '1px solid #ddd', borderRadius: 6 }} />
