@@ -11,6 +11,10 @@ import {
   Calendar,
   BarChart3,
   Calculator,
+  Package,
+  Copy,
+  DollarSign,
+  FilePlus,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -24,9 +28,30 @@ export function Sidebar() {
       </div>
       <nav className="sidebar-nav">
         <div className="nav-section">
-          <NavLink to="/estimates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <div className="nav-section-title">Estimating</div>
+          <NavLink to="/estimates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} end>
             <Calculator size={20} />
-            <span>Estimates</span>
+            <span>Dashboard</span>
+          </NavLink>
+          <NavLink to="/estimates/list" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <FileText size={20} />
+            <span>All Estimates</span>
+          </NavLink>
+          <NavLink to="/estimates/new" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <FilePlus size={20} />
+            <span>New Estimate</span>
+          </NavLink>
+          <NavLink to="/estimates/templates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Copy size={20} />
+            <span>Templates</span>
+          </NavLink>
+          <NavLink to="/estimates/assemblies" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Package size={20} />
+            <span>Assemblies</span>
+          </NavLink>
+          <NavLink to="/estimates/pricebook" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <DollarSign size={20} />
+            <span>Price Book</span>
           </NavLink>
         </div>
         <div className="nav-section">

@@ -13,7 +13,7 @@ export type PaymentMethod = 'cash' | 'check' | 'ach' | 'card' | 'other';
 export type ChangeOrderStatus = 'pending' | 'approved' | 'rejected';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertType = 'task_overdue' | 'job_overdue' | 'invoice_overdue' | 'budget_warning' | 'payment_due';
-export type EstimateStatus = 'draft' | 'sent' | 'approved' | 'rejected' | 'expired';
+export type EstimateStatus = 'draft' | 'in_review' | 'sent' | 'viewed' | 'approved' | 'rejected' | 'expired' | 'archived' | 'converted';
 
 // ============ SHARED ENTITIES ============
 
@@ -87,11 +87,11 @@ export interface Template {
   id: string;
   name: string;
   type: 'estimate' | 'job';
-  scope: string;
-  laborAssumptions: string;
-  materialAssumptions: string;
+  scope?: string;
+  laborAssumptions?: string;
+  materialAssumptions?: string;
   markupPercent: number;
-  items: TemplateItem[];
+  items?: TemplateItem[];
   createdAt: string;
 }
 
@@ -106,6 +106,8 @@ export interface TemplateItem {
 
 // ============ ESTIMATE ENTITIES ============
 
+export type EstimateLineCategory = 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other';
+
 export interface EstimateLineItem {
   id: string;
   name: string;
@@ -113,12 +115,46 @@ export interface EstimateLineItem {
   quantity: number;
   unit: string;
   unitPrice: number;
-  category: string;
+  category: EstimateLineCategory;
   isLabor: boolean;
   hours?: number;
   laborRateId?: string;
+  materialCost?: number;
+  equipmentCost?: number;
+  subcontractorCost?: number;
   total: number;
+  isOptional?: boolean;
+  isExcluded?: boolean;
+  isAllowance?: boolean;
+  notes?: string;
+  sortOrder?: number;
 }
+
+export interface EstimateSection {
+  id: string;
+  name: string;
+  description?: string;
+  lineItems: EstimateLineItem[];
+  notes?: string;
+  sortOrder?: number;
+}
+
+export interface EstimateAllowance {
+  id: string;
+  name: string;
+  amount: number;
+  description?: string;
+  sortOrder?: number;
+}
+
+export interface EstimateExclusion {
+  id: string;
+  name: string;
+  description?: string;
+  sortOrder?: number;
+}
+
+export type EstimateTaxable = 'none' | 'materials' | 'labor' | 'all';
 
 export interface Estimate {
   id: string;
@@ -128,21 +164,29 @@ export interface Estimate {
   address: string;
   type: JobType;
   status: EstimateStatus;
-  lineItems: EstimateLineItem[];
+  sections: EstimateSection[];
   laborTotal: number;
   materialTotal: number;
   equipmentTotal: number;
+  subcontractorTotal: number;
   subtotal: number;
   markupPercent: number;
   markupAmount: number;
   total: number;
   projectedLaborHours: number;
-  projectedProfit: number;
+  projectedMaterialCost: number;
+  projectedLaborCost: number;
+  marginPercent?: number;
+  marginAmount?: number;
   notes?: string;
   validUntil?: string;
+  exclusions?: EstimateExclusion[];
+  allowances?: EstimateAllowance[];
+  taxable: EstimateTaxable;
   createdAt: string;
   updatedAt: string;
   convertedToJobId?: string;
+  archivedAt?: string;
 }
 
 export interface JobTemplate {
@@ -328,10 +372,14 @@ export const JOB_TYPES: { value: JobType; label: string }[] = [
 
 export const ESTIMATE_STATUSES: { value: EstimateStatus; label: string }[] = [
   { value: 'draft', label: 'Draft' },
+  { value: 'in_review', label: 'In Review' },
   { value: 'sent', label: 'Sent' },
+  { value: 'viewed', label: 'Viewed' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'expired', label: 'Expired' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'converted', label: 'Converted' },
 ];
 
 export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [

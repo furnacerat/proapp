@@ -10,9 +10,11 @@ interface AppContextType {
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
   
-  addEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedProfit'>) => string;
+  addEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subcontractorTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedMaterialCost' | 'projectedLaborCost' | 'marginAmount' | 'marginPercent'>) => string;
   updateEstimate: (id: string, updates: Partial<Estimate>) => void;
   deleteEstimate: (id: string) => void;
+  duplicateEstimate: (id: string) => string;
+  archiveEstimate: (id: string) => void;
   convertEstimateToJob: (estimateId: string) => string;
   
   addLaborRate: (rate: Omit<LaborRate, 'id'>) => string;
@@ -696,23 +698,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return estimate ? data.customers.find(c => c.id === estimate.customerId) : undefined;
   };
 
-  const calculateEstimateTotals = (estimate: Partial<Estimate>): { laborTotal: number; materialTotal: number; equipmentTotal: number; subtotal: number; markupAmount: number; total: number; projectedLaborHours: number; projectedProfit: number } => {
-    const laborTotal = estimate.lineItems?.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0) || 0;
-    const materialTotal = estimate.lineItems?.filter(i => i.category === 'materials').reduce((sum, i) => sum + i.total, 0) || 0;
-    const equipmentTotal = estimate.lineItems?.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.total, 0) || 0;
-    const subtotal = laborTotal + materialTotal + equipmentTotal;
+  const calculateEstimateTotals = (estimate: Partial<Estimate>) => {
+    const allItems = estimate.sections?.flatMap(s => s.lineItems || []) || [];
+    
+    const laborTotal = allItems.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0);
+    const materialTotal = allItems.filter(i => i.category === 'material').reduce((sum, i) => sum + i.total, 0);
+    const equipmentTotal = allItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.total, 0);
+    const subcontractorTotal = allItems.filter(i => i.category === 'subcontractor').reduce((sum, i) => sum + i.total, 0);
+    
+    const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
     const markupAmount = subtotal * ((estimate.markupPercent || 0) / 100);
     const total = subtotal + markupAmount;
-    const projectedLaborHours = estimate.lineItems?.filter(i => i.isLabor).reduce((sum, i) => sum + (i.hours || 0), 0) || 0;
-    const projectedProfit = 0;
-    return { laborTotal, materialTotal, equipmentTotal, subtotal, markupAmount, total, projectedLaborHours, projectedProfit };
+    
+    const projectedLaborHours = allItems.filter(i => i.isLabor).reduce((sum, i) => sum + (i.hours || 0), 0);
+    const projectedMaterialCost = materialTotal;
+    const projectedLaborCost = laborTotal;
+    const marginAmount = 0;
+    const marginPercent = 0;
+    
+    return { 
+      laborTotal, 
+      materialTotal, 
+      equipmentTotal, 
+      subcontractorTotal,
+      subtotal, 
+      markupAmount, 
+      total, 
+      projectedLaborHours,
+      projectedMaterialCost,
+      projectedLaborCost,
+      marginAmount,
+      marginPercent
+    };
   };
 
-  const addEstimate = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedProfit'>) => {
+  const addEstimate = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subcontractorTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedMaterialCost' | 'projectedLaborCost' | 'marginAmount' | 'marginPercent'>) => {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     const totals = calculateEstimateTotals({ ...estimate, markupPercent: estimate.markupPercent || 20 });
-    const newEstimate: Estimate = { ...estimate, ...totals, id, createdAt: now, updatedAt: now };
+    const newEstimate: Estimate = { 
+      ...estimate, 
+      ...totals, 
+      id, 
+      createdAt: now, 
+      updatedAt: now,
+      taxable: estimate.taxable || 'none'
+    };
     setData(prev => ({ ...prev, estimates: [...prev.estimates, newEstimate] }));
     return id;
   };
@@ -728,6 +759,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         estimates: prev.estimates.map(e => e.id === id ? { ...e, ...updates, ...totals, updatedAt: new Date().toISOString() } : e),
       };
     });
+  };
+
+  const duplicateEstimate = (id: string) => {
+    const estimate = data.estimates.find(e => e.id === id);
+    if (!estimate) return '';
+    
+    const newId = addEstimate({
+      estimateNumber: `EST-${new Date().getFullYear()}-${String(data.estimates.length + 1).padStart(3, '0')}`,
+      customerId: estimate.customerId,
+      name: `${estimate.name} (Copy)`,
+      address: estimate.address,
+      type: estimate.type,
+      status: 'draft',
+      sections: estimate.sections?.map(section => ({
+        ...section,
+        id: crypto.randomUUID(),
+        lineItems: section.lineItems?.map(item => ({ ...item, id: crypto.randomUUID() })),
+      })) || [],
+      markupPercent: estimate.markupPercent,
+      taxable: estimate.taxable,
+      notes: estimate.notes,
+      validUntil: estimate.validUntil,
+    });
+    return newId;
+  };
+
+  const archiveEstimate = (id: string) => {
+    updateEstimate(id, { status: 'archived', archivedAt: new Date().toISOString() });
   };
 
   const deleteEstimate = (id: string) => {
@@ -841,6 +900,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addEstimate,
       updateEstimate,
       deleteEstimate,
+      duplicateEstimate,
+      archiveEstimate,
       convertEstimateToJob,
       addLaborRate,
       updateLaborRate,
