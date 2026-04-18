@@ -23,7 +23,7 @@ export function Sidebar() {
       <div className="sidebar-header">
         <div className="sidebar-logo">
           <Briefcase size={24} />
-          <span>BuildOps</span>
+          <span>Allen's</span>
         </div>
       </div>
       <nav className="sidebar-nav">

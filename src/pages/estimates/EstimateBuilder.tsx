@@ -47,6 +47,26 @@ export function EstimateBuilder() {
   const [showProposal, setShowProposal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showConvertConfirm, setShowConvertConfirm] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailForm, setEmailForm] = useState({ email: '', subject: '', body: '' });
+
+  const handlePrint = () => window.print();
+
+  const handleEmailWithFallback = (subject: string, body: string, existingEmail?: string) => {
+    if (existingEmail) {
+      window.location.href = `mailto:${existingEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    } else {
+      setEmailForm({ email: existingEmail || '', subject, body });
+      setShowEmailModal(true);
+    }
+  };
+
+  const handleSendEmail = () => {
+    if (!emailForm.email) { showToast('Enter email address', 'error'); return; }
+    window.location.href = `mailto:${emailForm.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.body)}`;
+    setShowEmailModal(false);
+    setEmailForm({ email: '', subject: '', body: '' });
+  };
 
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTypeTemplate | null>(null);
   const [selectedTemplateItems, setSelectedTemplateItems] = useState<Record<string, boolean>>({});
@@ -812,12 +832,14 @@ export function EstimateBuilder() {
           <button className="btn btn-secondary" onClick={() => setShowProposal(true)}>
             <Eye size={16} /> Preview
           </button>
-          <button className="btn btn-secondary" onClick={() => {
-            if (!customer?.email) { showToast('No customer email', 'error'); return; }
-            const subject = encodeURIComponent(`Estimate: ${estimate.name}`);
-            const body = encodeURIComponent(`Hi ${customer.name},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`);
-            window.location.href = `mailto:${customer.email}?subject=${subject}&body=${body}`;
-          }}>
+          <button className="btn btn-secondary" onClick={handlePrint}>
+            <FileText size={16} /> Print
+          </button>
+          <button className="btn btn-secondary" onClick={() => handleEmailWithFallback(
+            `Estimate: ${estimate.name}`,
+            `Hi ${customer?.name || 'Customer'},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`,
+            customer?.email
+          )}>
             <Send size={16} /> Email
           </button>
           {estimate.status === 'draft' && (
@@ -1554,6 +1576,25 @@ export function EstimateBuilder() {
               <span>{formatCurrency(totals.total)}</span>
             </div>
           </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} title="Send Email">
+        <div className="form-group">
+          <label className="form-label">To *</label>
+          <input className="form-input" type="email" value={emailForm.email} onChange={e => setEmailForm({...emailForm, email: e.target.value})} placeholder="customer@email.com" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Subject</label>
+          <input className="form-input" value={emailForm.subject} onChange={e => setEmailForm({...emailForm, subject: e.target.value})} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Message</label>
+          <textarea className="form-textarea" value={emailForm.body} onChange={e => setEmailForm({...emailForm, body: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowEmailModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSendEmail}>Open Email</button>
         </div>
       </Modal>
 

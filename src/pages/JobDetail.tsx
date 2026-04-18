@@ -56,6 +56,19 @@ export function JobDetail() {
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
   const [receiptForm, setReceiptForm] = useState({ url: '', vendor: '', amount: '', notes: '' });
+  const [emailForm, setEmailForm] = useState({ email: '', subject: '', body: '' });
+  const [pendingEmailAction, setPendingEmailAction] = useState<(() => void) | null>(null);
+
+  const handlePrint = () => window.print();
+
+  const handleEmailWithFallback = (subject: string, body: string, existingEmail?: string) => {
+    if (existingEmail) {
+      window.location.href = `mailto:${existingEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    } else {
+      setEmailForm({ email: '', subject, body });
+      setShowModal('email');
+    }
+  };
   
   // Mock data - in real app these would come from context
   const [timeline, setTimeline] = useState<JobTimelineEntry[]>([]);
@@ -234,6 +247,13 @@ export function JobDetail() {
     setShowModal(null);
     setReceiptForm({ url: '', vendor: '', amount: '', notes: '' });
     setSelectedExpense(null);
+  };
+
+  const handleSendEmail = () => {
+    if (!emailForm.email) { showToast('Enter email address', 'error'); return; }
+    window.location.href = `mailto:${emailForm.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.body)}`;
+    setShowModal(null);
+    setEmailForm({ email: '', subject: '', body: '' });
   };
 
   const handleAddTask = () => {
@@ -486,6 +506,7 @@ export function JobDetail() {
             <div className="card-header">
               <h3 className="card-title">Expenses ({jobExpenses.length})</h3>
               <div className="flex gap-2">
+                <button className="btn btn-sm btn-secondary" onClick={handlePrint}>Print</button>
                 <button className="btn btn-sm btn-secondary" onClick={() => setShowModal('capture')}>Capture Receipt</button>
                 <button className="btn btn-sm btn-primary" onClick={() => setShowModal('expense')}>+ Add</button>
               </div>
@@ -570,12 +591,12 @@ export function JobDetail() {
                         <td>
                           <div className="flex gap-2">
                             {inv.status !== 'paid' && <button className="btn btn-sm btn-secondary" onClick={() => setShowModal('payment')}>Pay</button>}
-                            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => {
-                              if (!job.customerEmail) { showToast('No customer email', 'error'); return; }
-                              const subject = encodeURIComponent(`Invoice ${inv.invoiceNumber}: ${job.name}`);
-                              const body = encodeURIComponent(`Hi,\n\nPlease find attached Invoice ${inv.invoiceNumber} for ${job.name}.\n\nAmount: ${formatCurrency(inv.amount)}\nDue: ${formatCurrency(inv.amount - paid)}\n\nThank you for your business!\n\nAllen's`);
-                              window.location.href = `mailto:${job.customerEmail}?subject=${subject}&body=${body}`;
-                            }} title="Email Invoice"><Send size={14} /></button>
+                            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => handleEmailWithFallback(
+                              `Invoice ${inv.invoiceNumber}: ${job.name}`,
+                              `Hi,\n\nPlease find attached Invoice ${inv.invoiceNumber} for ${job.name}.\n\nAmount: ${formatCurrency(inv.amount)}\nDue: ${formatCurrency(inv.amount - paid)}\n\nThank you for your business!\n\nAllen's`,
+                              job.customerEmail
+                            )} title="Email Invoice"><Send size={14} /></button>
+                            <button className="btn btn-sm btn-secondary btn-icon" onClick={handlePrint} title="Print Invoice"><FileText size={14} /></button>
                             <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'invoice', id: inv.id })}><Trash2 size={14} /></button>
                           </div>
                         </td>
@@ -605,12 +626,12 @@ export function JobDetail() {
                       <td><span className={`badge ${getStatusColor(co.status)}`}>{co.status}</span></td>
                       <td>
                         <div className="flex gap-2">
-                          <button className="btn btn-sm btn-secondary btn-icon" onClick={() => {
-                            if (!job.customerEmail) { showToast('No customer email', 'error'); return; }
-                            const subject = encodeURIComponent(`Change Order: ${job.name}`);
-                            const body = encodeURIComponent(`Hi,\n\nA change order has been submitted for ${job.name}.\n\nDescription: ${co.description}\nAmount: ${formatCurrency(co.amount)}\n\nPlease review and let us know if you have any questions.\n\nThanks,\nAllen's`);
-                            window.location.href = `mailto:${job.customerEmail}?subject=${subject}&body=${body}`;
-                          }} title="Email Change Order"><Send size={14} /></button>
+                          <button className="btn btn-sm btn-secondary btn-icon" onClick={() => handleEmailWithFallback(
+                            `Change Order: ${job.name}`,
+                            `Hi,\n\nA change order has been submitted for ${job.name}.\n\nDescription: ${co.description}\nAmount: ${formatCurrency(co.amount)}\n\nPlease review and let us know if you have any questions.\n\nThanks,\nAllen's`,
+                            job.customerEmail
+                          )} title="Email Change Order"><Send size={14} /></button>
+                          <button className="btn btn-sm btn-secondary btn-icon" onClick={handlePrint} title="Print"><FileText size={14} /></button>
                           {co.status === 'pending' && (
                             <button className="btn btn-sm btn-primary" onClick={() => approveChangeOrder(co.id)}>Approve</button>
                           )}
@@ -1229,6 +1250,25 @@ export function JobDetail() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
           <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
           <button className="btn btn-primary" onClick={() => { setAttachments([...attachments, { ...fileForm, id: crypto.randomUUID(), jobId: job.id, size: fileForm.size || 0, createdAt: new Date().toISOString(), category: fileForm.category || 'document' }]); showToast('File added'); setShowModal(null); setFileForm({ name: '', url: '', type: '', size: 0, category: '' }); }}>Add File</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'email'} onClose={() => setShowModal(null)} title="Send Email">
+        <div className="form-group">
+          <label className="form-label">To *</label>
+          <input className="form-input" type="email" value={emailForm.email} onChange={e => setEmailForm({...emailForm, email: e.target.value})} placeholder="customer@email.com" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Subject</label>
+          <input className="form-input" value={emailForm.subject} onChange={e => setEmailForm({...emailForm, subject: e.target.value})} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Message</label>
+          <textarea className="form-textarea" value={emailForm.body} onChange={e => setEmailForm({...emailForm, body: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSendEmail}>Open Email</button>
         </div>
       </Modal>
 
