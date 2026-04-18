@@ -94,6 +94,9 @@ export function Settings() {
     updateBranding({ [key]: value } as any);
   };
 
+  // SMTP settings from app context
+  const { smtpSettings, updateSmtpSettings } = useApp();
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -163,6 +166,40 @@ export function Settings() {
           <label className="form-label">Terms URL</label>
           <input className="form-input" value={branding.termsUrl || ''} onChange={e => setBrand('termsUrl', e.target.value)} placeholder="https://..." />
         </div>
+      </div>
+      <div className="card mt-4" style={{ padding: 12 }}>
+        <div className="form-group">
+          <label className="form-label">Enable SMTP</label>
+          <input type="checkbox" checked={smtpSettings?.enabled ?? false} onChange={e => updateSmtpSettings({ enabled: e.target.checked })} />
+        </div>
+        {smtpSettings?.enabled && (
+          <>
+            <div className="form-group">
+              <label className="form-label">SMTP Host</label>
+              <input className="form-input" value={smtpSettings.host} onChange={e => updateSmtpSettings({ host: e.target.value })} placeholder="smtp.example.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">SMTP Port</label>
+              <input className="form-input" type="number" value={smtpSettings.port} onChange={e => updateSmtpSettings({ port: Number(e.target.value) })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">SMTP User</label>
+              <input className="form-input" value={smtpSettings.user} onChange={e => updateSmtpSettings({ user: e.target.value })} placeholder="username" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">SMTP Password</label>
+              <input className="form-input" type="password" value={smtpSettings.password || ''} onChange={e => updateSmtpSettings({ password: e.target.value })} placeholder="password" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">From Name</label>
+              <input className="form-input" value={smtpSettings.fromName || ''} onChange={e => updateSmtpSettings({ fromName: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">From Email</label>
+              <input className="form-input" value={smtpSettings.fromEmail || ''} onChange={e => updateSmtpSettings({ fromEmail: e.target.value })} />
+            </div>
+          </>
+        )}
       </div>
       <div className="card mt-4" style={{ padding: 12 }}>
         <div className="flex gap-2">

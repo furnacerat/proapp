@@ -176,7 +176,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // SMTP settings (global)
   const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>({
     host: '', port: 587, user: '', password: '', secure: true,
-    fromName: '', fromEmail: ''
+    fromName: '', fromEmail: '', enabled: false
   });
 
   const updateSmtpSettings = (updates: Partial<SmtpSettings>) => {
@@ -185,8 +185,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendEmail = async (payload: { to: string; subject: string; html?: string; text?: string; }): Promise<boolean> => {
     const { to, subject, html, text } = payload;
-    // If SMTP is configured (host present), attempt server-side delivery
-    if (smtpSettings.host && smtpSettings.fromEmail) {
+    // If SMTP is configured and enabled, attempt server-side delivery
+    const canUseSmtp = !!smtpSettings.enabled && !!smtpSettings.host && !!smtpSettings.fromEmail;
+    if (canUseSmtp) {
       try {
         const res = await fetch('/api/send-email', {
           method: 'POST',

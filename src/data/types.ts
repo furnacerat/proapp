@@ -513,6 +513,7 @@ export interface SmtpSettings {
   secure: boolean; // true for TLS/SSL
   fromName?: string;
   fromEmail?: string;
+  enabled?: boolean;
 }
 
 // Branding configuration for emails, invoices, estimates, etc.
