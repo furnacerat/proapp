@@ -122,66 +122,73 @@ export function EstimateBuilder() {
   if (!estimate) {
     return (
       <div>
-        <Modal isOpen={showNewEstimateModal} onClose={() => navigate('/estimates')} title="New Estimate" size="md">
-          <div className="form-group">
-            <label className="form-label">Estimate Name *</label>
-            <input
-              className="form-input"
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-              placeholder="e.g., Smith Kitchen Remodel"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Customer *</label>
-            <select
-              className="form-select"
-              value={formData.customerId}
-              onChange={e => setFormData({...formData, customerId: e.target.value})}
-            >
-              <option value="">Select customer...</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Project Address</label>
-            <input
-              className="form-input"
-              value={formData.address}
-              onChange={e => setFormData({...formData, address: e.target.value})}
-              placeholder="Project address"
-            />
-          </div>
-          <div className="grid-2 gap-4">
-            <div className="form-group">
-              <label className="form-label">Project Type</label>
-              <select
-                className="form-select"
-                value={formData.type}
-                onChange={e => setFormData({...formData, type: e.target.value as JobType})}
-              >
-                {JOB_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
+        <div className="page-header">
+          <h1 className="page-title">New Estimate</h1>
+        </div>
+        <div className="page-content">
+          <div className="card" style={{maxWidth: '600px'}}>
+            <div className="card-body">
+              <div className="form-group">
+                <label className="form-label">Estimate Name *</label>
+                <input
+                  className="form-input"
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  placeholder="e.g., Smith Kitchen Remodel"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Customer *</label>
+                <select
+                  className="form-select"
+                  value={formData.customerId}
+                  onChange={e => setFormData({...formData, customerId: e.target.value})}
+                >
+                  <option value="">Select customer...</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Project Address</label>
+                <input
+                  className="form-input"
+                  value={formData.address}
+                  onChange={e => setFormData({...formData, address: e.target.value})}
+                  placeholder="Project address"
+                />
+              </div>
+              <div className="grid-2 gap-4">
+                <div className="form-group">
+                  <label className="form-label">Project Type</label>
+                  <select
+                    className="form-select"
+                    value={formData.type}
+                    onChange={e => setFormData({...formData, type: e.target.value as JobType})}
+                  >
+                    {JOB_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Markup %</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.markupPercent}
+                    onChange={e => setFormData({...formData, markupPercent: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button className="btn btn-secondary" onClick={() => navigate('/estimates')}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleCreateNewEstimate}>Create Estimate</button>
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Markup %</label>
-              <input
-                className="form-input"
-                type="number"
-                value={formData.markupPercent}
-                onChange={e => setFormData({...formData, markupPercent: e.target.value})}
-              />
-            </div>
           </div>
-          <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
-            <button className="btn btn-secondary" onClick={() => navigate('/estimates')}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleCreateNewEstimate}>Create Estimate</button>
-          </div>
-        </Modal>
+        </div>
       </div>
     );
   }
