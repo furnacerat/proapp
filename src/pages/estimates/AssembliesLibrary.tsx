@@ -75,7 +75,7 @@ export function AssembliesLibrary() {
   };
 
   const addItem = () => {
-    setItems([...items, { name: '', quantity: 1, unitPrice: 0, category: 'material' }]);
+    setItems([...items, { name: '', description: '', quantity: 1, unit: 'ea', unitPrice: 0, category: 'material' }]);
   };
 
   const updateItem = (index: number, updates: Partial<AssemblyItem>) => {
@@ -96,9 +96,9 @@ export function AssembliesLibrary() {
       category: 'Demo', 
       laborHours: 4,
       items: [
-        { name: 'Demo - Walls', quantity: 1, unitPrice: 200, category: 'labor' as const },
-        { name: 'Demo - Flooring', quantity: 1, unitPrice: 150, category: 'labor' as const },
-        { name: 'Debris Removal', quantity: 1, unitPrice: 100, category: 'other' as const },
+        { name: 'Demo - Walls', quantity: 1, unit: 'ea', unitPrice: 200, category: 'labor' as const },
+        { name: 'Demo - Flooring', quantity: 1, unit: 'ea', unitPrice: 150, category: 'labor' as const },
+        { name: 'Debris Removal', quantity: 1, unit: 'ea', unitPrice: 100, category: 'other' as const },
       ]
     },
     { 
@@ -106,10 +106,10 @@ export function AssembliesLibrary() {
       category: 'Drywall', 
       laborHours: 6,
       items: [
-        { name: 'Drywall 4x8', quantity: 12, unitPrice: 12, category: 'material' as const },
-        { name: 'Joint Compound', quantity: 2, unitPrice: 18, category: 'material' as const },
-        { name: 'Paper Tape', quantity: 2, unitPrice: 2.5, category: 'material' as const },
-        { name: 'Install & Tape', quantity: 6, unitPrice: 35, category: 'labor' as const },
+        { name: 'Drywall 4x8', quantity: 12, unit: 'sheet', unitPrice: 12, category: 'material' as const },
+        { name: 'Joint Compound', quantity: 2, unit: 'bucket', unitPrice: 18, category: 'material' as const },
+        { name: 'Paper Tape', quantity: 2, unit: 'roll', unitPrice: 2.5, category: 'material' as const },
+        { name: 'Install & Tape', quantity: 6, unit: 'hrs', unitPrice: 35, category: 'labor' as const },
       ]
     },
     { 
@@ -117,11 +117,11 @@ export function AssembliesLibrary() {
       category: 'Painting', 
       laborHours: 8,
       items: [
-        { name: 'Paint', quantity: 4, unitPrice: 45, category: 'material' as const },
-        { name: 'Primer', quantity: 2, unitPrice: 25, category: 'material' as const },
-        { name: 'Supplies', quantity: 1, unitPrice: 25, category: 'material' as const },
-        { name: 'Paint - Walls', quantity: 6, unitPrice: 35, category: 'labor' as const },
-        { name: 'Paint - Ceiling', quantity: 2, unitPrice: 40, category: 'labor' as const },
+        { name: 'Paint', quantity: 4, unit: 'gal', unitPrice: 45, category: 'material' as const },
+        { name: 'Primer', quantity: 2, unit: 'gal', unitPrice: 25, category: 'material' as const },
+        { name: 'Supplies', quantity: 1, unit: 'ea', unitPrice: 25, category: 'material' as const },
+        { name: 'Paint - Walls', quantity: 6, unit: 'hrs', unitPrice: 35, category: 'labor' as const },
+        { name: 'Paint - Ceiling', quantity: 2, unit: 'hrs', unitPrice: 40, category: 'labor' as const },
       ]
     },
     { 
@@ -129,10 +129,10 @@ export function AssembliesLibrary() {
       category: 'Plumbing', 
       laborHours: 4,
       items: [
-        { name: 'Vanity Unit', quantity: 1, unitPrice: 450, category: 'material' as const },
-        { name: 'Faucet', quantity: 1, unitPrice: 150, category: 'material' as const },
-        { name: 'Supply Lines', quantity: 1, unitPrice: 35, category: 'material' as const },
-        { name: 'Install', quantity: 3, unitPrice: 45, category: 'labor' as const },
+        { name: 'Vanity Unit', quantity: 1, unit: 'ea', unitPrice: 450, category: 'material' as const },
+        { name: 'Faucet', quantity: 1, unit: 'ea', unitPrice: 150, category: 'material' as const },
+        { name: 'Supply Lines', quantity: 1, unit: 'ea', unitPrice: 35, category: 'material' as const },
+        { name: 'Install', quantity: 3, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
       ]
     },
     { 
@@ -140,9 +140,9 @@ export function AssembliesLibrary() {
       category: 'Carpentry', 
       laborHours: 2,
       items: [
-        { name: 'Base Cabinet 24"', quantity: 1, unitPrice: 250, category: 'material' as const },
-        { name: 'Screws/Hardware', quantity: 1, unitPrice: 15, category: 'material' as const },
-        { name: 'Install Labor', quantity: 2, unitPrice: 45, category: 'labor' as const },
+        { name: 'Base Cabinet 24"', quantity: 1, unit: 'ea', unitPrice: 250, category: 'material' as const },
+        { name: 'Screws/Hardware', quantity: 1, unit: 'box', unitPrice: 15, category: 'material' as const },
+        { name: 'Install Labor', quantity: 2, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
       ]
     },
     { 
@@ -150,10 +150,10 @@ export function AssembliesLibrary() {
       category: 'Flooring', 
       laborHours: 6,
       items: [
-        { name: 'Hardwood Flooring', quantity: 200, unitPrice: 8, category: 'material' as const },
-        { name: 'Underlayment', quantity: 200, unitPrice: 0.75, category: 'material' as const },
-        { name: 'Nails/Staples', quantity: 1, unitPrice: 25, category: 'material' as const },
-        { name: 'Install Labor', quantity: 6, unitPrice: 4, category: 'labor' as const },
+        { name: 'Hardwood Flooring', quantity: 200, unit: 'sqft', unitPrice: 8, category: 'material' as const },
+        { name: 'Underlayment', quantity: 200, unit: 'sqft', unitPrice: 0.75, category: 'material' as const },
+        { name: 'Nails/Staples', quantity: 1, unit: 'box', unitPrice: 25, category: 'material' as const },
+        { name: 'Install Labor', quantity: 6, unit: 'hrs', unitPrice: 4, category: 'labor' as const },
       ]
     },
     { 
@@ -161,10 +161,10 @@ export function AssembliesLibrary() {
       category: 'Carpentry', 
       laborHours: 4,
       items: [
-        { name: 'Base Shoe', quantity: 100, unitPrice: 1.5, category: 'material' as const },
-        { name: 'Casing', quantity: 60, unitPrice: 2.5, category: 'material' as const },
-        { name: 'Casing Head', quantity: 4, unitPrice: 8, category: 'material' as const },
-        { name: 'Install Labor', quantity: 4, unitPrice: 45, category: 'labor' as const },
+        { name: 'Base Shoe', quantity: 100, unit: 'lnft', unitPrice: 1.5, category: 'material' as const },
+        { name: 'Casing', quantity: 60, unit: 'lnft', unitPrice: 2.5, category: 'material' as const },
+        { name: 'Casing Head', quantity: 4, unit: 'lnft', unitPrice: 8, category: 'material' as const },
+        { name: 'Install Labor', quantity: 4, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
       ]
     },
     { 
@@ -172,12 +172,12 @@ export function AssembliesLibrary() {
       category: 'Roofing', 
       laborHours: 16,
       items: [
-        { name: 'Tear-Off Labor', quantity: 8, unitPrice: 45, category: 'labor' as const },
-        { name: 'Underlayment', quantity: 4, unitPrice: 45, category: 'material' as const },
-        { name: 'Shingles', quantity: 4, unitPrice: 35, category: 'material' as const },
-        { name: 'Drip Edge', quantity: 4, unitPrice: 18, category: 'material' as const },
-        { name: 'Nails', quantity: 1, unitPrice: 25, category: 'material' as const },
-        { name: 'Install Labor', quantity: 8, unitPrice: 45, category: 'labor' as const },
+        { name: 'Tear-Off Labor', quantity: 8, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
+        { name: 'Underlayment', quantity: 4, unit: 'roll', unitPrice: 45, category: 'material' as const },
+        { name: 'Shingles', quantity: 4, unit: 'bundle', unitPrice: 35, category: 'material' as const },
+        { name: 'Drip Edge', quantity: 4, unit: 'bundle', unitPrice: 18, category: 'material' as const },
+        { name: 'Nails', quantity: 1, unit: 'box', unitPrice: 25, category: 'material' as const },
+        { name: 'Install Labor', quantity: 8, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
       ]
     },
   ];
@@ -296,9 +296,17 @@ export function AssembliesLibrary() {
                 <Plus size={14} /> Add Item
               </button>
             </div>
+            <div className="grid-6 gap-2 mb-2 text-sm font-medium text-muted">
+              <div>Item</div>
+              <div>Qty</div>
+              <div>Unit</div>
+              <div>Unit Price</div>
+              <div>Category</div>
+              <div></div>
+            </div>
             <div className="space-y-2">
               {items.map((item, index) => (
-                <div key={index} className="grid-4 gap-2 items-center">
+                <div key={index} className="grid-6 gap-2 items-center">
                   <input
                     className="form-input"
                     value={item.name}
@@ -310,15 +318,31 @@ export function AssembliesLibrary() {
                     type="number"
                     value={item.quantity}
                     onChange={e => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
-                    placeholder="Qty"
+                    placeholder="1"
+                  />
+                  <input
+                    className="form-input"
+                    value={item.unit}
+                    onChange={e => updateItem(index, { unit: e.target.value })}
+                    placeholder="ea, sqft, lb, gal, hr"
                   />
                   <input
                     className="form-input"
                     type="number"
                     value={item.unitPrice}
                     onChange={e => updateItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
-                    placeholder="Price"
+                    placeholder="0.00"
                   />
+                  <select
+                    className="form-select"
+                    value={item.category}
+                    onChange={e => updateItem(index, { category: e.target.value as 'material' | 'labor' | 'equipment' | 'other' })}
+                  >
+                    <option value="material">Material</option>
+                    <option value="labor">Labor</option>
+                    <option value="equipment">Equipment</option>
+                    <option value="other">Other</option>
+                  </select>
                   <button className="btn btn-sm btn-icon btn-danger" onClick={() => removeItem(index)}>
                     <Trash2 size={14} />
                   </button>

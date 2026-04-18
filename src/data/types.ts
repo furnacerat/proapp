@@ -78,7 +78,9 @@ export interface Assembly {
 
 export interface AssemblyItem {
   name: string;
+  description?: string;
   quantity: number;
+  unit: string;
   unitPrice: number;
   category: 'material' | 'labor' | 'equipment' | 'other';
 }
