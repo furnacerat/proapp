@@ -82,7 +82,80 @@ export interface AssemblyItem {
   quantity: number;
   unit: string;
   unitPrice: number;
-  category: 'material' | 'labor' | 'equipment' | 'other';
+  category: 'material' | 'labor' | 'equipment' | 'other' | 'allowance';
+  linkedMaterialId?: string;
+  linkedLaborRateId?: string;
+}
+
+export interface Assembly {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  unit: string;
+  laborHours: number;
+  laborRateId?: string;
+  items: AssemblyItem[];
+  isOptional?: boolean;
+  isDefault?: boolean;
+  notes?: string;
+  markupPercent?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+// ============ ESTIMATE TEMPLATES ============
+
+export interface EstimateTemplateScope {
+  id: string;
+  name: string;
+  description?: string;
+  sortOrder: number;
+  sections: EstimateTemplateSection[];
+}
+
+export interface EstimateTemplateSection {
+  id: string;
+  name: string;
+  description?: string;
+  sortOrder: number;
+  items: EstimateTemplateItem[];
+}
+
+export interface EstimateTemplateItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  category: string;
+  isLabor?: boolean;
+  hours?: number;
+  isOptional?: boolean;
+  isAllowance?: boolean;
+  isDefaultChecked?: boolean;
+  assemblyId?: string;
+  linkedMaterialId?: string;
+  linkedLaborRateId?: string;
+}
+
+export interface EstimateTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  projectType: JobType;
+  scopes: EstimateTemplateScope[];
+  defaultMarkups?: {
+    labor: number;
+    material: number;
+    equipment: number;
+  };
+  isActive: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Template {
@@ -383,6 +456,7 @@ export interface AppData {
   assemblies: Assembly[];
   templates: Template[];
   projectTypeTemplates: ProjectTypeTemplate[];
+  estimateTemplates?: EstimateTemplate[];
   estimates: Estimate[];
   jobTemplates: JobTemplate[];
   jobs: Job[];

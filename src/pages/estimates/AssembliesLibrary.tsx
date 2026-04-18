@@ -19,6 +19,7 @@ export function AssembliesLibrary() {
     name: '',
     description: '',
     category: '',
+    unit: 'ea',
     laborHours: '0',
     laborRateId: '',
   });
@@ -49,7 +50,7 @@ export function AssembliesLibrary() {
     
     setShowModal(false);
     setEditingAssembly(null);
-    setFormData({ name: '', description: '', category: '', laborHours: '0', laborRateId: '' });
+    setFormData({ name: '', description: '', category: '', unit: 'ea', laborHours: '0', laborRateId: '' });
     setItems([]);
   };
 
@@ -59,6 +60,7 @@ export function AssembliesLibrary() {
       name: assembly.name,
       description: assembly.description || '',
       category: assembly.category,
+      unit: assembly.unit || 'ea',
       laborHours: assembly.laborHours.toString(),
       laborRateId: assembly.laborRateId || '',
     });
@@ -94,6 +96,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Demolition Package', 
       category: 'Demo', 
+      unit: 'room',
       laborHours: 4,
       items: [
         { name: 'Demo - Walls', quantity: 1, unit: 'ea', unitPrice: 200, category: 'labor' as const },
@@ -104,6 +107,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Drywall - Room', 
       category: 'Drywall', 
+      unit: 'room',
       laborHours: 6,
       items: [
         { name: 'Drywall 4x8', quantity: 12, unit: 'sheet', unitPrice: 12, category: 'material' as const },
@@ -115,6 +119,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Paint Room', 
       category: 'Painting', 
+      unit: 'room',
       laborHours: 8,
       items: [
         { name: 'Paint', quantity: 4, unit: 'gal', unitPrice: 45, category: 'material' as const },
@@ -127,6 +132,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Vanity Install', 
       category: 'Plumbing', 
+      unit: 'ea',
       laborHours: 4,
       items: [
         { name: 'Vanity Unit', quantity: 1, unit: 'ea', unitPrice: 450, category: 'material' as const },
@@ -134,10 +140,11 @@ export function AssembliesLibrary() {
         { name: 'Supply Lines', quantity: 1, unit: 'ea', unitPrice: 35, category: 'material' as const },
         { name: 'Install', quantity: 3, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
       ]
-    },
+}, 
     { 
       name: 'Cabinet Install - Base', 
       category: 'Carpentry', 
+      unit: 'ea',
       laborHours: 2,
       items: [
         { name: 'Base Cabinet 24"', quantity: 1, unit: 'ea', unitPrice: 250, category: 'material' as const },
@@ -148,6 +155,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Flooring Install - Hardwood', 
       category: 'Flooring', 
+      unit: 'sqft',
       laborHours: 6,
       items: [
         { name: 'Hardwood Flooring', quantity: 200, unit: 'sqft', unitPrice: 8, category: 'material' as const },
@@ -159,6 +167,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Trim Package', 
       category: 'Carpentry', 
+      unit: 'lnft',
       laborHours: 4,
       items: [
         { name: 'Base Shoe', quantity: 100, unit: 'lnft', unitPrice: 1.5, category: 'material' as const },
@@ -170,6 +179,7 @@ export function AssembliesLibrary() {
     { 
       name: 'Roofing Tear-Off & Replace', 
       category: 'Roofing', 
+      unit: 'sqft',
       laborHours: 16,
       items: [
         { name: 'Tear-Off Labor', quantity: 8, unit: 'hrs', unitPrice: 45, category: 'labor' as const },
@@ -250,7 +260,7 @@ export function AssembliesLibrary() {
 
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditingAssembly(null); setItems([]); }} title={editingAssembly ? 'Edit Assembly' : 'New Assembly'} size="lg">
         <div className="space-y-4">
-          <div className="grid-2 gap-4">
+          <div className="grid-3 gap-4">
             <div className="form-group">
               <label className="form-label">Assembly Name *</label>
               <input
@@ -267,6 +277,15 @@ export function AssembliesLibrary() {
                 value={formData.category}
                 onChange={e => setFormData({...formData, category: e.target.value})}
                 placeholder="e.g., Drywall, Framing"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Unit</label>
+              <input
+                className="form-input"
+                value={formData.unit}
+                onChange={e => setFormData({...formData, unit: e.target.value})}
+                placeholder="e.g., sqft, ea, lf"
               />
             </div>
           </div>

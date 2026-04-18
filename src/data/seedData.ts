@@ -48,10 +48,326 @@ export const initialData: AppData = {
     { id: uuidv4(), name: 'Light Switch', category: 'Electrical', unit: 'ea', unitPrice: 2.25, supplier: 'ElectricPro', isActive: true },
   ],
   assemblies: [
-    { id: uuidv4(), name: 'Wall Frame 8ft', description: 'Standard 2x4 wall with 16" OC spacing', category: 'Framing', laborHours: 2.5, laborRateId: '', items: [{ name: '2x4x8 Stud', quantity: 11, unit: 'ea', unitPrice: 4.50, category: 'material' }, { name: '2x4x8 Plate', quantity: 3, unit: 'ea', unitPrice: 4.50, category: 'material' }, { name: 'Nails', quantity: 0.5, unit: 'lb', unitPrice: 12, category: 'material' }], createdAt: now },
-    { id: uuidv4(), name: 'Install Drywall 4x8', description: 'Hang and tape drywall', category: 'Drywall', laborHours: 1.5, items: [{ name: 'Drywall 4x8', quantity: 3, unit: 'sheet', unitPrice: 12, category: 'material' }, { name: 'Joint Compound 5gal', quantity: 0.1, unit: 'bucket', unitPrice: 18, category: 'material' }, { name: 'Paper Tape', quantity: 1, unit: 'roll', unitPrice: 2.50, category: 'material' }, { name: 'Screws', quantity: 0.5, unit: 'box', unitPrice: 15, category: 'material' }], createdAt: now },
-    { id: uuidv4(), name: 'Cabinet Install Base', description: 'Install base cabinet with doors', category: 'Carpentry', laborHours: 1.0, items: [{ name: 'Cabinet 24"', quantity: 1, unit: 'ea', unitPrice: 250, category: 'material' }, { name: 'Screws', quantity: 0.25, unit: 'box', unitPrice: 15, category: 'material' }, { name: 'Shims', quantity: 4, unit: 'ea', unitPrice: 0.50, category: 'material' }], createdAt: now },
-    { id: uuidv4(), name: 'Floor Prep', description: 'Subfloor prep for tile or hardwood', category: 'Flooring', laborHours: 2.0, items: [{ name: 'Plywood 3/4"', quantity: 4, unit: 'sheet', unitPrice: 45, category: 'material' }, { name: 'Screws', quantity: 1, unit: 'box', unitPrice: 15, category: 'material' }], createdAt: now },
+    // ============ DEMOLITION ============
+    { id: uuidv4(), name: 'Room Demolition', description: 'Remove all finish materials from one room', category: 'Demolition', unit: 'room', laborHours: 4, items: [
+      { name: 'Demo Labor', quantity: 4, unit: 'hrs', unitPrice: 35, category: 'labor' },
+      { name: 'Debris Hauling', quantity: 1, unit: 'ea', unitPrice: 150, category: 'other' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Cabinet Demo', description: 'Remove upper and base cabinets', category: 'Demolition', unit: 'lf', laborHours: 0.5, items: [
+      { name: 'Demo Labor', quantity: 0.5, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Countertop Demo', description: 'Remove laminate or stone countertops', category: 'Demolition', unit: 'lf', laborHours: 0.25, items: [
+      { name: 'Demo Labor', quantity: 0.25, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Flooring Demo - Carpet', description: 'Remove carpet and padding', category: 'Demolition', unit: 'sqft', laborHours: 0.02, items: [
+      { name: 'Demo Labor', quantity: 0.02, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Flooring Demo - Tile', description: 'Remove ceramic or porcelain tile', category: 'Demolition', unit: 'sqft', laborHours: 0.05, items: [
+      { name: 'Demo Labor', quantity: 0.05, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Drywall Remove', description: 'Remove drywall sheets', category: 'Demolition', unit: 'sheet', laborHours: 0.25, items: [
+      { name: 'Demo Labor', quantity: 0.25, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Fixture Demo - Toilet', description: 'Remove toilet', category: 'Demolition', unit: 'ea', laborHours: 0.5, items: [
+      { name: 'Demo Labor', quantity: 0.5, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Fixture Demo - Vanity', description: 'Remove vanity cabinet', category: 'Demolition', unit: 'ea', laborHours: 1, items: [
+      { name: 'Demo Labor', quantity: 1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Demolition Debris Container', description: '10 yard roll-off for demo debris', category: 'Demolition', unit: 'ea', laborHours: 0, items: [
+      { name: 'Container Rental', quantity: 1, unit: 'wk', unitPrice: 350, category: 'other' },
+    ], createdAt: now },
+
+    // ============ FRAMING ============
+    { id: uuidv4(), name: 'Wall Frame - 8ft', description: 'Standard 2x4 wall with 16" OC', category: 'Framing', unit: 'lf', laborHours: 0.15, items: [
+      { name: '2x4 Stud', quantity: 0.7, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: '2x4 Plate', quantity: 0.2, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: 'Framing Nails', quantity: 0.05, unit: 'lb', unitPrice: 8, category: 'material' },
+      { name: 'Framing Labor', quantity: 0.15, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Wall Frame - 9ft', description: 'Standard 2x4 wall 9ft tall', category: 'Framing', unit: 'lf', laborHours: 0.18, items: [
+      { name: '2x4 Stud', quantity: 0.8, unit: 'ea', unitPrice: 5.50, category: 'material' },
+      { name: '2x4 Plate', quantity: 0.2, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: 'Framing Nails', quantity: 0.05, unit: 'lb', unitPrice: 8, category: 'material' },
+      { name: 'Framing Labor', quantity: 0.18, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Partition Wall', description: 'Non-load bearing interior wall', category: 'Framing', unit: 'lf', laborHours: 0.2, items: [
+      { name: '2x4 Stud', quantity: 0.7, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: '2x4 Plate', quantity: 0.2, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: 'Framing Labor', quantity: 0.2, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Window Rough-In', description: 'Rough opening for window', category: 'Framing', unit: 'ea', laborHours: 2, items: [
+      { name: '2x4 Header', quantity: 3, unit: 'ea', unitPrice: 12, category: 'material' },
+      { name: '2x4 Stud', quantity: 4, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: 'Framing Labor', quantity: 2, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Door Rough-In', description: 'Rough opening for door', category: 'Framing', unit: 'ea', laborHours: 1.5, items: [
+      { name: '2x4 Header', quantity: 2, unit: 'ea', unitPrice: 12, category: 'material' },
+      { name: '2x4 Stud', quantity: 4, unit: 'ea', unitPrice: 4.50, category: 'material' },
+      { name: 'Framing Labor', quantity: 1.5, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Floor Joist Sistering', description: 'Sister floor joists for reinforcement', category: 'Framing', unit: 'ea', laborHours: 1, items: [
+      { name: '2x10 Joist', quantity: 1, unit: 'ea', unitPrice: 18, category: 'material' },
+      { name: 'Joist Hangers', quantity: 2, unit: 'ea', unitPrice: 3.50, category: 'material' },
+      { name: 'Framing Labor', quantity: 1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ ELECTRICAL ============
+    { id: uuidv4(), name: 'Receptacle Rough-In', description: 'New electrical outlet box', category: 'Electrical', unit: 'ea', laborHours: 1, items: [
+      { name: 'Outlet Box', quantity: 1, unit: 'ea', unitPrice: 2.50, category: 'material' },
+      { name: 'Romex 14/2', quantity: 8, unit: 'ft', unitPrice: 0.45, category: 'material' },
+      { name: 'Wire Nuts', quantity: 3, unit: 'ea', unitPrice: 0.75, category: 'material' },
+      { name: 'Elec Labor', quantity: 1, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Switch Rough-In', description: 'Light switch rough-in', category: 'Electrical', unit: 'ea', laborHours: 1, items: [
+      { name: 'Switch Box', quantity: 1, unit: 'ea', unitPrice: 2, category: 'material' },
+      { name: 'Romex 14/2', quantity: 8, unit: 'ft', unitPrice: 0.45, category: 'material' },
+      { name: 'Wire Nuts', quantity: 2, unit: 'ea', unitPrice: 0.75, category: 'material' },
+      { name: 'Elec Labor', quantity: 1, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Ceiling Fan Box', description: 'Install ceiling fan rated box', category: 'Electrical', unit: 'ea', laborHours: 1.5, items: [
+      { name: 'Ceiling Fan Box', quantity: 1, unit: 'ea', unitPrice: 12, category: 'material' },
+      { name: 'Romex 14/2', quantity: 12, unit: 'ft', unitPrice: 0.45, category: 'material' },
+      { name: 'Elec Labor', quantity: 1.5, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'GFCI Outlet', description: 'Install GFCI outlet', category: 'Electrical', unit: 'ea', laborHours: 0.5, items: [
+      { name: 'GFCI Outlet', quantity: 1, unit: 'ea', unitPrice: 18, category: 'material' },
+      { name: 'Wall Plate', quantity: 1, unit: 'ea', unitPrice: 3, category: 'material' },
+      { name: 'Elec Labor', quantity: 0.5, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Light Fixture', description: 'Install ceiling light', category: 'Electrical', unit: 'ea', laborHours: 1, items: [
+      { name: 'Light Fixture', quantity: 1, unit: 'ea', unitPrice: 45, category: 'material' },
+      { name: 'Wire Nuts', quantity: 3, unit: 'ea', unitPrice: 0.75, category: 'material' },
+      { name: 'Elec Labor', quantity: 1, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ PLUMBING ============
+    { id: uuidv4(), name: 'Toilet Hookup', description: 'Connect toilet supply and drain', category: 'Plumbing', unit: 'ea', laborHours: 1.5, items: [
+      { name: 'Wax Ring', quantity: 1, unit: 'ea', unitPrice: 4, category: 'material' },
+      { name: 'Supply Line', quantity: 1, unit: 'ea', unitPrice: 12, category: 'material' },
+      { name: 'Plumb Labor', quantity: 1.5, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Faucet Install - Kitchen', description: 'Install kitchen faucet', category: 'Plumbing', unit: 'ea', laborHours: 1, items: [
+      { name: 'Faucet', quantity: 1, unit: 'ea', unitPrice: 185, category: 'material' },
+      { name: 'Supply Lines', quantity: 2, unit: 'ea', unitPrice: 8, category: 'material' },
+      { name: 'Plumb Labor', quantity: 1, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Faucet Install - Bathroom', description: 'Install bathroom faucet', category: 'Plumbing', unit: 'ea', laborHours: 1, items: [
+      { name: 'Faucet', quantity: 1, unit: 'ea', unitPrice: 125, category: 'material' },
+      { name: 'Supply Lines', quantity: 2, unit: 'ea', unitPrice: 8, category: 'material' },
+      { name: 'Plumb Labor', quantity: 1, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'P-Trap Install', description: 'Install p-trap for sink', category: 'Plumbing', unit: 'ea', laborHours: 0.75, items: [
+      { name: 'P-Trap', quantity: 1, unit: 'ea', unitPrice: 15, category: 'material' },
+      { name: 'Plumb Labor', quantity: 0.75, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Dishwasher Connect', description: 'Connect dishwasher', category: 'Plumbing', unit: 'ea', laborHours: 1.5, items: [
+      { name: 'Dishwasher Connector', quantity: 1, unit: 'ea', unitPrice: 25, category: 'material' },
+      { name: 'Plumb Labor', quantity: 1.5, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Gas Line - Range', description: 'Run gas line for range', category: 'Plumbing', unit: 'ea', laborHours: 3, items: [
+      { name: 'Gas Pipe', quantity: 10, unit: 'ft', unitPrice: 4.50, category: 'material' },
+      { name: 'Gas Fitting', quantity: 3, unit: 'ea', unitPrice: 5, category: 'material' },
+      { name: 'Gas Valve', quantity: 1, unit: 'ea', unitPrice: 35, category: 'material' },
+      { name: 'Plumb Labor', quantity: 3, unit: 'hrs', unitPrice: 55, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ DRYWALL ============
+    { id: uuidv4(), name: 'Drywall - Room Walls', description: 'Hang and finish drywall on walls', category: 'Drywall', unit: 'sqft', laborHours: 0.04, items: [
+      { name: 'Drywall 4x8', quantity: 0.0625, unit: 'sheet', unitPrice: 12, category: 'material' },
+      { name: 'Drywall Screws', quantity: 0.03, unit: 'lb', unitPrice: 7, category: 'material' },
+      { name: 'Joint Compound', quantity: 0.005, unit: 'gal', unitPrice: 18, category: 'material' },
+      { name: 'Paper Tape', quantity: 0.04, unit: 'ft', unitPrice: 0.10, category: 'material' },
+      { name: 'Drywall Labor', quantity: 0.04, unit: 'hrs', unitPrice: 32, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Drywall - Room Ceiling', description: 'Hang and finish drywall on ceiling', category: 'Drywall', unit: 'sqft', laborHours: 0.05, items: [
+      { name: 'Drywall 4x8', quantity: 0.0625, unit: 'sheet', unitPrice: 12, category: 'material' },
+      { name: 'Drywall Screws', quantity: 0.03, unit: 'lb', unitPrice: 7, category: 'material' },
+      { name: 'Joint Compound', quantity: 0.005, unit: 'gal', unitPrice: 18, category: 'material' },
+      { name: 'Paper Tape', quantity: 0.04, unit: 'ft', unitPrice: 0.10, category: 'material' },
+      { name: 'Drywall Labor', quantity: 0.05, unit: 'hrs', unitPrice: 32, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Drywall Patch', description: 'Repair small drywall area', category: 'Drywall', unit: 'sqft', laborHours: 0.1, items: [
+      { name: 'Drywall Patch', quantity: 1, unit: 'sqft', unitPrice: 8, category: 'material' },
+      { name: 'Joint Compound', quantity: 0.01, unit: 'gal', unitPrice: 18, category: 'material' },
+      { name: 'Drywall Labor', quantity: 0.1, unit: 'hrs', unitPrice: 32, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ PAINT ============
+    { id: uuidv4(), name: 'Paint - Walls', description: 'Paint walls with primer and two coats', category: 'Paint', unit: 'sqft', laborHours: 0.025, items: [
+      { name: 'Primer', quantity: 0.004, unit: 'gal', unitPrice: 28, category: 'material' },
+      { name: 'Paint', quantity: 0.004, unit: 'gal', unitPrice: 45, category: 'material' },
+      { name: 'Paint Supplies', quantity: 0.001, unit: 'sqft', unitPrice: 2, category: 'material' },
+      { name: 'Paint Labor', quantity: 0.025, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Paint - Ceiling', description: 'Paint ceiling flat white', category: 'Paint', unit: 'sqft', laborHours: 0.02, items: [
+      { name: 'Ceiling Paint', quantity: 0.004, unit: 'gal', unitPrice: 35, category: 'material' },
+      { name: 'Paint Supplies', quantity: 0.001, unit: 'sqft', unitPrice: 2, category: 'material' },
+      { name: 'Paint Labor', quantity: 0.02, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Paint - Trim', description: 'Paint door and window trim', category: 'Paint', unit: 'lf', laborHours: 0.08, items: [
+      { name: 'Trim Paint', quantity: 0.005, unit: 'gal', unitPrice: 45, category: 'material' },
+      { name: 'Primer', quantity: 0.003, unit: 'gal', unitPrice: 28, category: 'material' },
+      { name: 'Paint Labor', quantity: 0.08, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Paint - Cabinetry', description: 'Paint cabinet boxes', category: 'Paint', unit: 'sqft', laborHours: 0.05, items: [
+      { name: 'Cabinet Paint', quantity: 0.008, unit: 'gal', unitPrice: 55, category: 'material' },
+      { name: 'Primer', quantity: 0.005, unit: 'gal', unitPrice: 35, category: 'material' },
+      { name: 'Paint Labor', quantity: 0.05, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ FINISH CARPENTRY ============
+    { id: uuidv4(), name: 'Baseboard Install', description: 'Install baseboard', category: 'Finish Carpentry', unit: 'lf', laborHours: 0.08, items: [
+      { name: 'Baseboard', quantity: 1, unit: 'lf', unitPrice: 2.50, category: 'material' },
+      { name: 'Base Shoe', quantity: 1, unit: 'lf', unitPrice: 1.25, category: 'material' },
+      { name: 'Brad Nails', quantity: 0.05, unit: 'box', unitPrice: 8, category: 'material' },
+      { name: 'Carp Labor', quantity: 0.08, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Casing Install - Door', description: 'Install door casing', category: 'Finish Carpentry', unit: 'lf', laborHours: 0.1, items: [
+      { name: 'Door Casing', quantity: 1, unit: 'lf', unitPrice: 3, category: 'material' },
+      { name: 'Brad Nails', quantity: 0.05, unit: 'box', unitPrice: 8, category: 'material' },
+      { name: 'Carp Labor', quantity: 0.1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Casing Install - Window', description: 'Install window casing', category: 'Finish Carpentry', unit: 'lf', laborHours: 0.12, items: [
+      { name: 'Window Casing', quantity: 1, unit: 'lf', unitPrice: 3.50, category: 'material' },
+      { name: 'Brad Nails', quantity: 0.05, unit: 'box', unitPrice: 8, category: 'material' },
+      { name: 'Carp Labor', quantity: 0.12, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Crown Molding', description: 'Install crown molding', category: 'Finish Carpentry', unit: 'lf', laborHours: 0.15, items: [
+      { name: 'Crown Molding', quantity: 1, unit: 'lf', unitPrice: 4.50, category: 'material' },
+      { name: 'Brad Nails', quantity: 0.05, unit: 'box', unitPrice: 8, category: 'material' },
+      { name: 'Carp Labor', quantity: 0.15, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Chair Rail', description: 'Install chair rail', category: 'Finish Carpentry', unit: 'lf', laborHours: 0.1, items: [
+      { name: 'Chair Rail', quantity: 1, unit: 'lf', unitPrice: 3.50, category: 'material' },
+      { name: 'Brad Nails', quantity: 0.05, unit: 'box', unitPrice: 8, category: 'material' },
+      { name: 'Carp Labor', quantity: 0.1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ CABINETS & FIXTURES ============
+    { id: uuidv4(), name: 'Cabinet Install - Base', description: 'Install base cabinet', category: 'Cabinets', unit: 'ea', laborHours: 1.5, items: [
+      { name: 'Base Cabinet', quantity: 1, unit: 'ea', unitPrice: 280, category: 'material' },
+      { name: 'Cabinet Screws', quantity: 4, unit: 'ea', unitPrice: 1, category: 'material' },
+      { name: 'Shims', quantity: 4, unit: 'ea', unitPrice: 0.50, category: 'material' },
+      { name: 'Carp Labor', quantity: 1.5, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Cabinet Install - Upper', description: 'Install upper cabinet', category: 'Cabinets', unit: 'ea', laborHours: 1, items: [
+      { name: 'Upper Cabinet', quantity: 1, unit: 'ea', unitPrice: 180, category: 'material' },
+      { name: 'Cabinet Screws', quantity: 4, unit: 'ea', unitPrice: 1, category: 'material' },
+      { name: 'French Cleat', quantity: 1, unit: 'ea', unitPrice: 12, category: 'material' },
+      { name: 'Carp Labor', quantity: 1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Vanity Install', description: 'Install vanity cabinet', category: 'Cabinets', unit: 'ea', laborHours: 2, items: [
+      { name: 'Vanity Cabinet', quantity: 1, unit: 'ea', unitPrice: 450, category: 'material' },
+      { name: 'Cabinet Screws', quantity: 4, unit: 'ea', unitPrice: 1, category: 'material' },
+      { name: 'Shims', quantity: 6, unit: 'ea', unitPrice: 0.50, category: 'material' },
+      { name: 'Carp Labor', quantity: 2, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Hardware Install', description: 'Install pulls and knobs', category: 'Cabinets', unit: 'ea', laborHours: 0.25, items: [
+      { name: 'Pull/Knob', quantity: 2, unit: 'ea', unitPrice: 6, category: 'material' },
+      { name: 'Screws', quantity: 4, unit: 'ea', unitPrice: 0.50, category: 'material' },
+      { name: 'Carp Labor', quantity: 0.25, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Medicine Cabinet', description: 'Install medicine cabinet', category: 'Cabinets', unit: 'ea', laborHours: 1, items: [
+      { name: 'Medicine Cabinet', quantity: 1, unit: 'ea', unitPrice: 85, category: 'material' },
+      { name: 'Screws', quantity: 4, unit: 'ea', unitPrice: 1, category: 'material' },
+      { name: 'Carp Labor', quantity: 1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ FLOORING ============
+    { id: uuidv4(), name: 'Floor Prep - Tile', description: 'Prepare subfloor for tile', category: 'Flooring', unit: 'sqft', laborHours: 0.03, items: [
+      { name: 'Plywood 1/4"', quantity: 0.04, unit: 'sheet', unitPrice: 28, category: 'material' },
+      { name: 'Screws', quantity: 0.1, unit: 'sqft', unitPrice: 0.15, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.03, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Floor Prep - Wood', description: 'Prepare subfloor for hardwood', category: 'Flooring', unit: 'sqft', laborHours: 0.02, items: [
+      { name: 'Underlayment', quantity: 1, unit: 'sqft', unitPrice: 0.75, category: 'material' },
+      { name: 'Tape', quantity: 0.05, unit: 'ft', unitPrice: 0.25, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.02, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Hardwood Install', description: 'Install 3/4" hardwood flooring', category: 'Flooring', unit: 'sqft', laborHours: 0.08, items: [
+      { name: 'Hardwood Flooring', quantity: 1.05, unit: 'sqft', unitPrice: 8, category: 'material' },
+      { name: 'Nails/Staples', quantity: 0.02, unit: 'lb', unitPrice: 4, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.08, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'LVP Install', description: 'Install luxury vinyl plank', category: 'Flooring', unit: 'sqft', laborHours: 0.04, items: [
+      { name: 'LVP Flooring', quantity: 1.05, unit: 'sqft', unitPrice: 4.50, category: 'material' },
+      { name: 'Transition', quantity: 0.02, unit: 'lf', unitPrice: 5, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.04, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Tile Install - Floor', description: 'Install ceramic/porcelain floor tile', category: 'Flooring', unit: 'sqft', laborHours: 0.1, items: [
+      { name: 'Floor Tile', quantity: 1.05, unit: 'sqft', unitPrice: 4, category: 'material' },
+      { name: 'Thinset', quantity: 0.05, unit: 'sqft', unitPrice: 1.50, category: 'material' },
+      { name: 'Grout', quantity: 0.03, unit: 'sqft', unitPrice: 1, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Carpet Install', description: 'Install carpet and pad', category: 'Flooring', unit: 'sqft', laborHours: 0.03, items: [
+      { name: 'Carpet', quantity: 1.1, unit: 'sqft', unitPrice: 4, category: 'material' },
+      { name: 'Carpet Pad', quantity: 1.1, unit: 'sqft', unitPrice: 1.50, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.03, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Transition Strip', description: 'Install transition strip', category: 'Flooring', unit: 'ea', laborHours: 0.25, items: [
+      { name: 'Transition Strip', quantity: 1, unit: 'ea', unitPrice: 12, category: 'material' },
+      { name: 'Floor Labor', quantity: 0.25, unit: 'hrs', unitPrice: 30, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ EXTERIOR ============
+    { id: uuidv4(), name: 'Siding - Vinyl', description: 'Install vinyl siding', category: 'Exterior', unit: 'sqft', laborHours: 0.06, items: [
+      { name: 'Vinyl Siding', quantity: 1.05, unit: 'sqft', unitPrice: 3.50, category: 'material' },
+      { name: 'J-Channel', quantity: 0.08, unit: 'lf', unitPrice: 2.50, category: 'material' },
+      { name: 'Siding Nails', quantity: 0.02, unit: 'lb', unitPrice: 6, category: 'material' },
+      { name: 'Exterior Labor', quantity: 0.06, unit: 'hrs', unitPrice: 32, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Siding - Fiber Cement', description: 'Install fiber cement siding', category: 'Exterior', unit: 'sqft', laborHours: 0.1, items: [
+      { name: 'Fiber Cement', quantity: 1.05, unit: 'sqft', unitPrice: 6, category: 'material' },
+      { name: 'Siding Screws', quantity: 0.02, unit: 'lb', unitPrice: 8, category: 'material' },
+      { name: 'Exterior Labor', quantity: 0.1, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Roofing Tear-Off', description: 'Remove existing shingles', category: 'Exterior', unit: 'sqft', laborHours: 0.04, items: [
+      { name: 'Tear-Off Labor', quantity: 0.04, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Roofing - Architectural', description: 'Install architectural shingles', category: 'Exterior', unit: 'sqft', laborHours: 0.06, items: [
+      { name: 'Architectural Shingles', quantity: 1.05, unit: 'bundle', unitPrice: 35, category: 'material' },
+      { name: 'Underlayment', quantity: 1.05, unit: 'sqft', unitPrice: 0.75, category: 'material' },
+      { name: 'Drip Edge', quantity: 0.04, unit: 'lf', unitPrice: 2, category: 'material' },
+      { name: 'Roofing Nails', quantity: 0.01, unit: 'lb', unitPrice: 6, category: 'material' },
+      { name: 'Roofing Labor', quantity: 0.06, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Window Install', description: 'Install replacement window', category: 'Exterior', unit: 'ea', laborHours: 2, items: [
+      { name: 'Window', quantity: 1, unit: 'ea', unitPrice: 250, category: 'material' },
+      { name: 'Flashing', quantity: 12, unit: 'ft', unitPrice: 1.50, category: 'material' },
+      { name: 'Foam', quantity: 1, unit: 'can', unitPrice: 8, category: 'material' },
+      { name: 'Exterior Labor', quantity: 2, unit: 'hrs', unitPrice: 40, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Deck - Pressure Treated', description: 'Build pressure treated deck', category: 'Exterior', unit: 'sqft', laborHours: 0.25, items: [
+      { name: 'PT Decking', quantity: 1.05, unit: 'sqft', unitPrice: 4, category: 'material' },
+      { name: 'PT Frame', quantity: 0.3, unit: 'lf', unitPrice: 3, category: 'material' },
+      { name: 'Deck Screws', quantity: 0.05, unit: 'lb', unitPrice: 12, category: 'material' },
+      { name: 'Exterior Labor', quantity: 0.25, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Deck - Composite', description: 'Build composite deck', category: 'Exterior', unit: 'sqft', laborHours: 0.2, items: [
+      { name: 'Composite Decking', quantity: 1.05, unit: 'sqft', unitPrice: 8, category: 'material' },
+      { name: 'Composite Frame', quantity: 0.2, unit: 'lf', unitPrice: 4, category: 'material' },
+      { name: 'Composite Screws', quantity: 0.05, unit: 'lb', unitPrice: 15, category: 'material' },
+      { name: 'Exterior Labor', quantity: 0.2, unit: 'hrs', unitPrice: 35, category: 'labor' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Gutter Install', description: 'Install aluminum gutters', category: 'Exterior', unit: 'lf', laborHours: 0.1, items: [
+      { name: 'Gutter Section', quantity: 1, unit: 'lf', unitPrice: 6, category: 'material' },
+      { name: 'Gutter Hanger', quantity: 0.5, unit: 'ea', unitPrice: 1.50, category: 'material' },
+      { name: 'Downspout', quantity: 0.2, unit: 'lf', unitPrice: 4, category: 'material' },
+      { name: 'Exterior Labor', quantity: 0.1, unit: 'hrs', unitPrice: 32, category: 'labor' },
+    ], createdAt: now },
+
+    // ============ ALLOWANCES ============
+    { id: uuidv4(), name: 'Allowance - Lighting', description: 'Allowance for light fixtures', category: 'Allowances', unit: 'ea', laborHours: 0, items: [
+      { name: 'Lighting Allowance', quantity: 1, unit: 'ea', unitPrice: 500, category: 'allowance' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Allowance - Plumbing Fixtures', description: 'Allowance for plumbing fixtures', category: 'Allowances', unit: 'ea', laborHours: 0, items: [
+      { name: 'Plumbing Allowance', quantity: 1, unit: 'ea', unitPrice: 1000, category: 'allowance' },
+    ], createdAt: now },
+    { id: uuidv4(), name: 'Allowance - Appliances', description: 'Allowance for appliances', category: 'Allowances', unit: 'ea', laborHours: 0, items: [
+      { name: 'Appliance Allowance', quantity: 1, unit: 'ea', unitPrice: 3000, category: 'allowance' },
+    ], createdAt: now },
   ],
   templates: [
     { id: uuidv4(), name: 'Kitchen Remodel Basic', type: 'estimate', scope: 'Complete kitchen remodel', laborAssumptions: 'Demo, drywall, electrical, plumbing, cabinets, countertops', materialAssumptions: 'Cabinets, countertops, flooring, fixtures', markupPercent: 20, items: [{ name: 'Demo', description: 'Remove existing cabinets, countertops', quantity: 1, unitPrice: 1500, category: 'Labor', isLabor: true }], createdAt: now },
