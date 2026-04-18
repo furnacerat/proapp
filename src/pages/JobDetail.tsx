@@ -12,7 +12,7 @@ import {
   ArrowLeft, MapPin, Trash2, Plus, Camera, FileText, Clock, Receipt, CheckSquare, DollarSign, 
   AlertTriangle, TrendingUp, Wrench, Edit, Copy, Upload, AlertCircle, Clipboard, Activity,
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
-  Flag, Paperclip, Eye, Calendar
+  Flag, Paperclip, Eye, Calendar, Send
 } from 'lucide-react';
 
 export function JobDetail() {
@@ -569,7 +569,13 @@ export function JobDetail() {
                         <td><span className={`badge ${getStatusColor(inv.status)}`}>{inv.status}</span></td>
                         <td>
                           <div className="flex gap-2">
-                            {inv.status !== 'paid' && <button className="btn btn-sm btn-secondary" onClick={() => { setSelectedInvoice(inv.id); setShowModal('payment'); }}>Pay</button>}
+                            {inv.status !== 'paid' && <button className="btn btn-sm btn-secondary" onClick={() => setShowModal('payment')}>Pay</button>}
+                            <button className="btn btn-sm btn-secondary btn-icon" onClick={() => {
+                              if (!job.customerEmail) { showToast('No customer email', 'error'); return; }
+                              const subject = encodeURIComponent(`Invoice ${inv.invoiceNumber}: ${job.name}`);
+                              const body = encodeURIComponent(`Hi,\n\nPlease find attached Invoice ${inv.invoiceNumber} for ${job.name}.\n\nAmount: ${formatCurrency(inv.amount)}\nDue: ${formatCurrency(inv.amount - paid)}\n\nThank you for your business!\n\nAllen's`);
+                              window.location.href = `mailto:${job.customerEmail}?subject=${subject}&body=${body}`;
+                            }} title="Email Invoice"><Send size={14} /></button>
                             <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'invoice', id: inv.id })}><Trash2 size={14} /></button>
                           </div>
                         </td>
@@ -599,6 +605,12 @@ export function JobDetail() {
                       <td><span className={`badge ${getStatusColor(co.status)}`}>{co.status}</span></td>
                       <td>
                         <div className="flex gap-2">
+                          <button className="btn btn-sm btn-secondary btn-icon" onClick={() => {
+                            if (!job.customerEmail) { showToast('No customer email', 'error'); return; }
+                            const subject = encodeURIComponent(`Change Order: ${job.name}`);
+                            const body = encodeURIComponent(`Hi,\n\nA change order has been submitted for ${job.name}.\n\nDescription: ${co.description}\nAmount: ${formatCurrency(co.amount)}\n\nPlease review and let us know if you have any questions.\n\nThanks,\nAllen's`);
+                            window.location.href = `mailto:${job.customerEmail}?subject=${subject}&body=${body}`;
+                          }} title="Email Change Order"><Send size={14} /></button>
                           {co.status === 'pending' && (
                             <button className="btn btn-sm btn-primary" onClick={() => approveChangeOrder(co.id)}>Approve</button>
                           )}

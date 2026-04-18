@@ -812,6 +812,14 @@ export function EstimateBuilder() {
           <button className="btn btn-secondary" onClick={() => setShowProposal(true)}>
             <Eye size={16} /> Preview
           </button>
+          <button className="btn btn-secondary" onClick={() => {
+            if (!customer?.email) { showToast('No customer email', 'error'); return; }
+            const subject = encodeURIComponent(`Estimate: ${estimate.name}`);
+            const body = encodeURIComponent(`Hi ${customer.name},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`);
+            window.location.href = `mailto:${customer.email}?subject=${subject}&body=${body}`;
+          }}>
+            <Send size={16} /> Email
+          </button>
           {estimate.status === 'draft' && (
             <button className="btn btn-secondary" onClick={() => updateEstimate(estimate.id, { status: 'sent' })}>
               <Send size={16} /> Mark Sent
