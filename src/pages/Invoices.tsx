@@ -65,8 +65,7 @@ export function Invoices() {
   const handleDelete = () => { if (deleteId) { deleteInvoice(deleteId); showToast('Invoice deleted'); setDeleteId(null); } };
 
   const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
     const invPayments = getInvoicePayments(inv.id);
@@ -83,8 +82,8 @@ export function Invoices() {
       <div className="page-content">
         <div className="kpi-grid mb-4">
           <div className="kpi-card"><div className="kpi-label">Total Invoiced</div><div className="kpi-value kpi-primary">{formatCurrency(totalInvoiced)}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Total Paid</div><div className="kpi-value kpi-success">{formatCurrency(totalPaid)}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Outstanding</div><div className="kpi-value kpi-accent">{formatCurrency(totalInvoiced - totalPaid)}</div></div>
+          <div className="kpi-card"><div className="kpi-label">Total Paid</div><div className="kpi-value kpi-success">{formatCurrency(totalPaidInv)}</div></div>
+          <div className="kpi-card"><div className="kpi-label">Outstanding</div><div className="kpi-value kpi-accent">{formatCurrency(totalInvoiced - totalPaidInv)}</div></div>
         </div>
         <div className="filters">
           <div className="search-bar"><Search /><input className="form-input" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{paddingLeft: '40px'}} /></div>

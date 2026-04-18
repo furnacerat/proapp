@@ -759,7 +759,8 @@ export function JobDetail() {
         )}
 
         {activeTab === 'timeline' && (
-          <div className="card">
+          <PrintRegion title="Timeline">
+            <div className="card">
             <div className="card-header">
               <h3 className="card-title">Activity Timeline</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('timeline')}>+ Add Entry</button>
@@ -788,7 +789,8 @@ export function JobDetail() {
         )}
 
         {activeTab === 'dailylog' && (
-          <div className="card">
+          <PrintRegion title="Daily Logs">
+            <div className="card">
             <div className="card-header">
               <h3 className="card-title">Daily Logs</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('dailylog')}>+ Add Log</button>
@@ -817,7 +819,8 @@ export function JobDetail() {
         )}
 
         {activeTab === 'punchlist' && (
-          <div className="card">
+          <PrintRegion title="Punch List">
+            <div className="card">
             <div className="card-header">
               <h3 className="card-title">Punch List ({punchList.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('punchlist')}>+ Add Item</button>
@@ -845,7 +848,8 @@ export function JobDetail() {
         )}
 
         {activeTab === 'issues' && (
-          <div className="card">
+          <PrintRegion title="Issues">
+            <div className="card">
             <div className="card-header">
               <h3 className="card-title">Issues ({issues.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('issue')}>+ Log Issue</button>
@@ -882,7 +886,8 @@ export function JobDetail() {
         )}
 
         {activeTab === 'files' && (
-          <div className="card">
+        <PrintRegion title="Files">
+            <div className="card">
             <div className="card-header">
               <h3 className="card-title">File Attachments ({attachments.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('file')}>+ Add File</button>
@@ -905,6 +910,7 @@ export function JobDetail() {
               )}
             </div>
           </div>
+        </PrintRegion>
         )}
       </div>
 

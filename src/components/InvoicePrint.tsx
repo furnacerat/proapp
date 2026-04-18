@@ -17,10 +17,10 @@ const InvoicePrint: React.FC<Props> = ({ invoice, job, payments }) => {
   return (
     <div style={{ fontFamily: 'ui-sans-serif, system-ui, Arial', padding: 8 }}>
       <div style={{ textAlign: 'center', fontWeight: 700, marginBottom: 8 }}>{/* Optional branding header can go here */}</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontWeight: 700 }}>{invoice.invoiceNumber}</div>
-        <div>{invoice.date ? new Date(invoice.date).toLocaleDateString() : ''}</div>
-      </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ fontWeight: 700 }}>{invoice.invoiceNumber}</div>
+          <div>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString() : ''}</div>
+        </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 14, color: '#555' }}>Job</div>
