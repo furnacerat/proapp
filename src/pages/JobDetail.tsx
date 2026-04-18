@@ -22,7 +22,7 @@ export function JobDetail() {
     addTimeEntry, deleteTimeEntry, addExpense, deleteExpense,
     addTask, deleteTask, addInvoice, updateInvoice, deleteInvoice, addPayment, addNote, deleteNote, addPhoto, deletePhoto,
     addChangeOrder, updateChangeOrder, deleteChangeOrder, approveChangeOrder,
-    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobActualCost, getJobProfit, getJobBalance, getJobProgress } = useApp();
+    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobActualCost, getJobProfit, getJobBalance, getJobProgress, updateExpense } = useApp();
   const { showToast } = useToast();
   
   const job = jobs.find(j => j.id === id);
@@ -54,6 +54,8 @@ export function JobDetail() {
   
   const [showModal, setShowModal] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
+  const [receiptForm, setReceiptForm] = useState({ url: '', vendor: '', amount: '', notes: '' });
   
   // Mock data - in real app these would come from context
   const [timeline, setTimeline] = useState<JobTimelineEntry[]>([]);
@@ -209,6 +211,29 @@ export function JobDetail() {
     showToast('Expense added');
     setShowModal(null);
     setExpenseForm({ date: new Date().toISOString().split('T')[0], vendor: '', amount: '', category: 'materials', paymentSource: 'company_card', notes: '' });
+  };
+
+  const handleCaptureReceipt = () => {
+    if (!receiptForm.url) { showToast('Enter receipt URL', 'error'); return; }
+    if (selectedExpense) {
+      updateExpense(selectedExpense, { receipt: receiptForm.url });
+      showToast('Receipt attached');
+    } else {
+      addExpense({ 
+        jobId: job.id, 
+        date: new Date().toISOString().split('T')[0], 
+        vendor: receiptForm.vendor || 'Receipt', 
+        amount: parseFloat(receiptForm.amount) || 0, 
+        category: 'materials', 
+        paymentSource: 'company_card', 
+        notes: receiptForm.notes,
+        receipt: receiptForm.url 
+      });
+      showToast('Receipt captured');
+    }
+    setShowModal(null);
+    setReceiptForm({ url: '', vendor: '', amount: '', notes: '' });
+    setSelectedExpense(null);
   };
 
   const handleAddTask = () => {
@@ -460,18 +485,32 @@ export function JobDetail() {
           <div className="card">
             <div className="card-header">
               <h3 className="card-title">Expenses ({jobExpenses.length})</h3>
-              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('expense')}>+ Add</button>
+              <div className="flex gap-2">
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowModal('capture')}>Capture Receipt</button>
+                <button className="btn btn-sm btn-primary" onClick={() => setShowModal('expense')}>+ Add</button>
+              </div>
             </div>
             <div className="table-container">
               <table className="table">
-                <thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th><th>Notes</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th><th>Receipt</th><th>Notes</th><th></th></tr></thead>
                 <tbody>
-                  {jobExpenses.length === 0 ? <tr><td colSpan={6} className="text-center text-muted">No expenses</td></tr> : jobExpenses.map(exp => (
+                  {jobExpenses.length === 0 ? <tr><td colSpan={7} className="text-center text-muted">No expenses</td></tr> : jobExpenses.map(exp => (
                     <tr key={exp.id}>
                       <td>{formatDate(exp.date)}</td>
                       <td>{exp.vendor}</td>
                       <td><span className="badge badge-gray">{exp.category}</span></td>
                       <td>{formatCurrency(exp.amount)}</td>
+                      <td>
+                        {exp.receipt ? (
+                          <a href={exp.receipt} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary btn-icon">
+                            <Camera size={14} />
+                          </a>
+                        ) : (
+                          <button className="btn btn-sm btn-ghost btn-icon" onClick={() => { setSelectedExpense(exp.id); setShowModal('capture'); }}>
+                            <Camera size={14} />
+                          </button>
+                        )}
+                      </td>
                       <td className="truncate" style={{maxWidth: '150px'}}>{exp.notes}</td>
                       <td><button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'expense', id: exp.id })}><Trash2 size={14} /></button></td>
                     </tr>
@@ -1024,6 +1063,36 @@ export function JobDetail() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
           <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleAddPhoto}>Add Photo</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'capture'} onClose={() => { setShowModal(null); setSelectedExpense(null); setReceiptForm({ url: '', vendor: '', amount: '', notes: '' }); }} title={selectedExpense ? 'Attach Receipt' : 'Capture Receipt'}>
+        <div className="form-group">
+          <label className="form-label">Receipt URL *</label>
+          <input className="form-input" value={receiptForm.url} onChange={e => setReceiptForm({...receiptForm, url: e.target.value})} placeholder="https://..." />
+          <p className="text-xs text-muted mt-1">Enter photo URL or use camera to capture</p>
+        </div>
+        {!selectedExpense && (
+          <>
+            <div className="form-row form-row-2">
+              <div className="form-group">
+                <label className="form-label">Vendor</label>
+                <input className="form-input" value={receiptForm.vendor} onChange={e => setReceiptForm({...receiptForm, vendor: e.target.value})} placeholder="e.g., Home Depot" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Amount</label>
+                <input className="form-input" type="number" value={receiptForm.amount} onChange={e => setReceiptForm({...receiptForm, amount: e.target.value})} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Notes</label>
+              <textarea className="form-textarea" value={receiptForm.notes} onChange={e => setReceiptForm({...receiptForm, notes: e.target.value})} />
+            </div>
+          </>
+        )}
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => { setShowModal(null); setSelectedExpense(null); }}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCaptureReceipt}>{selectedExpense ? 'Attach Receipt' : 'Save Expense'}</button>
         </div>
       </Modal>
 
