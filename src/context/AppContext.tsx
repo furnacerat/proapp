@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, LaborRate, Material, Assembly, Template } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 
 interface AppContextType {
@@ -32,6 +32,11 @@ interface AppContextType {
   addTemplate: (template: Omit<Template, 'id' | 'createdAt'>) => string;
   updateTemplate: (id: string, updates: Partial<Template>) => void;
   deleteTemplate: (id: string) => void;
+  
+  addProjectTypeTemplate: (template: Omit<ProjectTypeTemplate, 'id' | 'createdAt'>) => string;
+  updateProjectTypeTemplate: (id: string, updates: Partial<ProjectTypeTemplate>) => void;
+  deleteProjectTypeTemplate: (id: string) => void;
+  getProjectTypeTemplate: (projectType: JobType) => ProjectTypeTemplate | undefined;
   
   addJob: (job: Omit<Job, 'id' | 'createdAt' | 'updatedAt' | 'actualCost'>) => string;
   updateJob: (id: string, updates: Partial<Job>) => void;
@@ -94,6 +99,7 @@ interface AppContextType {
   materials: Material[];
   assemblies: Assembly[];
   templates: Template[];
+  projectTypeTemplates: ProjectTypeTemplate[];
   
   jobs: Job[];
   workers: Worker[];
@@ -699,7 +705,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const calculateEstimateTotals = (estimate: Partial<Estimate>) => {
-    const allItems = estimate.sections?.flatMap(s => s.lineItems || []) || [];
+    const allScopes = estimate.scopes || [];
+    let allItems: EstimateLineItem[] = [];
+    const scopeTotals: Record<string, number> = {};
+    
+    allScopes.forEach(scope => {
+      const scopeItems = scope.sections?.flatMap(s => s.lineItems || []) || [];
+      allItems = [...allItems, ...scopeItems];
+      
+      const scopeLabor = scopeItems.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0);
+      const scopeMaterial = scopeItems.filter(i => i.category === 'material').reduce((sum, i) => sum + i.total, 0);
+      const scopeEquipment = scopeItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.total, 0);
+      const scopeSub = scopeItems.filter(i => i.category === 'subcontractor').reduce((sum, i) => sum + i.total, 0);
+      scopeTotals[scope.id] = scopeLabor + scopeMaterial + scopeEquipment + scopeSub;
+    });
     
     const laborTotal = allItems.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0);
     const materialTotal = allItems.filter(i => i.category === 'material').reduce((sum, i) => sum + i.total, 0);
@@ -713,8 +732,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const projectedLaborHours = allItems.filter(i => i.isLabor).reduce((sum, i) => sum + (i.hours || 0), 0);
     const projectedMaterialCost = materialTotal;
     const projectedLaborCost = laborTotal;
-    const marginAmount = 0;
-    const marginPercent = 0;
     
     return { 
       laborTotal, 
@@ -727,8 +744,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       projectedLaborHours,
       projectedMaterialCost,
       projectedLaborCost,
-      marginAmount,
-      marginPercent
+      marginAmount: 0,
+      marginPercent: 0,
+      scopeTotals
     };
   };
 
@@ -890,6 +908,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({ ...prev, templates: prev.templates.filter(t => t.id !== id) }));
   };
 
+  const addProjectTypeTemplate = (template: Omit<ProjectTypeTemplate, 'id' | 'createdAt'>) => {
+    const id = crypto.randomUUID();
+    const newTemplate: ProjectTypeTemplate = { ...template, id, createdAt: new Date().toISOString() };
+    setData(prev => ({ ...prev, projectTypeTemplates: [...prev.projectTypeTemplates, newTemplate] }));
+    return id;
+  };
+
+  const updateProjectTypeTemplate = (id: string, updates: Partial<ProjectTypeTemplate>) => {
+    setData(prev => ({
+      ...prev,
+      projectTypeTemplates: prev.projectTypeTemplates.map(t => t.id === id ? { ...t, ...updates } : t),
+    }));
+  };
+
+  const deleteProjectTypeTemplate = (id: string) => {
+    setData(prev => ({ ...prev, projectTypeTemplates: prev.projectTypeTemplates.filter(t => t.id !== id) }));
+  };
+
+  const getProjectTypeTemplate = (projectType: JobType) => 
+    data.projectTypeTemplates.find(t => t.projectType === projectType);
+
   return (
     <AppContext.Provider value={{
       data,
@@ -915,6 +954,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addTemplate,
       updateTemplate,
       deleteTemplate,
+      addProjectTypeTemplate,
+      updateProjectTypeTemplate,
+      deleteProjectTypeTemplate,
+      getProjectTypeTemplate,
       addJob,
       updateJob,
       deleteJob,
@@ -966,6 +1009,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       materials: data.materials,
       assemblies: data.assemblies,
       templates: data.templates,
+      projectTypeTemplates: data.projectTypeTemplates,
       jobs: data.jobs,
       workers: data.workers,
       timeEntries: data.timeEntries,

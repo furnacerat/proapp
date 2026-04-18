@@ -147,6 +147,42 @@ export interface EstimateAllowance {
   sortOrder?: number;
 }
 
+export type TemplateItemCategory = 'labor' | 'material' | 'equipment' | 'subcontractor' | 'allowance' | 'optional' | 'other';
+
+export interface ProjectTypeTemplateItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  category: TemplateItemCategory;
+  isLabor?: boolean;
+  hours?: number;
+  isOptional?: boolean;
+  isAllowance?: boolean;
+  isDefaultChecked?: boolean;
+  linkedLaborRateId?: string;
+  linkedMaterialId?: string;
+}
+
+export interface ProjectTypeTemplateSection {
+  id: string;
+  name: string;
+  description?: string;
+  items: ProjectTypeTemplateItem[];
+  sortOrder: number;
+}
+
+export interface ProjectTypeTemplate {
+  id: string;
+  name: string;
+  projectType: JobType;
+  description?: string;
+  sections: ProjectTypeTemplateSection[];
+  createdAt: string;
+}
+
 export interface EstimateExclusion {
   id: string;
   name: string;
@@ -156,15 +192,26 @@ export interface EstimateExclusion {
 
 export type EstimateTaxable = 'none' | 'materials' | 'labor' | 'all';
 
+export interface EstimateScope {
+  id: string;
+  name: string;
+  projectType: JobType;
+  sections: EstimateSection[];
+  subtotal: number;
+  isOptional: boolean;
+  sortOrder: number;
+}
+
 export interface Estimate {
   id: string;
   estimateNumber: string;
   customerId: string;
   name: string;
   address: string;
-  type: JobType;
   status: EstimateStatus;
-  sections: EstimateSection[];
+  type?: JobType;
+  scopes?: EstimateScope[];
+  sections?: EstimateSection[];
   laborTotal: number;
   materialTotal: number;
   equipmentTotal: number;
@@ -333,6 +380,7 @@ export interface AppData {
   materials: Material[];
   assemblies: Assembly[];
   templates: Template[];
+  projectTypeTemplates: ProjectTypeTemplate[];
   estimates: Estimate[];
   jobTemplates: JobTemplate[];
   jobs: Job[];

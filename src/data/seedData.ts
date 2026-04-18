@@ -1,4 +1,4 @@
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Customer, Estimate, LaborRate, Material, Assembly, Template } from './types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Customer, Estimate, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateSection, ProjectTypeTemplateItem } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 const now = new Date().toISOString();
@@ -56,6 +56,252 @@ export const initialData: AppData = {
   templates: [
     { id: uuidv4(), name: 'Kitchen Remodel Basic', type: 'estimate', scope: 'Complete kitchen remodel', laborAssumptions: 'Demo, drywall, electrical, plumbing, cabinets, countertops', materialAssumptions: 'Cabinets, countertops, flooring, fixtures', markupPercent: 20, items: [{ name: 'Demo', description: 'Remove existing cabinets, countertops', quantity: 1, unitPrice: 1500, category: 'Labor', isLabor: true }], createdAt: now },
     { id: uuidv4(), name: 'Bathroom Remodel', type: 'estimate', scope: 'Full bathroom renovation', laborAssumptions: 'Demo, plumbing, electrical, tile, fixtures', materialAssumptions: 'Tile, vanity, fixtures, plumbing', markupPercent: 20, items: [], createdAt: now },
+  ],
+  projectTypeTemplates: [
+    {
+      id: uuidv4(),
+      name: 'Kitchen Remodel',
+      projectType: 'remodel',
+      description: 'Full kitchen remodel with cabinets, countertops, flooring, and appliances',
+      sections: [
+        { id: uuidv4(), name: 'Demolition', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Remove Existing Cabinets', description: 'Demo upper and base cabinets', quantity: 1, unit: 'ls', unitPrice: 800, category: 'labor', isLabor: true, hours: 4, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Remove Countertops', description: 'Remove laminate or stone countertops', quantity: 1, unit: 'ls', unitPrice: 300, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Demo Flooring', description: 'Remove existing flooring', quantity: 200, unit: 'sqft', unitPrice: 1, category: 'labor', isLabor: true, hours: 3, isDefaultChecked: false },
+          { id: uuidv4(), name: 'Debris Removal', description: 'Haul away demo debris', quantity: 1, unit: 'ls', unitPrice: 400, category: 'other', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Cabinets', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Upper Cabinets (Stock)', description: '24" upper cabinets', quantity: 8, unit: 'ea', unitPrice: 180, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Base Cabinets (Stock)', description: '34.5" base cabinets', quantity: 8, unit: 'ea', unitPrice: 280, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Cabinet Hardware', description: 'Knobs/pulls', quantity: 32, unit: 'ea', unitPrice: 3, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Cabinet Install Labor', description: 'Install all cabinets', quantity: 4, unit: 'hrs', unitPrice: 45, category: 'labor', isLabor: true, hours: 4, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Countertops', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Quartz Countertops', description: 'Remove and replace with quartz', quantity: 40, unit: 'sqft', unitPrice: 65, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Countertop Template/Install', description: 'Template and install', quantity: 1, unit: 'ea', unitPrice: 350, category: 'labor', isLabor: true, hours: 3, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Flooring', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Hardwood Flooring', description: '3/4" hardwood', quantity: 200, unit: 'sqft', unitPrice: 8, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Underlayment', description: 'Foam underlayment', quantity: 200, unit: 'sqft', unitPrice: 0.75, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Install Hardwood', description: 'Install and finish', quantity: 200, unit: 'sqft', unitPrice: 4, category: 'labor', isLabor: true, hours: 8, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Electrical', sortOrder: 4, items: [
+          { id: uuidv4(), name: 'Receptacle Installation', description: 'Add, move, or update outlets', quantity: 4, unit: 'ea', unitPrice: 125, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Pendant Lighting', description: 'Install pendant lights', quantity: 3, unit: 'ea', unitPrice: 150, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: false },
+        ]},
+        { id: uuidv4(), name: 'Plumbing', sortOrder: 5, items: [
+          { id: uuidv4(), name: 'Dishwasher Hookup', description: 'Connect dishwasher', quantity: 1, unit: 'ea', unitPrice: 200, category: 'labor', isLabor: true, hours: 1, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Faucet Installation', description: 'Install new faucet', quantity: 1, unit: 'ea', unitPrice: 150, category: 'labor', isLabor: true, hours: 1, isDefaultChecked: true },
+        ]},
+      ],
+      createdAt: now
+    },
+    {
+      id: uuidv4(),
+      name: 'Bathroom Remodel',
+      projectType: 'remodel',
+      description: 'Full bathroom renovation with tile, vanity, and fixtures',
+      sections: [
+        { id: uuidv4(), name: 'Demolition', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Remove Fixtures', description: 'Remove toilet, vanity, tub/shower', quantity: 1, unit: 'ls', unitPrice: 400, category: 'labor', isLabor: true, hours: 3, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Remove Tile', description: 'Remove floor and shower tile', quantity: 80, unit: 'sqft', unitPrice: 2, category: 'labor', isLabor: true, hours: 4, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Demo & Haul', description: 'Demolition debris removal', quantity: 1, unit: 'ls', unitPrice: 350, category: 'other', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Vanity', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Vanity 48"', description: 'Single sink vanity', quantity: 1, unit: 'ea', unitPrice: 650, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Vanity Faucet', description: 'Single handle faucet', quantity: 1, unit: 'ea', unitPrice: 180, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Vanity Install', description: 'Install vanity and connect plumbing', quantity: 3, unit: 'hrs', unitPrice: 45, category: 'labor', isLabor: true, hours: 3, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Shower/Tub', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Shower Pan', description: 'Acrylic shower pan', quantity: 1, unit: 'ea', unitPrice: 450, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Shower Glass', description: 'Glass enclosure', quantity: 1, unit: 'ea', unitPrice: 850, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Shower Valve', description: 'New shower valve and trim', quantity: 1, unit: 'ea', unitPrice: 350, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Tile - Floor', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Floor Tile', description: 'Ceramic or porcelain tile', quantity: 60, unit: 'sqft', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Thinset Mortar', description: 'Tile mortar', quantity: 60, unit: 'sqft', unitPrice: 2, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Grout', description: 'Unsanded grout', quantity: 60, unit: 'sqft', unitPrice: 1, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Tile Install - Floor', description: 'Install floor tile', quantity: 60, unit: 'sqft', unitPrice: 5, category: 'labor', isLabor: true, hours: 4, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Tile - Shower', sortOrder: 4, items: [
+          { id: uuidv4(), name: 'Shower Wall Tile', description: '3x6 subway tile', quantity: 140, unit: 'sqft', unitPrice: 3.50, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Shower Waterproofing', description: 'Waterproof membrane', quantity: 140, unit: 'sqft', unitPrice: 2, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Tile Install - Shower', description: 'Install shower walls', quantity: 140, unit: 'sqft', unitPrice: 6, category: 'labor', isLabor: true, hours: 8, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Toilet', sortOrder: 5, items: [
+          { id: uuidv4(), name: 'Toilet', description: 'Two-piece elongated', quantity: 1, unit: 'ea', unitPrice: 350, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Toilet Install', description: 'Install toilet', quantity: 1, unit: 'ea', unitPrice: 125, category: 'labor', isLabor: true, hours: 1, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Accessories', sortOrder: 6, items: [
+          { id: uuidv4(), name: 'Towel Bars', description: 'Towel bar set', quantity: 2, unit: 'ea', unitPrice: 85, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Toilet Paper Holder', description: 'Wall mount', quantity: 1, unit: 'ea', unitPrice: 45, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Mirror/Medicine Cabinet', description: 'Lighted medicine cabinet', quantity: 1, unit: 'ea', unitPrice: 250, category: 'material', isLabor: false, isDefaultChecked: false },
+        ]},
+      ],
+      createdAt: now
+    },
+    {
+      id: uuidv4(),
+      name: 'Flooring Install',
+      projectType: 'remodel',
+      description: 'Hardwood or luxury vinyl plank flooring installation',
+      sections: [
+        { id: uuidv4(), name: 'Flooring', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Hardwood Flooring', description: '3/4" solid hardwood', quantity: 200, unit: 'sqft', unitPrice: 8, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'LVP Flooring', description: 'Luxury vinyl plank', quantity: 200, unit: 'sqft', unitPrice: 4.50, category: 'material', isLabor: false, isDefaultChecked: false },
+          { id: uuidv4(), name: 'Tile Flooring', description: 'Porcelain tile', quantity: 200, unit: 'sqft', unitPrice: 5, category: 'material', isLabor: false, isDefaultChecked: false },
+        ]},
+        { id: uuidv4(), name: 'Prep', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Subfloor Prep', description: 'Level and repair subfloor', quantity: 200, unit: 'sqft', unitPrice: 2, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Underlayment', description: 'Foam or cork underlayment', quantity: 200, unit: 'sqft', unitPrice: 0.75, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Moisture Barrier', description: ' Vapor barrier', quantity: 200, unit: 'sqft', unitPrice: 0.50, category: 'material', isLabor: false, isDefaultChecked: false },
+        ]},
+        { id: uuidv4(), name: 'Installation', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Install Hardwood', description: 'Install and finish hardwood', quantity: 200, unit: 'sqft', unitPrice: 4, category: 'labor', isLabor: true, hours: 8, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Install LVP', description: 'Click-lock LVP installation', quantity: 200, unit: 'sqft', unitPrice: 2.50, category: 'labor', isLabor: true, hours: 5, isDefaultChecked: false },
+          { id: uuidv4(), name: 'Install Tile', description: 'Set and grout tile', quantity: 200, unit: 'sqft', unitPrice: 5, category: 'labor', isLabor: true, hours: 10, isDefaultChecked: false },
+        ]},
+        { id: uuidv4(), name: 'Trim', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Base Shoe', description: '3/4" base shoe', quantity: 100, unit: 'lf', unitPrice: 1.50, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Quarter Round', description: '3/4" quarter round', quantity: 100, unit: 'lf', unitPrice: 1, category: 'material', isLabor: false, isDefaultChecked: false },
+          { id: uuidv4(), name: 'Transition Strips', description: 'Wood transitions', quantity: 3, unit: 'ea', unitPrice: 35, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+      ],
+      createdAt: now
+    },
+    {
+      id: uuidv4(),
+      name: 'Interior Paint',
+      projectType: 'repair',
+      description: 'Interior wall painting including prep and finish',
+      sections: [
+        { id: uuidv4(), name: 'Walls', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Interior Paint', description: 'Premium interior latex', quantity: 4, unit: 'gal', unitPrice: 45, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Primer', description: 'Interior primer', quantity: 2, unit: 'gal', unitPrice: 28, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Prep', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Fill & Sand', description: 'Fill holes, sand smooth', quantity: 800, unit: 'sqft', unitPrice: 0.50, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Caulk Trim', description: 'Caulk trim and corners', quantity: 200, unit: 'lf', unitPrice: 0.75, category: 'labor', isLabor: true, hours: 1, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Paint - Walls', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Paint Walls - 2 Coats', description: 'Prime and 2 coats', quantity: 800, unit: 'sqft', unitPrice: 1.50, category: 'labor', isLabor: true, hours: 6, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Ceilings', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Ceiling Paint', description: 'Flat ceiling paint', quantity: 2, unit: 'gal', unitPrice: 35, category: 'material', isLabor: false, isDefaultChecked: false },
+          { id: uuidv4(), name: 'Paint Ceiling - 2 Coats', description: 'Prime and 2 coats', quantity: 200, unit: 'sqft', unitPrice: 1.25, category: 'labor', isLabor: true, hours: 3, isDefaultChecked: false },
+        ]},
+        { id: uuidv4(), name: 'Trim', sortOrder: 4, items: [
+          { id: uuidv4(), name: 'Trim Paint', description: 'Semi-gloss trim paint', quantity: 1, unit: 'qt', unitPrice: 35, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Paint Trim', description: 'Paint doors, trim, casings', quantity: 60, unit: 'lf', unitPrice: 1.50, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: true },
+        ]},
+      ],
+      createdAt: now
+    },
+    {
+      id: uuidv4(),
+      name: 'Roofing',
+      projectType: 'repair',
+      description: 'Complete roofing replacement with shingles',
+      sections: [
+        { id: uuidv4(), name: 'Tear-Off', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Tear Off Shingles', description: 'Remove existing shingles', quantity: 20, unit: 'sq', unitPrice: 35, category: 'labor', isLabor: true, hours: 8, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Remove Underlayment', description: 'Remove old felt', quantity: 20, unit: 'sq', unitPrice: 15, category: 'labor', isLabor: true, hours: 3, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Roof Debris Haul', description: 'Dumpster and haul', quantity: 1, unit: 'ea', unitPrice: 450, category: 'other', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Prep', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Inspect Decking', description: 'Check and repair decking', quantity: 20, unit: 'sq', unitPrice: 15, category: 'labor', isLabor: true, hours: 4, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Synthetic Underlayment', description: 'Synthetic roof underlayment', quantity: 22, unit: 'sq', unitPrice: 35, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Drip Edge', description: 'Aluminum drip edge', quantity: 100, unit: 'lf', unitPrice: 2.50, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Shingles', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Architectural Shingles', description: '30yr architectural shingles', quantity: 22, unit: 'sq', unitPrice: 125, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Starter Shingles', description: 'Starter strip', quantity: 8, unit: 'sq', unitPrice: 45, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Roofing Nails', description: 'Coil nails', quantity: 4, unit: 'coil', unitPrice: 25, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Flashing', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Pipe Boot', description: 'Rubber pipe boot', quantity: 4, unit: 'ea', unitPrice: 15, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Step Flashing', description: 'Step flashing at walls', quantity: 30, unit: 'lf', unitPrice: 3.50, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Ridge Vent', description: 'Continuous ridge vent', quantity: 30, unit: 'lf', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Install', sortOrder: 4, items: [
+          { id: uuidv4(), name: 'Shingle Install Labor', description: 'Install shingles', quantity: 22, unit: 'sq', unitPrice: 85, category: 'labor', isLabor: true, hours: 16, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Ridge Cap', description: 'Cut and cap ridge', quantity: 30, unit: 'lf', unitPrice: 4, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: false, isOptional: true },
+        ]},
+      ],
+      createdAt: now
+    },
+    {
+      id: uuidv4(),
+      name: 'Deck Build',
+      projectType: 'addition',
+      description: 'Custom deck construction with framing and railings',
+      sections: [
+        { id: uuidv4(), name: 'Framing', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Posts', description: '4x4 pressure treated posts', quantity: 6, unit: 'ea', unitPrice: 25, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Beams', description: '2x10 or 2x12 beams', quantity: 60, unit: 'lf', unitPrice: 8, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Joists', description: '2x8 joists 16" OC', quantity: 240, unit: 'lf', unitPrice: 3.50, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Decking', description: '2x6 or 5/4 decking', quantity: 240, unit: 'lf', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Framing Labor', description: 'Build frame structure', quantity: 12, unit: 'hrs', unitPrice: 45, category: 'labor', isLabor: true, hours: 12, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Railings', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Composite Rail Posts', description: '4x4 composite posts', quantity: 4, unit: 'ea', unitPrice: 45, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Rail Kit', description: 'Composite top rail and bottom', quantity: 40, unit: 'lf', unitPrice: 28, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Balusters', description: 'Aluminum balusters', quantity: 80, unit: 'ea', unitPrice: 4.50, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Railing Install', description: 'Install railings', quantity: 8, unit: 'hrs', unitPrice: 45, category: 'labor', isLabor: true, hours: 8, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Stairs', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Stair Stringers', description: '2x12 PT stringers', quantity: 3, unit: 'ea', unitPrice: 35, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Stair Treads', description: 'Composite treads', quantity: 9, unit: 'ea', unitPrice: 45, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Stair Install', description: 'Build and install stairs', quantity: 4, unit: 'hrs', unitPrice: 45, category: 'labor', isLabor: true, hours: 4, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Finishing', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Ledger Bolts', description: 'Bolts to house', quantity: 1, unit: 'ea', unitPrice: 85, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Post Base', description: 'Simson structural post base', quantity: 6, unit: 'ea', unitPrice: 18, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Surface Prep', description: 'Sand and prep', quantity: 200, unit: 'sqft', unitPrice: 0.50, category: 'labor', isLabor: true, hours: 2, isDefaultChecked: false },
+        ]},
+      ],
+      createdAt: now
+    },
+    {
+      id: uuidv4(),
+      name: 'Whole House Rehab',
+      projectType: 'flip',
+      description: 'Comprehensive house renovation for flip',
+      sections: [
+        { id: uuidv4(), name: 'Demo - Entire House', sortOrder: 0, items: [
+          { id: uuidv4(), name: 'Full House Demo', description: 'Remove all cabinets, flooring, fixtures', quantity: 2000, unit: 'sqft', unitPrice: 1.50, category: 'labor', isLabor: true, hours: 24, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Haul Away', description: 'Multiple dump runs', quantity: 4, unit: 'ea', unitPrice: 350, category: 'other', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Kitchen', sortOrder: 1, items: [
+          { id: uuidv4(), name: 'Cabinets - Upper', description: 'Stock upper cabinets', quantity: 12, unit: 'ea', unitPrice: 180, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Cabinets - Base', description: 'Stock base cabinets', quantity: 10, unit: 'ea', unitPrice: 280, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Granite/Quartz', description: 'Installed countertops', quantity: 50, unit: 'sqft', unitPrice: 55, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'New Appliances', description: 'Basic stainless package', quantity: 1, unit: 'ea', unitPrice: 2500, category: 'allowance', isLabor: false, isAllowance: true, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Bathrooms (2)', sortOrder: 2, items: [
+          { id: uuidv4(), name: 'Vanities', description: 'Two bath vanities', quantity: 2, unit: 'ea', unitPrice: 650, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Tub/Shower Units', description: 'Fiberglass tub/shower', quantity: 2, unit: 'ea', unitPrice: 650, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Tile - Floors', description: 'Bath floor tile', quantity: 150, unit: 'sqft', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Tile - Shower Walls', description: 'Shower walls', quantity: 200, unit: 'sqft', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Fixtures', description: 'Toilets, faucets, accessories', quantity: 1, unit: 'ea', unitPrice: 1200, category: 'allowance', isAllowance: true, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Flooring', sortOrder: 3, items: [
+          { id: uuidv4(), name: 'Hardwood - Main', description: 'Main living areas', quantity: 1400, unit: 'sqft', unitPrice: 8, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Tile - Baths', description: 'Bath tile', quantity: 150, unit: 'sqft', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Carpet - Bedrooms', description: 'Bedrooms', quantity: 600, unit: 'sqft', unitPrice: 3, category: 'material', isLabor: false, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Paint - Interior', sortOrder: 4, items: [
+          { id: uuidv4(), name: 'Walls - Paint', description: 'Full interior walls', quantity: 4000, unit: 'sqft', unitPrice: 1, category: 'labor', isLabor: true, hours: 16, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Trim - Paint', description: 'Doors, casings, base', quantity: 400, unit: 'lf', unitPrice: 2, category: 'labor', isLabor: true, hours: 8, isDefaultChecked: true },
+        ]},
+        { id: uuidv4(), name: 'Exterior', sortOrder: 5, items: [
+          { id: uuidv4(), name: 'Siding Repair', description: 'Replace damaged siding', quantity: 100, unit: 'sqft', unitPrice: 4, category: 'material', isLabor: false, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Exterior Paint', description: 'Full house exterior paint', quantity: 2500, unit: 'sqft', unitPrice: 1.50, category: 'labor', isLabor: true, hours: 20, isDefaultChecked: true },
+          { id: uuidv4(), name: 'Landscaping Cleanup', description: 'Basic cleanup and mulch', quantity: 1, unit: 'ea', unitPrice: 850, category: 'allowance', isAllowance: true, isDefaultChecked: true },
+        ]},
+      ],
+      createdAt: now
+    },
   ],
   estimates: [],
   jobs: [
