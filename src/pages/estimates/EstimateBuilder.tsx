@@ -13,11 +13,12 @@ import {
   AlertTriangle, Calculator, X, Eye, Archive, FolderOpen, CheckSquare,
   MoreHorizontal, Edit3, RotateCcw, FileCheck, Briefcase
 } from 'lucide-react';
+import { renderEmailHTML, renderEmailAll } from '../../utils/emailTemplates';
 
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer } = useApp();
+  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer } = useApp();
   const { showToast } = useToast();
   
   const isNew = id === 'new';
@@ -49,6 +50,10 @@ export function EstimateBuilder() {
   const [showConvertConfirm, setShowConvertConfirm] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailForm, setEmailForm] = useState({ email: '', subject: '', body: '' });
+  const [emailAllPreview, setEmailAllPreview] = useState<{ subject: string; html: string; text: string } | null>(null);
+  const [showEmailAllPreview, setShowEmailAllPreview] = useState(false);
+  const [emailHtmlPreview, setEmailHtmlPreview] = useState<{ subject: string; html: string } | null>(null);
+  const [emailHtmlOpen, setEmailHtmlOpen] = useState(false);
 
   const handlePrint = () => window.print();
 
@@ -56,8 +61,18 @@ export function EstimateBuilder() {
     if (existingEmail) {
       window.location.href = `mailto:${existingEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     } else {
-      setEmailForm({ email: existingEmail || '', subject, body });
-      setShowEmailModal(true);
+      // Build a universal HTML/Plaintext email using branding
+      const brandingLocal = branding as any;
+      try {
+        const tmpl = renderEmailAll('estimate', brandingLocal, { estimate, customer, totals: { total: (typeof totals?.total === 'number' ? totals.total : 0) } });
+        setEmailForm({ email: customer?.email ?? '', subject: tmpl.subject, body: tmpl.text });
+        setEmailHtmlPreview({ subject: tmpl.subject, html: tmpl.html });
+        setEmailAllPreview({ subject: tmpl.subject, html: tmpl.html, text: tmpl.text });
+        setShowEmailModal(true);
+        setShowEmailAllPreview(true);
+      } catch {
+        setEmailHtmlPreview(null);
+      }
     }
   };
 
@@ -835,11 +850,14 @@ export function EstimateBuilder() {
           <button className="btn btn-secondary" onClick={handlePrint}>
             <FileText size={16} /> Print
           </button>
-          <button className="btn btn-secondary" onClick={() => handleEmailWithFallback(
-            `Estimate: ${estimate.name}`,
-            `Hi ${customer?.name || 'Customer'},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`,
-            customer?.email
-          )}>
+          <button className="btn btn-secondary" onClick={() => {
+            // Email with branding signature if available
+            const brandingSig = branding?.brandName ? `\n\n${branding.brandName}` + (branding.logoUrl ? `\n${branding.logoUrl}` : '') : '';
+            const subjectText = `Estimate: ${estimate.name}`;
+            const bodyBase = `Hi ${customer?.name || 'Customer'},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`;
+            const body = bodyBase + brandingSig;
+            handleEmailWithFallback(subjectText, body, customer?.email);
+          }}>
             <Send size={16} /> Email
           </button>
           {estimate.status === 'draft' && (
@@ -1596,6 +1614,37 @@ export function EstimateBuilder() {
           <button className="btn btn-secondary" onClick={() => setShowEmailModal(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSendEmail}>Open Email</button>
         </div>
+      </Modal>
+
+      <Modal isOpen={showEmailAllPreview} onClose={() => { setShowEmailAllPreview(false); }} title="Email Preview" size="lg">
+        {emailAllPreview && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div><strong>Subject:</strong> {emailAllPreview.subject}</div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <iframe title="Email HTML" srcDoc={emailAllPreview.html} style={{ width: '100%', height: 300, border: '1px solid #ddd', borderRadius: 6 }} />
+            </div>
+            <div>
+              <strong>Plaintext</strong>
+              <textarea className="form-textarea" value={emailAllPreview.text} readOnly style={{ width: '100%', height: 120 }} />
+            </div>
+            <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+              <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailAllPreview.html)}>Copy HTML</button>
+              <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailAllPreview.text)}>Copy Text</button>
+              <button className="btn btn-primary" onClick={() => { window.location.href = `mailto:${emailForm.email || ''}?subject=${encodeURIComponent(emailAllPreview.subject)}&body=${encodeURIComponent(emailAllPreview.text)}`; }}>Open Email</button>
+            </div>
+          </div>
+        )}
+      </Modal>
+        {emailHtmlPreview && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div><strong>Subject:</strong> {emailHtmlPreview.subject}</div>
+            <iframe title="Email HTML" srcDoc={emailHtmlPreview.html} style={{ width: '100%', height: 420, border: '1px solid #ddd', borderRadius: 6 }} />
+            <div className="modal-footer" style={{ padding: 0, borderTop: 'none' }}>
+              <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailHtmlPreview.html).then(()=> {})}>Copy HTML</button>
+              <button className="btn btn-primary" onClick={() => setEmailHtmlOpen(false)}>Close</button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

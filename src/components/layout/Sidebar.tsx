@@ -15,6 +15,7 @@ import {
   Copy,
   DollarSign,
   FilePlus,
+  Settings
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -82,6 +83,10 @@ export function Sidebar() {
           <NavLink to="/invoices" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <FileText size={20} />
             <span>Invoices</span>
+          </NavLink>
+          <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Settings size={20} />
+            <span>Settings</span>
           </NavLink>
         </div>
         <div className="nav-section">

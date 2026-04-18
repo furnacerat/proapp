@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 
 interface AppContextType {
   data: AppData;
   setData: React.Dispatch<React.SetStateAction<AppData>>;
+  branding: BrandingSettings;
+  updateBranding: (updates: Partial<BrandingSettings>) => void;
   
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
@@ -150,6 +152,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     generateAlerts();
   }, [data.jobs, data.tasks, data.invoices, data.payments]);
+
+  // Simple branding configuration accessible app-wide
+  const [branding, setBranding] = useState<BrandingSettings>({
+    brandName: 'Allens Hub',
+    emailFromName: 'Allens Hub',
+    primaryColor: '#1f3a8a',
+    secondaryColor: '#2563eb',
+    fontFamily: 'Inter, system-ui, Arial',
+    logoUrl: '',
+    logoDataUrl: '',
+    termsText: '',
+    termsUrl: '',
+  } as BrandingSettings);
+
+  const updateBranding = (updates: Partial<BrandingSettings>) => {
+    setBranding(prev => ({ ...prev, ...updates }));
+  };
+
+  // Apply branding to CSS variables globally for a premium feel
+  useEffect(() => {
+    const root = document.documentElement;
+    const b = branding as BrandingSettings;
+    if (!root) return;
+    if (b.brandName) root.style.setProperty('--brand-name', b.brandName);
+    if (b.primaryColor) root.style.setProperty('--primary', b.primaryColor);
+    if (b.secondaryColor) root.style.setProperty('--secondary', b.secondaryColor);
+    if (b.fontFamily) root.style.setProperty('--font-family', b.fontFamily);
+    if (b.logoUrl) root.style.setProperty('--logo-url', b.logoUrl);
+    if (b.logoDataUrl) root.style.setProperty('--logo-data-url', b.logoDataUrl);
+  }, [branding]);
 
   const generateAlerts = () => {
     const newAlerts: AlertType[] = [];
@@ -933,6 +965,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       data,
       setData,
+      branding,
+      updateBranding,
       addCustomer,
       updateCustomer,
       deleteCustomer,

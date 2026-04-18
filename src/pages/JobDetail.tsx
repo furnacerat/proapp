@@ -17,7 +17,7 @@ import {
 
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
-  const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, 
+  const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, branding, 
     updateJob, deleteJob, duplicateJob,
     addTimeEntry, deleteTimeEntry, addExpense, deleteExpense,
     addTask, deleteTask, addInvoice, updateInvoice, deleteInvoice, addPayment, addNote, deleteNote, addPhoto, deletePhoto,

@@ -504,6 +504,21 @@ export interface FileAttachment {
   createdAt: string;
 }
 
+// Branding configuration for emails, invoices, estimates, etc.
+export interface BrandingSettings {
+  brandName: string;
+  emailFromName?: string;
+  emailFromAddress?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontFamily?: string;
+  logoUrl?: string;
+  logoDataUrl?: string;
+  termsUrl?: string;
+  termsText?: string;
+  signature?: string;
+}
+
 export interface Alert {
   id: string;
   type: AlertType;
