@@ -1,4 +1,4 @@
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert } from './types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Customer, Estimate, LaborRate, Material, Assembly, Template } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 const now = new Date().toISOString();
@@ -9,6 +9,55 @@ const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
 const twoWeeks = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
 
 export const initialData: AppData = {
+  customers: [
+    { id: uuidv4(), name: 'John Smith', company: 'Smith Properties', email: 'jsmith@email.com', phone: '(555) 123-4567', address: '123 Oak Street, Springfield, IL 62701', notes: 'Preferred customer', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'Mike Johnson', company: 'Johnson Investments', email: 'mjohnson@email.com', phone: '(555) 234-5678', address: '456 Maple Ave, Springfield, IL 62702', notes: 'Real estate investor', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'Sarah Williams', email: 'swilliams@email.com', phone: '(555) 345-6789', address: '789 Pine Lane, Springfield, IL 62703', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'Tom Brown', phone: '(555) 456-7890', address: '321 Elm Street, Springfield, IL 62704', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'Lisa Davis', company: 'Davis Realty', email: 'ldavis@email.com', phone: '(555) 567-8901', address: '654 Cedar Drive, Springfield, IL 62705', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'Robert Garcia', email: 'rgarcia@email.com', phone: '(555) 678-9012', address: '987 Birch Rd, Springfield, IL 62706', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'Jennifer Wilson', company: 'Wilson Design', email: 'jwilson@email.com', phone: '(555) 789-0123', address: '147 Oak Ave, Springfield, IL 62707', createdAt: now, updatedAt: now },
+    { id: uuidv4(), name: 'David Martinez', email: 'dmartinez@email.com', phone: '(555) 890-1234', address: '258 Maple St, Springfield, IL 62708', createdAt: now, updatedAt: now },
+  ],
+  laborRates: [
+    { id: uuidv4(), name: 'Lead Carpenter', trade: 'Carpentry', hourlyRate: 45, overtimeRate: 67.5, isActive: true },
+    { id: uuidv4(), name: 'Skilled Carpenter', trade: 'Carpentry', hourlyRate: 35, overtimeRate: 52.5, isActive: true },
+    { id: uuidv4(), name: 'Laborer', trade: 'General', hourlyRate: 25, overtimeRate: 37.5, isActive: true },
+    { id: uuidv4(), name: 'Electrician', trade: 'Electrical', hourlyRate: 55, overtimeRate: 82.5, isActive: true },
+    { id: uuidv4(), name: 'Plumber', trade: 'Plumbing', hourlyRate: 55, overtimeRate: 82.5, isActive: true },
+    { id: uuidv4(), name: 'HVAC Tech', trade: 'HVAC', hourlyRate: 50, overtimeRate: 75, isActive: true },
+    { id: uuidv4(), name: 'Painter', trade: 'Painting', hourlyRate: 30, overtimeRate: 45, isActive: true },
+    { id: uuidv4(), name: 'Drywall Finisher', trade: 'Drywall', hourlyRate: 32, overtimeRate: 48, isActive: true },
+  ],
+  materials: [
+    { id: uuidv4(), name: '2x4x8 Stud', category: 'Lumber', unit: 'ea', unitPrice: 4.50, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: '2x6x8 Stud', category: 'Lumber', unit: 'ea', unitPrice: 6.25, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: 'OSB 4x8 7/16"', category: 'Sheathing', unit: 'sheet', unitPrice: 18.00, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: 'Plywood 3/4"', category: 'Sheathing', unit: 'sheet', unitPrice: 45.00, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: 'Drywall 4x8', category: 'Drywall', unit: 'sheet', unitPrice: 12.00, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: 'Joint Compound 5gal', category: 'Drywall', unit: 'bucket', unitPrice: 18.00, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: 'Paper Tape', category: 'Drywall', unit: 'roll', unitPrice: 2.50, supplier: 'BuildPro', isActive: true },
+    { id: uuidv4(), name: 'Cabinet Pull', category: 'Hardware', unit: 'ea', unitPrice: 3.50, supplier: 'Hardware Plus', isActive: true },
+    { id: uuidv4(), name: 'Hinges (soft close)', category: 'Hardware', unit: 'pr', unitPrice: 12.00, supplier: 'Hardware Plus', isActive: true },
+    { id: uuidv4(), name: 'Hardwood Flooring', category: 'Flooring', unit: 'sqft', unitPrice: 8.00, supplier: 'FloorCo', isActive: true },
+    { id: uuidv4(), name: 'Ceramic Tile 12x12', category: 'Tile', unit: 'sqft', unitPrice: 4.00, supplier: 'TilePro', isActive: true },
+    { id: uuidv4(), name: 'Grout 25lb', category: 'Tile', unit: 'bag', unitPrice: 15.00, supplier: 'TilePro', isActive: true },
+    { id: uuidv4(), name: 'Mortar 50lb', category: 'Tile', unit: 'bag', unitPrice: 12.00, supplier: 'TilePro', isActive: true },
+    { id: uuidv4(), name: 'PVC Pipe 2"', category: 'Plumbing', unit: 'ft', unitPrice: 2.50, supplier: 'PlumbSupply', isActive: true },
+    { id: uuidv4(), name: 'Copper Wire 12/2', category: 'Electrical', unit: 'ft', unitPrice: 0.85, supplier: 'ElectricPro', isActive: true },
+    { id: uuidv4(), name: 'Light Switch', category: 'Electrical', unit: 'ea', unitPrice: 2.25, supplier: 'ElectricPro', isActive: true },
+  ],
+  assemblies: [
+    { id: uuidv4(), name: 'Wall Frame 8ft', description: 'Standard 2x4 wall with 16" OC spacing', category: 'Framing', laborHours: 2.5, laborRateId: '', items: [{ name: '2x4x8 Stud', quantity: 11, unitPrice: 4.50, category: 'material' }, { name: '2x4x8 Plate', quantity: 3, unitPrice: 4.50, category: 'material' }, { name: 'Nails', quantity: 0.5, unitPrice: 12, category: 'material' }], createdAt: now },
+    { id: uuidv4(), name: 'Install Drywall 4x8', description: 'Hang and tape drywall', category: 'Drywall', laborHours: 1.5, items: [{ name: 'Drywall 4x8', quantity: 3, unitPrice: 12, category: 'material' }, { name: 'Joint Compound 5gal', quantity: 0.1, unitPrice: 18, category: 'material' }, { name: 'Paper Tape', quantity: 1, unitPrice: 2.50, category: 'material' }, { name: 'Screws', quantity: 0.5, unitPrice: 15, category: 'material' }], createdAt: now },
+    { id: uuidv4(), name: 'Cabinet Install Base', description: 'Install base cabinet with doors', category: 'Carpentry', laborHours: 1.0, items: [{ name: 'Cabinet 24"', quantity: 1, unitPrice: 250, category: 'material' }, { name: 'Screws', quantity: 0.25, unitPrice: 15, category: 'material' }, { name: 'Shims', quantity: 4, unitPrice: 0.50, category: 'material' }], createdAt: now },
+    { id: uuidv4(), name: 'Floor Prep', description: 'Subfloor prep for tile or hardwood', category: 'Flooring', laborHours: 2.0, items: [{ name: 'Plywood 3/4"', quantity: 4, unitPrice: 45, category: 'material' }, { name: 'Screws', quantity: 1, unitPrice: 15, category: 'material' }], createdAt: now },
+  ],
+  templates: [
+    { id: uuidv4(), name: 'Kitchen Remodel Basic', type: 'estimate', scope: 'Complete kitchen remodel', laborAssumptions: 'Demo, drywall, electrical, plumbing, cabinets, countertops', materialAssumptions: 'Cabinets, countertops, flooring, fixtures', markupPercent: 20, items: [{ name: 'Demo', description: 'Remove existing cabinets, countertops', quantity: 1, unitPrice: 1500, category: 'Labor', isLabor: true }], createdAt: now },
+    { id: uuidv4(), name: 'Bathroom Remodel', type: 'estimate', scope: 'Full bathroom renovation', laborAssumptions: 'Demo, plumbing, electrical, tile, fixtures', materialAssumptions: 'Tile, vanity, fixtures, plumbing', markupPercent: 20, items: [], createdAt: now },
+  ],
+  estimates: [],
   jobs: [
     {
       id: uuidv4(),

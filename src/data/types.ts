@@ -13,23 +13,18 @@ export type PaymentMethod = 'cash' | 'check' | 'ach' | 'card' | 'other';
 export type ChangeOrderStatus = 'pending' | 'approved' | 'rejected';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertType = 'task_overdue' | 'job_overdue' | 'invoice_overdue' | 'budget_warning' | 'payment_due';
+export type EstimateStatus = 'draft' | 'sent' | 'approved' | 'rejected' | 'expired';
 
-export interface Job {
+// ============ SHARED ENTITIES ============
+
+export interface Customer {
   id: string;
   name: string;
-  customer: string;
-  customerPhone?: string;
-  customerEmail?: string;
-  address: string;
-  type: JobType;
-  contractAmount: number;
-  estimatedCost: number;
-  actualCost: number;
-  startDate: string;
-  dueDate: string;
-  status: JobStatus;
+  company?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
   notes?: string;
-  templateId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +43,139 @@ export interface Worker {
   status: WorkerStatus;
   notes?: string;
   createdAt: string;
+}
+
+export interface LaborRate {
+  id: string;
+  name: string;
+  trade: string;
+  hourlyRate: number;
+  overtimeRate?: number;
+  isActive: boolean;
+}
+
+export interface Material {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  unitPrice: number;
+  supplier?: string;
+  sku?: string;
+  isActive: boolean;
+}
+
+export interface Assembly {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  laborHours: number;
+  laborRateId?: string;
+  items: AssemblyItem[];
+  createdAt: string;
+}
+
+export interface AssemblyItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  category: 'material' | 'labor' | 'equipment' | 'other';
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  type: 'estimate' | 'job';
+  scope: string;
+  laborAssumptions: string;
+  materialAssumptions: string;
+  markupPercent: number;
+  items: TemplateItem[];
+  createdAt: string;
+}
+
+export interface TemplateItem {
+  name: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+  category: string;
+  isLabor: boolean;
+}
+
+// ============ ESTIMATE ENTITIES ============
+
+export interface EstimateLineItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  category: string;
+  isLabor: boolean;
+  hours?: number;
+  laborRateId?: string;
+  total: number;
+}
+
+export interface Estimate {
+  id: string;
+  estimateNumber: string;
+  customerId: string;
+  name: string;
+  address: string;
+  type: JobType;
+  status: EstimateStatus;
+  lineItems: EstimateLineItem[];
+  laborTotal: number;
+  materialTotal: number;
+  equipmentTotal: number;
+  subtotal: number;
+  markupPercent: number;
+  markupAmount: number;
+  total: number;
+  projectedLaborHours: number;
+  projectedProfit: number;
+  notes?: string;
+  validUntil?: string;
+  createdAt: string;
+  updatedAt: string;
+  convertedToJobId?: string;
+}
+
+export interface JobTemplate {
+  id: string;
+  name: string;
+  type: JobType;
+  estimatedCost: number;
+  tasks: { title: string; description?: string; priority: Priority }[];
+  materials: { name: string; category: ExpenseCategory; estimatedCost: number }[];
+  createdAt: string;
+}
+
+// ============ JOB ENTITIES ============
+
+export interface Job {
+  id: string;
+  name: string;
+  customerId?: string;
+  address: string;
+  type: JobType;
+  contractAmount: number;
+  estimatedCost: number;
+  actualCost: number;
+  startDate: string;
+  dueDate: string;
+  status: JobStatus;
+  notes?: string;
+  estimateId?: string;
+  customer?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TimeEntry {
@@ -139,16 +267,6 @@ export interface ChangeOrder {
   updatedAt: string;
 }
 
-export interface JobTemplate {
-  id: string;
-  name: string;
-  type: JobType;
-  estimatedCost: number;
-  tasks: { title: string; description?: string; priority: Priority }[];
-  materials: { name: string; category: ExpenseCategory; estimatedCost: number }[];
-  createdAt: string;
-}
-
 export interface Alert {
   id: string;
   type: AlertType;
@@ -162,9 +280,18 @@ export interface Alert {
   createdAt: string;
 }
 
+// ============ APP DATA ============
+
 export interface AppData {
-  jobs: Job[];
+  customers: Customer[];
   workers: Worker[];
+  laborRates: LaborRate[];
+  materials: Material[];
+  assemblies: Assembly[];
+  templates: Template[];
+  estimates: Estimate[];
+  jobTemplates: JobTemplate[];
+  jobs: Job[];
   timeEntries: TimeEntry[];
   expenses: Expense[];
   tasks: Task[];
@@ -173,9 +300,10 @@ export interface AppData {
   notes: Note[];
   photos: Photo[];
   changeOrders: ChangeOrder[];
-  jobTemplates: JobTemplate[];
   alerts: Alert[];
 }
+
+// ============ CONSTANTS ============
 
 export const JOB_STATUSES: { value: JobStatus; label: string }[] = [
   { value: 'lead', label: 'Lead' },
@@ -196,6 +324,14 @@ export const JOB_TYPES: { value: JobType; label: string }[] = [
   { value: 'addition', label: 'Addition' },
   { value: 'repair', label: 'Repair' },
   { value: 'other', label: 'Other' },
+];
+
+export const ESTIMATE_STATUSES: { value: EstimateStatus; label: string }[] = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'expired', label: 'Expired' },
 ];
 
 export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [

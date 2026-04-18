@@ -5,6 +5,8 @@ import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Jobs } from './pages/Jobs';
 import { JobDetail } from './pages/JobDetail';
+import { Estimates } from './pages/Estimates';
+import { EstimateDetail } from './pages/EstimateDetail';
 import { Workers } from './pages/Workers';
 import { TimeEntries } from './pages/TimeEntries';
 import { Expenses } from './pages/Expenses';
@@ -24,6 +26,8 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/jobs/:id" element={<JobDetail />} />
+              <Route path="/estimates" element={<Estimates />} />
+              <Route path="/estimates/:id" element={<EstimateDetail />} />
               <Route path="/workers" element={<Workers />} />
               <Route path="/time-entries" element={<TimeEntries />} />
               <Route path="/expenses" element={<Expenses />} />

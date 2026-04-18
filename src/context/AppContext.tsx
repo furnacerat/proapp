@@ -1,10 +1,35 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, LaborRate, Material, Assembly, Template } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 
 interface AppContextType {
   data: AppData;
   setData: React.Dispatch<React.SetStateAction<AppData>>;
+  
+  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateCustomer: (id: string, updates: Partial<Customer>) => void;
+  deleteCustomer: (id: string) => void;
+  
+  addEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedProfit'>) => string;
+  updateEstimate: (id: string, updates: Partial<Estimate>) => void;
+  deleteEstimate: (id: string) => void;
+  convertEstimateToJob: (estimateId: string) => string;
+  
+  addLaborRate: (rate: Omit<LaborRate, 'id'>) => string;
+  updateLaborRate: (id: string, updates: Partial<LaborRate>) => void;
+  deleteLaborRate: (id: string) => void;
+  
+  addMaterial: (material: Omit<Material, 'id'>) => string;
+  updateMaterial: (id: string, updates: Partial<Material>) => void;
+  deleteMaterial: (id: string) => void;
+  
+  addAssembly: (assembly: Omit<Assembly, 'id' | 'createdAt'>) => string;
+  updateAssembly: (id: string, updates: Partial<Assembly>) => void;
+  deleteAssembly: (id: string) => void;
+  
+  addTemplate: (template: Omit<Template, 'id' | 'createdAt'>) => string;
+  updateTemplate: (id: string, updates: Partial<Template>) => void;
+  deleteTemplate: (id: string) => void;
   
   addJob: (job: Omit<Job, 'id' | 'createdAt' | 'updatedAt' | 'actualCost'>) => string;
   updateJob: (id: string, updates: Partial<Job>) => void;
@@ -61,6 +86,13 @@ interface AppContextType {
   getJobBalance: (jobId: string) => number;
   getJobProgress: (jobId: string) => number;
   
+  customers: Customer[];
+  estimates: Estimate[];
+  laborRates: LaborRate[];
+  materials: Material[];
+  assemblies: Assembly[];
+  templates: Template[];
+  
   jobs: Job[];
   workers: Worker[];
   timeEntries: TimeEntry[];
@@ -73,6 +105,10 @@ interface AppContextType {
   changeOrders: ChangeOrderType[];
   jobTemplates: JobTemplateType[];
   alerts: AlertType[];
+  
+  getCustomerById: (id: string) => Customer | undefined;
+  getJobCustomer: (jobId: string) => Customer | undefined;
+  getEstimateCustomer: (estimateId: string) => Customer | undefined;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -269,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     const newJobId = addJob({
       name: `${job.name} (Copy)`,
+      customerId: job.customerId,
       customer: job.customer,
       customerPhone: job.customerPhone,
       customerEmail: job.customerEmail,
@@ -557,6 +594,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     const jobId = addJob({
       name,
+      customerId: '',
       customer,
       address,
       type: template.type,
@@ -565,7 +603,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       startDate: new Date().toISOString().split('T')[0],
       dueDate: '',
       status: 'lead',
-      templateId,
     });
     
     template.tasks.forEach(task => {
@@ -630,10 +667,193 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return Math.round((doneTasks / jobTasks.length) * 100);
   };
 
+  const addCustomer = (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    const newCustomer: Customer = { ...customer, id, createdAt: now, updatedAt: now };
+    setData(prev => ({ ...prev, customers: [...prev.customers, newCustomer] }));
+    return id;
+  };
+
+  const updateCustomer = (id: string, updates: Partial<Customer>) => {
+    setData(prev => ({
+      ...prev,
+      customers: prev.customers.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c),
+    }));
+  };
+
+  const deleteCustomer = (id: string) => {
+    setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }));
+  };
+
+  const getCustomerById = (id: string) => data.customers.find(c => c.id === id);
+  const getJobCustomer = (jobId: string) => {
+    const job = data.jobs.find(j => j.id === jobId);
+    return job ? data.customers.find(c => c.id === job.customerId) : undefined;
+  };
+  const getEstimateCustomer = (estimateId: string) => {
+    const estimate = data.estimates.find(e => e.id === estimateId);
+    return estimate ? data.customers.find(c => c.id === estimate.customerId) : undefined;
+  };
+
+  const calculateEstimateTotals = (estimate: Partial<Estimate>): { laborTotal: number; materialTotal: number; equipmentTotal: number; subtotal: number; markupAmount: number; total: number; projectedLaborHours: number; projectedProfit: number } => {
+    const laborTotal = estimate.lineItems?.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0) || 0;
+    const materialTotal = estimate.lineItems?.filter(i => i.category === 'materials').reduce((sum, i) => sum + i.total, 0) || 0;
+    const equipmentTotal = estimate.lineItems?.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.total, 0) || 0;
+    const subtotal = laborTotal + materialTotal + equipmentTotal;
+    const markupAmount = subtotal * ((estimate.markupPercent || 0) / 100);
+    const total = subtotal + markupAmount;
+    const projectedLaborHours = estimate.lineItems?.filter(i => i.isLabor).reduce((sum, i) => sum + (i.hours || 0), 0) || 0;
+    const projectedProfit = 0;
+    return { laborTotal, materialTotal, equipmentTotal, subtotal, markupAmount, total, projectedLaborHours, projectedProfit };
+  };
+
+  const addEstimate = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedProfit'>) => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    const totals = calculateEstimateTotals({ ...estimate, markupPercent: estimate.markupPercent || 20 });
+    const newEstimate: Estimate = { ...estimate, ...totals, id, createdAt: now, updatedAt: now };
+    setData(prev => ({ ...prev, estimates: [...prev.estimates, newEstimate] }));
+    return id;
+  };
+
+  const updateEstimate = (id: string, updates: Partial<Estimate>) => {
+    setData(prev => {
+      const existing = prev.estimates.find(e => e.id === id);
+      if (!existing) return prev;
+      const merged = { ...existing, ...updates };
+      const totals = calculateEstimateTotals(merged);
+      return {
+        ...prev,
+        estimates: prev.estimates.map(e => e.id === id ? { ...e, ...updates, ...totals, updatedAt: new Date().toISOString() } : e),
+      };
+    });
+  };
+
+  const deleteEstimate = (id: string) => {
+    setData(prev => ({ ...prev, estimates: prev.estimates.filter(e => e.id !== id) }));
+  };
+
+  const convertEstimateToJob = (estimateId: string) => {
+    const estimate = data.estimates.find(e => e.id === estimateId);
+    if (!estimate) return '';
+    
+    const customer = data.customers.find(c => c.id === estimate.customerId);
+    const jobId = addJob({
+      name: estimate.name,
+      customerId: estimate.customerId,
+      customer: customer?.name || '',
+      customerPhone: customer?.phone || '',
+      customerEmail: customer?.email || '',
+      address: estimate.address,
+      type: estimate.type,
+      contractAmount: estimate.total,
+      estimatedCost: estimate.subtotal,
+      startDate: new Date().toISOString().split('T')[0],
+      dueDate: '',
+      status: 'approved',
+      estimateId: estimate.id,
+    });
+    
+    updateEstimate(estimateId, { status: 'approved', convertedToJobId: jobId });
+    return jobId;
+  };
+
+  const addLaborRate = (rate: Omit<LaborRate, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newRate: LaborRate = { ...rate, id };
+    setData(prev => ({ ...prev, laborRates: [...prev.laborRates, newRate] }));
+    return id;
+  };
+
+  const updateLaborRate = (id: string, updates: Partial<LaborRate>) => {
+    setData(prev => ({
+      ...prev,
+      laborRates: prev.laborRates.map(r => r.id === id ? { ...r, ...updates } : r),
+    }));
+  };
+
+  const deleteLaborRate = (id: string) => {
+    setData(prev => ({ ...prev, laborRates: prev.laborRates.filter(r => r.id !== id) }));
+  };
+
+  const addMaterial = (material: Omit<Material, 'id'>) => {
+    const id = crypto.randomUUID();
+    const newMaterial: Material = { ...material, id };
+    setData(prev => ({ ...prev, materials: [...prev.materials, newMaterial] }));
+    return id;
+  };
+
+  const updateMaterial = (id: string, updates: Partial<Material>) => {
+    setData(prev => ({
+      ...prev,
+      materials: prev.materials.map(m => m.id === id ? { ...m, ...updates } : m),
+    }));
+  };
+
+  const deleteMaterial = (id: string) => {
+    setData(prev => ({ ...prev, materials: prev.materials.filter(m => m.id !== id) }));
+  };
+
+  const addAssembly = (assembly: Omit<Assembly, 'id' | 'createdAt'>) => {
+    const id = crypto.randomUUID();
+    const newAssembly: Assembly = { ...assembly, id, createdAt: new Date().toISOString() };
+    setData(prev => ({ ...prev, assemblies: [...prev.assemblies, newAssembly] }));
+    return id;
+  };
+
+  const updateAssembly = (id: string, updates: Partial<Assembly>) => {
+    setData(prev => ({
+      ...prev,
+      assemblies: prev.assemblies.map(a => a.id === id ? { ...a, ...updates } : a),
+    }));
+  };
+
+  const deleteAssembly = (id: string) => {
+    setData(prev => ({ ...prev, assemblies: prev.assemblies.filter(a => a.id !== id) }));
+  };
+
+  const addTemplate = (template: Omit<Template, 'id' | 'createdAt'>) => {
+    const id = crypto.randomUUID();
+    const newTemplate: Template = { ...template, id, createdAt: new Date().toISOString() };
+    setData(prev => ({ ...prev, templates: [...prev.templates, newTemplate] }));
+    return id;
+  };
+
+  const updateTemplate = (id: string, updates: Partial<Template>) => {
+    setData(prev => ({
+      ...prev,
+      templates: prev.templates.map(t => t.id === id ? { ...t, ...updates } : t),
+    }));
+  };
+
+  const deleteTemplate = (id: string) => {
+    setData(prev => ({ ...prev, templates: prev.templates.filter(t => t.id !== id) }));
+  };
+
   return (
     <AppContext.Provider value={{
       data,
       setData,
+      addCustomer,
+      updateCustomer,
+      deleteCustomer,
+      addEstimate,
+      updateEstimate,
+      deleteEstimate,
+      convertEstimateToJob,
+      addLaborRate,
+      updateLaborRate,
+      deleteLaborRate,
+      addMaterial,
+      updateMaterial,
+      deleteMaterial,
+      addAssembly,
+      updateAssembly,
+      deleteAssembly,
+      addTemplate,
+      updateTemplate,
+      deleteTemplate,
       addJob,
       updateJob,
       deleteJob,
@@ -676,6 +896,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       getJobProfit,
       getJobBalance,
       getJobProgress,
+      getCustomerById,
+      getJobCustomer,
+      getEstimateCustomer,
+      customers: data.customers,
+      estimates: data.estimates,
+      laborRates: data.laborRates,
+      materials: data.materials,
+      assemblies: data.assemblies,
+      templates: data.templates,
       jobs: data.jobs,
       workers: data.workers,
       timeEntries: data.timeEntries,
