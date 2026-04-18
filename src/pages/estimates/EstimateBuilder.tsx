@@ -3,20 +3,20 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES, ESTIMATE_STATUSES as STATUSES } from '../../data/types';
-import type { EstimateSection, EstimateLineItem, EstimateStatus, JobType, EstimateLineCategory, Estimate, EstimateTaxable } from '../../data/types';
+import type { EstimateSection, EstimateLineItem, EstimateStatus, JobType, EstimateLineCategory, Estimate, EstimateTaxable, EstimateScope, ProjectTypeTemplate, ProjectTypeTemplateItem, ProjectTypeTemplateSection } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { Modal } from '../../components/common/Modal';
 import { 
   Plus, Trash2, Save, Send, CheckCircle, ArrowLeft, Copy, FileText, 
   Package, Clock, DollarSign, ChevronDown, ChevronUp, GripVertical,
-  AlertTriangle, Calculator, X, Eye, Archive
+  AlertTriangle, Calculator, X, Eye, Archive, FolderOpen, CheckSquare
 } from 'lucide-react';
 
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { estimates, customers, materials, laborRates, assemblies, templates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer } = useApp();
+  const { estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer } = useApp();
   const { showToast } = useToast();
   
   const isNew = id === 'new';
@@ -29,6 +29,11 @@ export function EstimateBuilder() {
   const [showAssemblyPicker, setShowAssemblyPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(isNew);
+  const [showAddScope, setShowAddScope] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ProjectTypeTemplate | null>(null);
+  const [selectedTemplateItems, setSelectedTemplateItems] = useState<Record<string, boolean>>({});
+  const [templatePickerStep, setTemplatePickerStep] = useState<'select' | 'items'>('select');
+  const [activeScopeId, setActiveScopeId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EstimateLineItem | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -39,8 +44,8 @@ export function EstimateBuilder() {
     name: estimate?.name || '',
     customerId: estimate?.customerId || '',
     address: estimate?.address || '',
-    type: estimate?.type || 'remodel',
     status: estimate?.status || 'draft',
+    type: estimate?.type || '',
     markupPercent: estimate?.markupPercent?.toString() || '20',
     taxable: estimate?.taxable || 'none',
     notes: estimate?.notes || '',
@@ -48,20 +53,54 @@ export function EstimateBuilder() {
   });
 
   const [newSectionName, setNewSectionName] = useState('');
+  const [newScopeName, setNewScopeName] = useState('');
   const [itemForm, setItemForm] = useState({
     name: '', description: '', quantity: '1', unit: 'ea', unitPrice: '0',
     category: 'material' as EstimateLineCategory, isLabor: false, hours: '0',
     isOptional: false, isExcluded: false, isAllowance: false, notes: '',
   });
 
-  const sections = estimate?.sections || [];
+  const allScopes = estimate?.scopes || [];
+  const legacySections = estimate?.sections || [];
+  
+  const getScopeTotals = (scope: EstimateScope) => {
+    let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0;
+    scope.sections?.forEach(section => {
+      section.lineItems?.forEach(item => {
+        if (item.isExcluded) return;
+        itemsCount++;
+        if (item.isLabor || item.category === 'labor') {
+          laborTotal += item.total;
+          hours += item.hours || 0;
+        } else if (item.category === 'material') {
+          materialTotal += item.total;
+        } else if (item.category === 'equipment') {
+          equipmentTotal += item.total;
+        } else if (item.category === 'subcontractor') {
+          subcontractorTotal += item.total;
+        }
+      });
+    });
+    const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
+    return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, hours, itemsCount };
+  };
   
   const totals = useMemo(() => {
     if (!estimate) return { laborTotal: 0, materialTotal: 0, equipmentTotal: 0, subcontractorTotal: 0, subtotal: 0, markupAmount: 0, total: 0, hours: 0, itemsCount: 0 };
     
     let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0;
     
-    sections.forEach(section => {
+    allScopes.forEach(scope => {
+      const scopeTotals = getScopeTotals(scope);
+      laborTotal += scopeTotals.laborTotal;
+      materialTotal += scopeTotals.materialTotal;
+      equipmentTotal += scopeTotals.equipmentTotal;
+      subcontractorTotal += scopeTotals.subcontractorTotal;
+      hours += scopeTotals.hours;
+      itemsCount += scopeTotals.itemsCount;
+    });
+    
+    legacySections.forEach(section => {
       section.lineItems?.forEach(item => {
         if (item.isExcluded) return;
         itemsCount++;
@@ -83,7 +122,7 @@ export function EstimateBuilder() {
     const total = subtotal + markupAmount;
     
     return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, markupAmount, total, hours, itemsCount };
-  }, [estimate, sections]);
+  }, [estimate, allScopes, legacySections]);
 
   useEffect(() => {
     if (estimate && formData.markupPercent) {
@@ -221,12 +260,24 @@ export function EstimateBuilder() {
       id: crypto.randomUUID(),
       name: newSectionName,
       lineItems: [],
-      sortOrder: sections.length,
+      sortOrder: activeScopeId 
+        ? allScopes.find(s => s.id === activeScopeId)?.sections?.length || 0
+        : legacySections.length,
     };
     
-    updateEstimate(estimate.id, {
-      sections: [...sections, newSection],
-    });
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return { ...scope, sections: [...(scope.sections || []), newSection] };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      updateEstimate(estimate.id, {
+        sections: [...legacySections, newSection],
+      });
+    }
     
     setNewSectionName('');
     setShowAddSection(false);
@@ -235,9 +286,147 @@ export function EstimateBuilder() {
   };
 
   const handleDeleteSection = (sectionId: string) => {
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return { ...scope, sections: scope.sections?.filter(s => s.id !== sectionId) || [] };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      updateEstimate(estimate.id, {
+        sections: legacySections.filter(s => s.id !== sectionId),
+      });
+    }
+  };
+
+  const handleAddScope = () => {
+    if (!selectedTemplate || !newScopeName.trim()) return;
+    
+    const templateSections: EstimateSection[] = selectedTemplate.sections?.map(ts => ({
+      id: crypto.randomUUID(),
+      name: ts.name,
+      description: ts.description,
+      lineItems: ts.items
+        .filter(item => selectedTemplateItems[item.id] !== false)
+        .map(item => ({
+          id: crypto.randomUUID(),
+          name: item.name,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          category: item.category as EstimateLineCategory,
+          isLabor: item.isLabor || false,
+          hours: item.isLabor ? item.hours : undefined,
+          total: item.quantity * item.unitPrice,
+          isOptional: item.isOptional,
+          isAllowance: item.isAllowance,
+        })),
+      sortOrder: ts.sortOrder,
+    })) || [];
+    
+    const newScope: EstimateScope = {
+      id: crypto.randomUUID(),
+      name: newScopeName,
+      projectType: selectedTemplate.projectType,
+      sections: templateSections,
+      subtotal: 0,
+      isOptional: false,
+      sortOrder: allScopes.length,
+    };
+    
     updateEstimate(estimate.id, {
-      sections: sections.filter(s => s.id !== sectionId),
+      scopes: [...allScopes, newScope],
     });
+    
+    setNewScopeName('');
+    setSelectedTemplate(null);
+    setSelectedTemplateItems({});
+    setTemplatePickerStep('select');
+    setShowAddScope(false);
+    setActiveScopeId(newScope.id);
+    showToast('Scope added');
+  };
+
+  const handleDeleteScope = (scopeId: string) => {
+    updateEstimate(estimate.id, {
+      scopes: allScopes.filter(s => s.id !== scopeId),
+    });
+    if (activeScopeId === scopeId) {
+      setActiveScopeId(null);
+    }
+  };
+
+  const handleSelectTemplate = (template: ProjectTypeTemplate) => {
+    setSelectedTemplate(template);
+    const defaults: Record<string, boolean> = {};
+    template.sections?.forEach(ts => {
+      ts.items?.forEach(item => {
+        defaults[item.id] = item.isDefaultChecked || false;
+      });
+    });
+    setSelectedTemplateItems(defaults);
+    setTemplatePickerStep('items');
+  };
+
+  const handleToggleTemplateItem = (itemId: string) => {
+    setSelectedTemplateItems(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId],
+    }));
+  };
+
+  const handleAddItemToScope = () => {
+    if (!itemForm.name.trim() || !activeSectionId) return;
+    
+    const qty = parseFloat(itemForm.quantity) || 1;
+    const price = parseFloat(itemForm.unitPrice) || 0;
+    const hours = parseFloat(itemForm.hours) || 0;
+    const isLabor = itemForm.isLabor || itemForm.category === 'labor';
+    
+    const newItem: EstimateLineItem = {
+      id: crypto.randomUUID(),
+      name: itemForm.name,
+      description: itemForm.description,
+      quantity: qty,
+      unit: itemForm.unit,
+      unitPrice: price,
+      category: itemForm.category,
+      isLabor,
+      hours: isLabor ? hours : undefined,
+      total: qty * price,
+      isOptional: itemForm.isOptional,
+      isExcluded: itemForm.isExcluded,
+      isAllowance: itemForm.isAllowance,
+      notes: itemForm.notes,
+    };
+    
+    const updatedScopes = allScopes.map(scope => {
+      if (scope.id === activeScopeId) {
+        return {
+          ...scope,
+          sections: scope.sections?.map(s => {
+            if (s.id === activeSectionId) {
+              return { ...s, lineItems: [...(s.lineItems || []), newItem] };
+            }
+            return s;
+          }) || [],
+        };
+      }
+      return scope;
+    });
+    
+    updateEstimate(estimate.id, { scopes: updatedScopes });
+    
+    setItemForm({
+      name: '', description: '', quantity: '1', unit: 'ea', unitPrice: '0',
+      category: 'material', isLabor: false, hours: '0',
+      isOptional: false, isExcluded: false, isAllowance: false, notes: '',
+    });
+    setShowAddItem(false);
+    showToast('Item added');
   };
 
   const handleAddItem = () => {
@@ -265,14 +454,31 @@ export function EstimateBuilder() {
       notes: itemForm.notes,
     };
     
-    const updatedSections = sections.map(s => {
-      if (s.id === activeSectionId) {
-        return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-      }
-      return s;
-    });
-    
-    updateEstimate(estimate.id, { sections: updatedSections });
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return {
+            ...scope,
+            sections: scope.sections?.map(s => {
+              if (s.id === activeSectionId) {
+                return { ...s, lineItems: [...(s.lineItems || []), newItem] };
+              }
+              return s;
+            }) || [],
+          };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      const updatedSections = legacySections.map(s => {
+        if (s.id === activeSectionId) {
+          return { ...s, lineItems: [...(s.lineItems || []), newItem] };
+        }
+        return s;
+      });
+      updateEstimate(estimate.id, { sections: updatedSections });
+    }
     
     setItemForm({
       name: '', description: '', quantity: '1', unit: 'ea', unitPrice: '0',
@@ -283,7 +489,7 @@ export function EstimateBuilder() {
     showToast('Item added');
   };
 
-  const handleUpdateItem = () => {
+const handleUpdateItem = () => {
     if (!editingItem || !activeSectionId) return;
     
     const qty = parseFloat(itemForm.quantity) || 1;
@@ -308,34 +514,71 @@ export function EstimateBuilder() {
       notes: itemForm.notes,
     };
     
-    const updatedSections = sections.map(s => {
-      if (s.id === activeSectionId) {
-        return {
-          ...s,
-          lineItems: s.lineItems?.map(item => item.id === editingItem.id ? updatedItem : item) || [],
-        };
-      }
-      return s;
-    });
-    
-    updateEstimate(estimate.id, { sections: updatedSections });
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return {
+            ...scope,
+            sections: scope.sections?.map(s => {
+              if (s.id === activeSectionId) {
+                return {
+                  ...s,
+                  lineItems: s.lineItems?.map(item => item.id === editingItem.id ? updatedItem : item) || [],
+                };
+              }
+              return s;
+            }) || [],
+          };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      const updatedSections = legacySections.map(s => {
+        if (s.id === activeSectionId) {
+          return {
+            ...s,
+            lineItems: s.lineItems?.map(item => item.id === editingItem.id ? updatedItem : item) || [],
+          };
+        }
+        return s;
+      });
+      updateEstimate(estimate.id, { sections: updatedSections });
+    }
     
     setEditingItem(null);
     setShowAddItem(false);
     showToast('Item updated');
   };
-
+  
   const handleDeleteItem = (itemId: string) => {
     if (!activeSectionId) return;
     
-    const updatedSections = sections.map(s => {
-      if (s.id === activeSectionId) {
-        return { ...s, lineItems: s.lineItems?.filter(i => i.id !== itemId) || [] };
-      }
-      return s;
-    });
-    
-    updateEstimate(estimate.id, { sections: updatedSections });
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return {
+            ...scope,
+            sections: scope.sections?.map(s => {
+              if (s.id === activeSectionId) {
+                return { ...s, lineItems: s.lineItems?.filter(i => i.id !== itemId) || [] };
+              }
+              return s;
+            }) || [],
+          };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      const updatedSections = legacySections.map(s => {
+        if (s.id === activeSectionId) {
+          return { ...s, lineItems: s.lineItems?.filter(i => i.id !== itemId) || [] };
+        }
+        return s;
+      });
+      updateEstimate(estimate.id, { sections: updatedSections });
+    }
     showToast('Item deleted');
   };
 
@@ -352,16 +595,31 @@ export function EstimateBuilder() {
       total: item.quantity * item.unitPrice,
     })) || [];
     
-    const sectionItems = sections.find(s => s.id === activeSectionId)?.lineItems || [];
-    
-    const updatedSections = sections.map(s => {
-      if (s.id === activeSectionId) {
-        return { ...s, lineItems: [...(s.lineItems || []), ...newItems] };
-      }
-      return s;
-    });
-    
-    updateEstimate(estimate.id, { sections: updatedSections });
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return {
+            ...scope,
+            sections: scope.sections?.map(s => {
+              if (s.id === activeSectionId) {
+                return { ...s, lineItems: [...(s.lineItems || []), ...newItems] };
+              }
+              return s;
+            }) || [],
+          };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      const updatedSections = legacySections.map(s => {
+        if (s.id === activeSectionId) {
+          return { ...s, lineItems: [...(s.lineItems || []), ...newItems] };
+        }
+        return s;
+      });
+      updateEstimate(estimate.id, { sections: updatedSections });
+    }
     setShowAssemblyPicker(false);
     showToast('Assembly inserted');
   };
@@ -386,10 +644,20 @@ export function EstimateBuilder() {
       sortOrder: section.sortOrder,
     })) || [];
     
-    updateEstimate(estimate.id, { 
-      sections: [...sections, ...newSections],
-      markupPercent: template.markupPercent || estimate.markupPercent,
-    });
+    if (activeScopeId) {
+      const updatedScopes = allScopes.map(scope => {
+        if (scope.id === activeScopeId) {
+          return { ...scope, sections: [...(scope.sections || []), ...newSections] };
+        }
+        return scope;
+      });
+      updateEstimate(estimate.id, { scopes: updatedScopes });
+    } else {
+      updateEstimate(estimate.id, { 
+        sections: [...legacySections, ...newSections],
+        markupPercent: template.markupPercent || estimate.markupPercent,
+      });
+    }
     setShowTemplatePicker(false);
     showToast('Template inserted');
   };
@@ -638,6 +906,9 @@ export function EstimateBuilder() {
               <button className="btn btn-secondary w-full" onClick={() => setShowAddSection(true)}>
                 <Plus size={16} /> Add Section
               </button>
+              <button className="btn btn-secondary w-full" onClick={() => setShowAddScope(true)}>
+                <CheckSquare size={16} /> Add Scope
+              </button>
               <button className="btn btn-danger w-full" onClick={handleArchive}>
                 <Archive size={16} /> Archive
               </button>
@@ -646,103 +917,235 @@ export function EstimateBuilder() {
         </div>
 
         <div className="card mb-6">
-          <div className="card-header">
-            <h3 className="card-title">Sections & Line Items</h3>
+          <div className="card-header flex justify-between items-center">
+            <h3 className="card-title">Project Scopes</h3>
+            <button className="btn btn-sm btn-primary" onClick={() => setShowAddScope(true)}>
+              <Plus size={14} /> Add Scope
+            </button>
           </div>
           <div className="card-body">
-            {sections.length === 0 ? (
+            {allScopes.length === 0 && legacySections.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-muted mb-4">No sections yet. Add a section to start building your estimate.</p>
-                <button className="btn btn-primary" onClick={() => setShowAddSection(true)}>
-                  <Plus size={18} /> Add Section
+                <p className="text-muted mb-4">No scopes yet. Add a project scope to start building your estimate.</p>
+                <button className="btn btn-primary" onClick={() => setShowAddScope(true)}>
+                  <Plus size={18} /> Add Scope
                 </button>
               </div>
             ) : (
               <div className="space-y-6">
-                {sections.map((section, sectionIndex) => (
-                  <div key={section.id} className="border rounded-lg">
-                    <div 
-                      className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
-                      onClick={() => setActiveSectionId(activeSectionId === section.id ? null : section.id)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{section.name}</span>
-                        <span className="badge badge-gray">{section.lineItems?.length || 0} items</span>
-                      </div>
-                      {activeSectionId === section.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </div>
-                    
-                    {activeSectionId === section.id && (
-                      <div className="p-4 border-t">
-                        <div className="flex justify-between mb-4">
-                          <button className="btn btn-sm btn-primary" onClick={() => openItemEditor(undefined, section.id)}>
-                            <Plus size={14} /> Add Item
-                          </button>
-                          <button 
-                            className="btn btn-sm btn-danger"
-                            onClick={() => handleDeleteSection(section.id)}
-                          >
-                            <Trash2 size={14} /> Delete Section
-                          </button>
+                {allScopes.map((scope, scopeIndex) => {
+                  const scopeTotals = getScopeTotals(scope);
+                  return (
+                    <div key={scope.id} className="border-2 border-blue-200 rounded-lg">
+                      <div 
+                        className="flex items-center justify-between p-4 bg-blue-50 cursor-pointer"
+                        onClick={() => setActiveScopeId(activeScopeId === scope.id ? null : scope.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-lg">{scope.name}</span>
+                          <span className="badge badge-blue">{scope.sections?.length || 0} sections</span>
+                          <span className="badge badge-green">{formatCurrency(scopeTotals.subtotal)}</span>
                         </div>
-                        
-                        {!section.lineItems?.length ? (
-                          <div className="text-center text-muted py-4">
-                            No items in this section. Add line items to build your estimate.
+                        {activeScopeId === scope.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </div>
+                      
+                      {activeScopeId === scope.id && (
+                        <div className="p-4 border-t bg-white">
+                          <div className="flex justify-between mb-4">
+                            <button className="btn btn-sm btn-primary" onClick={() => { setActiveScopeId(scope.id); setShowAddSection(true); }}>
+                              <Plus size={14} /> Add Section
+                            </button>
+                            <button 
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleDeleteScope(scope.id)}
+                            >
+                              <Trash2 size={14} /> Delete Scope
+                            </button>
                           </div>
-                        ) : (
-                          <table className="table">
-                            <thead>
-                              <tr>
-                                <th>Item</th>
-                                <th>Qty</th>
-                                <th>Unit</th>
-                                <th>Unit Price</th>
-                                <th>Total</th>
-                                <th></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {section.lineItems?.map(item => (
-                                <tr key={item.id} className={item.isExcluded ? 'opacity-50 line-through' : ''}>
-                                  <td>
-                                    <div className="font-medium">{item.name}</div>
-                                    {item.description && (
-                                      <div className="text-xs text-muted">{item.description}</div>
-                                    )}
-                                    {item.isOptional && <span className="badge badge-yellow text-xs">Optional</span>}
-                                    {item.isExcluded && <span className="badge badge-red text-xs">Excluded</span>}
-                                    {item.isAllowance && <span className="badge badge-blue text-xs">Allowance</span>}
-                                  </td>
-                                  <td>{item.quantity}</td>
-                                  <td>{item.unit}</td>
-                                  <td>{formatCurrency(item.unitPrice)}</td>
-                                  <td className="font-medium">{formatCurrency(item.total)}</td>
-                                  <td>
-                                    <div className="flex gap-1">
-                                      <button 
-                                        className="btn btn-sm btn-icon"
-                                        onClick={() => openItemEditor(item, section.id)}
-                                      >
-                                        <Copy size={14} />
+                          
+                          <div className="space-y-4">
+                            {scope.sections?.map((section, sectionIndex) => (
+                              <div key={section.id} className="border rounded-lg">
+                                <div 
+                                  className="flex items-center justify-between p-3 bg-gray-50 cursor-pointer"
+                                  onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(activeSectionId === section.id ? null : section.id); }}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{section.name}</span>
+                                    <span className="badge badge-gray">{section.lineItems?.length || 0} items</span>
+                                  </div>
+                                  {activeSectionId === section.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </div>
+                                
+                                {activeSectionId === section.id && (
+                                  <div className="p-3 border-t">
+                                    <div className="flex justify-between mb-3">
+                                      <button className="btn btn-sm btn-primary" onClick={() => openItemEditor(undefined, section.id)}>
+                                        <Plus size={14} /> Add Item
                                       </button>
                                       <button 
-                                        className="btn btn-sm btn-icon btn-danger"
-                                        onClick={() => handleDeleteItem(item.id)}
+                                        className="btn btn-sm btn-danger"
+                                        onClick={() => { setActiveScopeId(scope.id); handleDeleteSection(section.id); }}
                                       >
-                                        <Trash2 size={14} />
+                                        <Trash2 size={14} /> Delete Section
                                       </button>
                                     </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                    )}
+                                    
+                                    {!section.lineItems?.length ? (
+                                      <div className="text-center text-muted py-3">
+                                        No items in this section.
+                                      </div>
+                                    ) : (
+                                      <table className="table">
+                                        <thead>
+                                          <tr>
+                                            <th>Item</th>
+                                            <th>Qty</th>
+                                            <th>Unit</th>
+                                            <th>Unit Price</th>
+                                            <th>Total</th>
+                                            <th></th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {section.lineItems?.map(item => (
+                                            <tr key={item.id} className={item.isExcluded ? 'opacity-50 line-through' : ''}>
+                                              <td>
+                                                <div className="font-medium">{item.name}</div>
+                                                {item.description && (
+                                                  <div className="text-xs text-muted">{item.description}</div>
+                                                )}
+                                                {item.isOptional && <span className="badge badge-yellow text-xs">Optional</span>}
+                                                {item.isExcluded && <span className="badge badge-red text-xs">Excluded</span>}
+                                                {item.isAllowance && <span className="badge badge-blue text-xs">Allowance</span>}
+                                              </td>
+                                              <td>{item.quantity}</td>
+                                              <td>{item.unit}</td>
+                                              <td>{formatCurrency(item.unitPrice)}</td>
+                                              <td className="font-medium">{formatCurrency(item.total)}</td>
+                                              <td>
+                                                <div className="flex gap-1">
+                                                  <button 
+                                                    className="btn btn-sm btn-icon"
+                                                    onClick={() => { setActiveScopeId(scope.id); openItemEditor(item, section.id); }}
+                                                  >
+                                                    <Copy size={14} />
+                                                  </button>
+                                                  <button 
+                                                    className="btn btn-sm btn-icon btn-danger"
+                                                    onClick={() => { setActiveScopeId(scope.id); handleDeleteItem(item.id); }}
+                                                  >
+                                                    <Trash2 size={14} />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                {legacySections.length > 0 && (
+                  <div className="border-t pt-6">
+                    <h4 className="font-medium mb-4 text-muted">Legacy Sections</h4>
+                    <div className="space-y-4">
+                      {legacySections.map((section, sectionIndex) => (
+                        <div key={section.id} className="border rounded-lg">
+                          <div 
+                            className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
+                            onClick={() => { setActiveScopeId(null); setActiveSectionId(activeSectionId === section.id ? null : section.id); }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{section.name}</span>
+                              <span className="badge badge-gray">{section.lineItems?.length || 0} items</span>
+                            </div>
+                            {activeSectionId === section.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </div>
+                          
+                          {activeSectionId === section.id && (
+                            <div className="p-4 border-t">
+                              <div className="flex justify-between mb-4">
+                                <button className="btn btn-sm btn-primary" onClick={() => openItemEditor(undefined, section.id)}>
+                                  <Plus size={14} /> Add Item
+                                </button>
+                                <button 
+                                  className="btn btn-sm btn-danger"
+                                  onClick={() => handleDeleteSection(section.id)}
+                                >
+                                  <Trash2 size={14} /> Delete Section
+                                </button>
+                              </div>
+                              
+                              {!section.lineItems?.length ? (
+                                <div className="text-center text-muted py-4">
+                                  No items in this section.
+                                </div>
+                              ) : (
+                                <table className="table">
+                                  <thead>
+                                    <tr>
+                                      <th>Item</th>
+                                      <th>Qty</th>
+                                      <th>Unit</th>
+                                      <th>Unit Price</th>
+                                      <th>Total</th>
+                                      <th></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {section.lineItems?.map(item => (
+                                      <tr key={item.id} className={item.isExcluded ? 'opacity-50 line-through' : ''}>
+                                        <td>
+                                          <div className="font-medium">{item.name}</div>
+                                          {item.description && (
+                                            <div className="text-xs text-muted">{item.description}</div>
+                                          )}
+                                          {item.isOptional && <span className="badge badge-yellow text-xs">Optional</span>}
+                                          {item.isExcluded && <span className="badge badge-red text-xs">Excluded</span>}
+                                          {item.isAllowance && <span className="badge badge-blue text-xs">Allowance</span>}
+                                        </td>
+                                        <td>{item.quantity}</td>
+                                        <td>{item.unit}</td>
+                                        <td>{formatCurrency(item.unitPrice)}</td>
+                                        <td className="font-medium">{formatCurrency(item.total)}</td>
+                                        <td>
+                                          <div className="flex gap-1">
+                                            <button 
+                                              className="btn btn-sm btn-icon"
+                                              onClick={() => openItemEditor(item, section.id)}
+                                            >
+                                              <Copy size={14} />
+                                            </button>
+                                            <button 
+                                              className="btn btn-sm btn-icon btn-danger"
+                                              onClick={() => handleDeleteItem(item.id)}
+                                            >
+                                              <Trash2 size={14} />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -768,6 +1171,94 @@ export function EstimateBuilder() {
           <button className="btn btn-secondary" onClick={() => setShowAddSection(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleAddSection}>Add Section</button>
         </div>
+      </Modal>
+
+      <Modal isOpen={showAddScope} onClose={() => { setShowAddScope(false); setSelectedTemplate(null); setTemplatePickerStep('select'); }} title="Add Project Scope" size="lg">
+        {templatePickerStep === 'select' ? (
+          <>
+            <div className="form-group">
+              <label className="form-label">Scope Name</label>
+              <input
+                className="form-input"
+                value={newScopeName}
+                onChange={e => setNewScopeName(e.target.value)}
+                placeholder="e.g., Kitchen, Master Bath, Flooring"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Select Template</label>
+              <div className="space-y-2">
+                {projectTypeTemplates.length === 0 ? (
+                  <div className="text-center py-4 text-muted">No project type templates available.</div>
+                ) : (
+                  projectTypeTemplates.map(template => (
+                    <button
+                      key={template.id}
+                      className="w-full text-left p-3 border rounded-lg hover:bg-gray-50"
+                      onClick={() => handleSelectTemplate(template)}
+                    >
+                      <div className="font-medium">{template.name}</div>
+                      <div className="text-sm text-muted">{template.description}</div>
+                      <div className="text-xs text-muted mt-1">{template.sections?.length} sections</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 mb-4">
+              <button className="btn btn-sm btn-secondary" onClick={() => setTemplatePickerStep('select')}>
+                <ArrowLeft size={14} /> Back
+              </button>
+              <span className="font-medium">{selectedTemplate?.name}</span>
+            </div>
+            <div className="form-group mb-4">
+              <label className="form-label">Scope Name</label>
+              <input
+                className="form-input"
+                value={newScopeName}
+                onChange={e => setNewScopeName(e.target.value)}
+                placeholder="e.g., Kitchen, Master Bath, Flooring"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Select Items to Include</label>
+              <div className="text-sm text-muted mb-2">Check items to include in this scope. Default items are pre-selected.</div>
+              <div className="max-h-96 overflow-y-auto space-y-4">
+                {selectedTemplate?.sections?.map(section => (
+                  <div key={section.id} className="border rounded-lg p-3">
+                    <div className="font-medium mb-2">{section.name}</div>
+                    {section.description && <div className="text-sm text-muted mb-2">{section.description}</div>}
+                    <div className="space-y-2">
+                      {section.items?.map(item => (
+                        <label key={item.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedTemplateItems[item.id] || false}
+                            onChange={() => handleToggleTemplateItem(item.id)}
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{item.name}</div>
+                            {item.description && <div className="text-xs text-muted">{item.description}</div>}
+                          </div>
+                          <div className="text-sm text-muted">
+                            {item.quantity} {item.unit} × {formatCurrency(item.unitPrice)}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
+              <button className="btn btn-secondary" onClick={() => { setShowAddScope(false); setSelectedTemplate(null); setTemplatePickerStep('select'); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAddScope} disabled={!newScopeName.trim()}>Add Scope</button>
+            </div>
+          </>
+        )}
       </Modal>
 
       <Modal isOpen={showAddItem} onClose={() => { setShowAddItem(false); setEditingItem(null); }} title={editingItem ? 'Edit Line Item' : 'Add Line Item'} size="lg">
@@ -932,7 +1423,22 @@ export function EstimateBuilder() {
           
           <div className="mb-6">
             <h3 className="font-bold mb-2">Scope of Work</h3>
-            {sections.map(section => (
+            {allScopes.map(scope => (
+              <div key={scope.id} className="mb-4">
+                <h4 className="font-medium">{scope.name}</h4>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {scope.sections?.flatMap(section => section.lineItems || []).map(item => (
+                      <tr key={item.id} className={item.isExcluded ? 'line-through text-muted' : ''}>
+                        <td>{item.name}</td>
+                        <td className="text-right">{formatCurrency(item.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            {legacySections.map(section => (
               <div key={section.id} className="mb-4">
                 <h4 className="font-medium">{section.name}</h4>
                 <table className="w-full text-sm">
