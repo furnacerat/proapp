@@ -1,0 +1,766 @@
+import { useState, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
+import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
+import { getJobInsights } from '../utils/insights';
+import { JOB_STATUSES, EXPENSE_CATEGORIES, INVOICE_TYPES, CHANGE_ORDER_STATUSES, PHOTO_CATEGORIES, TASK_STATUSES, PRIORITIES } from '../data/types';
+import { useToast } from '../components/common/Toast';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { Modal } from '../components/common/Modal';
+import { ArrowLeft, MapPin, Trash2, Plus, Camera, FileText, Clock, Receipt, CheckSquare, DollarSign, AlertTriangle, TrendingUp, Wrench, Edit, Copy } from 'lucide-react';
+
+export function JobDetail() {
+  const { id } = useParams<{ id: string }>();
+  const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, 
+    updateJob, deleteJob, duplicateJob,
+    addTimeEntry, deleteTimeEntry, addExpense, deleteExpense,
+    addTask, deleteTask, addInvoice, addPayment, addNote, addPhoto,
+    addChangeOrder, updateChangeOrder, deleteChangeOrder, approveChangeOrder,
+    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobProfit, getJobBalance, getJobProgress } = useApp();
+  const { showToast } = useToast();
+  
+  const job = jobs.find(j => j.id === id);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
+
+  const [timeEntryForm, setTimeEntryForm] = useState({ workerId: '', date: new Date().toISOString().split('T')[0], startTime: '07:00', endTime: '16:00', notes: '' });
+  const [expenseForm, setExpenseForm] = useState({ date: new Date().toISOString().split('T')[0], vendor: '', amount: '', category: 'materials', paymentSource: 'company_card', notes: '' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', dueDate: '', priority: 'medium', status: 'open' });
+  const [invoiceForm, setInvoiceForm] = useState({ invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: 'check', checkNumber: '', notes: '' });
+  const [noteForm, setNoteForm] = useState('');
+  const [photoForm, setPhotoForm] = useState({ url: '', description: '', category: 'progress' as const });
+  const [changeOrderForm, setChangeOrderForm] = useState({ description: '', amount: '', status: 'pending' as const });
+  
+  const [showModal, setShowModal] = useState<string | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
+
+  const jobTimeEntries = useMemo(() => timeEntries.filter(t => t.jobId === id), [timeEntries, id]);
+  const jobExpenses = useMemo(() => expenses.filter(e => e.jobId === id), [expenses, id]);
+  const jobTasks = useMemo(() => tasks.filter(t => t.jobId === id), [tasks, id]);
+  const jobInvoices = useMemo(() => invoices.filter(i => i.jobId === id), [invoices, id]);
+  const jobNotes = useMemo(() => notes.filter(n => n.jobId === id), [notes, id]);
+  const jobPhotos = useMemo(() => photos.filter(p => p.jobId === id), [photos, id]);
+  const jobChangeOrders = useMemo(() => changeOrders.filter(co => co.jobId === id), [changeOrders, id]);
+
+  const profit = useMemo(() => getJobProfit(id!), [id, job, getJobProfit]);
+  const balance = useMemo(() => getJobBalance(id!), [id, jobInvoices, payments]);
+  const progress = useMemo(() => getJobProgress(id!), [id, jobTasks]);
+  const insights = useMemo(() => job ? getJobInsights(job, jobExpenses, jobTimeEntries) : [], [job, jobExpenses, jobTimeEntries]);
+
+  if (!job) {
+    return (
+      <div>
+        <div className="page-header">
+          <Link to="/jobs" className="btn btn-secondary"><ArrowLeft size={18} /> Back</Link>
+        </div>
+        <div className="page-content">
+          <div className="empty-state">
+            <h3>Job not found</h3>
+            <p>The requested job could not be found.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const totalLaborCost = getJobLaborCost(job.id);
+  const totalExpenses = getJobExpenseTotal(job.id);
+  const changeOrderTotal = getJobChangeOrderTotal(job.id);
+  const actualCost = getJobActualCost(job.id);
+  const budgetUsage = job.contractAmount > 0 ? (actualCost / job.contractAmount) * 100 : 0;
+
+  const handleAddTimeEntry = () => {
+    if (!timeEntryForm.workerId) { showToast('Select a worker', 'error'); return; }
+    const [startH, startM] = timeEntryForm.startTime.split(':').map(Number);
+    const [endH, endM] = timeEntryForm.endTime.split(':').map(Number);
+    const hours = (endH + endM / 60) - (startH + startM / 60);
+    if (hours <= 0) { showToast('End time must be after start', 'error'); return; }
+    addTimeEntry({ jobId: job.id, workerId: timeEntryForm.workerId, date: timeEntryForm.date, startTime: timeEntryForm.startTime, endTime: timeEntryForm.endTime, totalHours: hours, overtime: hours > 8, notes: timeEntryForm.notes });
+    showToast('Time entry added');
+    setShowModal(null);
+    setTimeEntryForm({ workerId: '', date: new Date().toISOString().split('T')[0], startTime: '07:00', endTime: '16:00', notes: '' });
+  };
+
+  const handleAddExpense = () => {
+    if (!expenseForm.vendor || !expenseForm.amount) { showToast('Fill required fields', 'error'); return; }
+    addExpense({ jobId: job.id, date: expenseForm.date, vendor: expenseForm.vendor, amount: parseFloat(expenseForm.amount), category: expenseForm.category as any, paymentSource: expenseForm.paymentSource as any, notes: expenseForm.notes });
+    showToast('Expense added');
+    setShowModal(null);
+    setExpenseForm({ date: new Date().toISOString().split('T')[0], vendor: '', amount: '', category: 'materials', paymentSource: 'company_card', notes: '' });
+  };
+
+  const handleAddTask = () => {
+    if (!taskForm.title) { showToast('Enter task title', 'error'); return; }
+    addTask({ ...taskForm, jobId: job.id, dueDate: taskForm.dueDate || undefined });
+    showToast('Task added');
+    setShowModal(null);
+    setTaskForm({ title: '', description: '', dueDate: '', priority: 'medium', status: 'open' });
+  };
+
+  const handleAddInvoice = () => {
+    if (!invoiceForm.amount) { showToast('Enter amount', 'error'); return; }
+    const invNum = invoiceForm.invoiceNumber || `INV-${String(invoices.length + 1).padStart(3, '0')}`;
+    addInvoice({ jobId: job.id, invoiceNumber: invNum, amount: parseFloat(invoiceForm.amount), type: invoiceForm.type as any, dueDate: invoiceForm.dueDate, status: invoiceForm.status as any, notes: invoiceForm.notes });
+    showToast('Invoice created');
+    setShowModal(null);
+    setInvoiceForm({ invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: '' });
+  };
+
+  const handleAddPayment = () => {
+    if (!paymentForm.amount || !selectedInvoice) { showToast('Enter amount', 'error'); return; }
+    addPayment({ invoiceId: selectedInvoice, amount: parseFloat(paymentForm.amount), date: paymentForm.date, method: paymentForm.method as any, checkNumber: paymentForm.checkNumber, notes: paymentForm.notes });
+    showToast('Payment recorded');
+    setShowModal(null);
+    setSelectedInvoice(null);
+    setPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], method: 'check', checkNumber: '', notes: '' });
+  };
+
+  const handleAddNote = () => {
+    if (!noteForm.trim()) { showToast('Enter note text', 'error'); return; }
+    addNote({ jobId: job.id, content: noteForm });
+    showToast('Note added');
+    setNoteForm('');
+  };
+
+  const handleAddPhoto = () => {
+    if (!photoForm.url) { showToast('Enter photo URL', 'error'); return; }
+    addPhoto({ jobId: job.id, url: photoForm.url, description: photoForm.description, category: photoForm.category });
+    showToast('Photo added');
+    setShowModal(null);
+    setPhotoForm({ url: '', description: '', category: 'progress' });
+  };
+
+  const handleAddChangeOrder = () => {
+    if (!changeOrderForm.description || !changeOrderForm.amount) { showToast('Fill required fields', 'error'); return; }
+    addChangeOrder({ jobId: job.id, description: changeOrderForm.description, amount: parseFloat(changeOrderForm.amount), status: changeOrderForm.status as any });
+    showToast('Change order created');
+    setShowModal(null);
+    setChangeOrderForm({ description: '', amount: '', status: 'pending' });
+  };
+
+  const handleDelete = () => {
+    if (!deleteConfirm) return;
+    switch (deleteConfirm.type) {
+      case 'timeEntry': deleteTimeEntry(deleteConfirm.id); showToast('Time entry deleted'); break;
+      case 'expense': deleteExpense(deleteConfirm.id); showToast('Expense deleted'); break;
+      case 'task': deleteTask(deleteConfirm.id); showToast('Task deleted'); break;
+      case 'invoice': deleteInvoice(deleteConfirm.id); showToast('Invoice deleted'); break;
+      case 'note': deleteNote(deleteConfirm.id); showToast('Note deleted'); break;
+      case 'photo': deleteNote(deleteConfirm.id); showToast('Photo deleted'); break;
+      case 'changeOrder': deleteChangeOrder(deleteConfirm.id); showToast('Change order deleted'); break;
+    }
+    setDeleteConfirm(null);
+  };
+
+  const getStatusColor = (status: string) => {
+    const map: Record<string, string> = {
+      lead: 'badge-gray', estimate_sent: 'badge-blue', approved: 'badge-purple', scheduled: 'badge-indigo',
+      active: 'badge-green', awaiting_materials: 'badge-yellow', awaiting_payment: 'badge-orange',
+      completed: 'badge-emerald', closed: 'badge-slate', pending: 'badge-yellow', approved: 'badge-green', rejected: 'badge-red',
+      open: 'badge-blue', in_progress: 'badge-yellow', blocked: 'badge-red', done: 'badge-green',
+      draft: 'badge-gray', sent: 'badge-blue', paid: 'badge-green', partial: 'badge-yellow', overdue: 'badge-red',
+    };
+    return map[status] || 'badge-gray';
+  };
+
+  const getBudgetColor = () => {
+    if (budgetUsage > 100) return 'bg-red-500';
+    if (budgetUsage > 75) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', count: null },
+    { id: 'schedule', label: 'Schedule', count: null },
+    { id: 'workers', label: 'Team', count: jobTimeEntries.length > 0 ? [...new Set(jobTimeEntries.map(t => t.workerId))].length : 0 },
+    { id: 'time', label: 'Time', count: jobTimeEntries.length },
+    { id: 'expenses', label: 'Expenses', count: jobExpenses.length },
+    { id: 'tasks', label: 'Tasks', count: jobTasks.length },
+    { id: 'invoices', label: 'Invoices', count: jobInvoices.length },
+    { id: 'changeorders', label: 'Changes', count: jobChangeOrders.length },
+    { id: 'photos', label: 'Photos', count: jobPhotos.length },
+    { id: 'notes', label: 'Notes', count: jobNotes.length },
+  ];
+
+  return (
+    <div>
+      <div className="page-header">
+        <Link to="/jobs" className="btn btn-secondary"><ArrowLeft size={18} /> Back</Link>
+        <div className="page-actions">
+          <button className="btn btn-secondary" onClick={() => duplicateJob(job.id)} title="Duplicate Job">
+            <Copy size={18} /> Duplicate
+          </button>
+          <button className="btn btn-danger" onClick={() => setDeleteConfirm({ type: 'job', id: job.id })}>Delete</button>
+        </div>
+      </div>
+
+      <div className="page-content">
+        <div className="job-header">
+          <div className="job-info">
+            <h1 className="job-title">{job.name}</h1>
+            <div className="job-address flex items-center gap-2">
+              <MapPin size={16} /> {job.address}
+            </div>
+            <div className="job-customer mt-2">{job.customer} {job.customerPhone && <span className="text-muted"> • {job.customerPhone}</span>}</div>
+          </div>
+          <div className="flex flex-col gap-2 items-end">
+            <span className={`badge badge-lg ${getStatusColor(job.status)}`}>{job.status.replace('_', ' ')}</span>
+            <span className="text-sm text-muted">{job.type.replace('_', ' ')}</span>
+          </div>
+        </div>
+
+        <div className="grid-4 gap-4 mb-6">
+          <div className="card">
+            <div className="text-xs text-muted uppercase">Contract</div>
+            <div className="text-2xl font-bold">{formatCurrency(job.contractAmount)}</div>
+          </div>
+          <div className="card">
+            <div className="text-xs text-muted uppercase">Actual Cost</div>
+            <div className="text-2xl font-bold">{formatCurrency(actualCost)}</div>
+            <div className="text-xs text-muted">{formatCurrency(totalLaborCost + totalExpenses)} + {formatCurrency(changeOrderTotal)}</div>
+          </div>
+          <div className="card">
+            <div className="text-xs text-muted uppercase">Profit</div>
+            <div className={`text-2xl font-bold ${profit.profit >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatCurrency(profit.profit)} ({profit.margin.toFixed(0)}%)
+            </div>
+          </div>
+          <div className="card">
+            <div className="text-xs text-muted uppercase">Balance Due</div>
+            <div className="text-2xl font-bold">{formatCurrency(balance)}</div>
+          </div>
+        </div>
+
+        <div className="card mb-6">
+          <div className="card-body">
+            <div className="text-xs text-muted mb-2">Budget Usage: {Math.round(budgetUsage)}%</div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div className={`h-3 rounded-full transition-all ${getBudgetColor()}`} style={{ width: `${Math.min(budgetUsage, 100)}%` }} />
+            </div>
+            <div className="flex justify-between text-xs text-muted mt-1">
+              <span>$0</span>
+              <span>{formatCurrency(job.contractAmount)}</span>
+            </div>
+          </div>
+        </div>
+
+        {insights.length > 0 && (
+          <div className="flex gap-2 mb-4 overflow-x-auto">
+            {insights.map(insight => (
+              <div key={insight.id} className={`flex-shrink-0 px-3 py-2 rounded-lg border ${getStatusColor(insight.severity).replace('badge-', 'border-').replace('bg-', 'bg-white ')}`}>
+                <div className="text-sm font-medium">{insight.title}</div>
+                <div className="text-xs text-muted">{insight.description}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="tabs mb-4 overflow-x-auto">
+          {tabs.map(tab => (
+            <button key={tab.id} className={`tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>
+              {tab.label}
+              {tab.count !== null && <span className="ml-1 text-xs">({tab.count})</span>}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'overview' && (
+          <div className="grid-2 gap-6">
+            <div className="card">
+              <div className="card-header"><h3 className="card-title">Quick Stats</h3></div>
+              <div className="card-body">
+                <div className="stats-row">
+                  <div className="stat-item"><div className="stat-label">Contract</div><div className="stat-value">{formatCurrency(job.contractAmount)}</div></div>
+                  <div className="stat-item"><div className="stat-label">Est. Cost</div><div className="stat-value">{formatCurrency(job.estimatedCost)}</div></div>
+                  <div className="stat-item"><div className="stat-label">Actual</div><div className="stat-value">{formatCurrency(actualCost)}</div></div>
+                </div>
+                <div className="mt-4 grid-2 gap-4">
+                  <div><span className="text-muted">Start:</span> {formatDate(job.startDate)}</div>
+                  <div><span className="text-muted">Due:</span> {formatDate(job.dueDate)}</div>
+                  <div><span className="text-muted">Progress:</span> {progress}%</div>
+                  <div><span className="text-muted">Change Orders:</span> {formatCurrency(changeOrderTotal)}</div>
+                </div>
+                <div className="mt-4">
+                  <h4 className="font-medium mb-2">Notes</h4>
+                  <p className="text-secondary">{job.notes || 'No notes'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header"><h3 className="card-title">Quick Actions</h3></div>
+              <div className="card-body space-y-2">
+                <button className="btn btn-primary w-full" onClick={() => setShowModal('time')}>+ Add Time Entry</button>
+                <button className="btn btn-secondary w-full" onClick={() => setShowModal('expense')}>+ Add Expense</button>
+                <button className="btn btn-secondary w-full" onClick={() => setShowModal('task')}>+ Add Task</button>
+                <button className="btn btn-secondary w-full" onClick={() => setShowModal('invoice')}>+ Create Invoice</button>
+                <button className="btn btn-secondary w-full" onClick={() => setShowModal('changeorder')}>+ Change Order</button>
+                <button className="btn btn-secondary w-full" onClick={() => setShowModal('photo')}>+ Add Photo</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'time' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Time Entries ({jobTimeEntries.length})</h3>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('time')}>+ Add</button>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>Date</th><th>Worker</th><th>Hours</th><th>Cost</th><th>Notes</th><th></th></tr></thead>
+                <tbody>
+                  {jobTimeEntries.length === 0 ? <tr><td colSpan={6} className="text-center text-muted">No entries</td></tr> : jobTimeEntries.map(entry => {
+                    const worker = workers.find(w => w.id === entry.workerId);
+                    return (
+                      <tr key={entry.id}>
+                        <td>{formatDate(entry.date)}</td>
+                        <td>{worker?.name}</td>
+                        <td>{entry.totalHours.toFixed(1)}h {entry.overtime && <span className="badge badge-red">OT</span>}</td>
+                        <td>{formatCurrency(entry.laborCost)}</td>
+                        <td className="truncate" style={{maxWidth: '150px'}}>{entry.notes}</td>
+                        <td><button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'timeEntry', id: entry.id })}><Trash2 size={14} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'expenses' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Expenses ({jobExpenses.length})</h3>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('expense')}>+ Add</button>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th><th>Notes</th><th></th></tr></thead>
+                <tbody>
+                  {jobExpenses.length === 0 ? <tr><td colSpan={6} className="text-center text-muted">No expenses</td></tr> : jobExpenses.map(exp => (
+                    <tr key={exp.id}>
+                      <td>{formatDate(exp.date)}</td>
+                      <td>{exp.vendor}</td>
+                      <td><span className="badge badge-gray">{exp.category}</span></td>
+                      <td>{formatCurrency(exp.amount)}</td>
+                      <td className="truncate" style={{maxWidth: '150px'}}>{exp.notes}</td>
+                      <td><button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'expense', id: exp.id })}><Trash2 size={14} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'tasks' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Tasks ({jobTasks.length})</h3>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('task')}>+ Add</button>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>Task</th><th>Due</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {jobTasks.length === 0 ? <tr><td colSpan={5} className="text-center text-muted">No tasks</td></tr> : jobTasks.map(task => (
+                    <tr key={task.id}>
+                      <td>{task.title}</td>
+                      <td>{task.dueDate ? formatDate(task.dueDate) : '-'}</td>
+                      <td><span className={`badge ${getStatusColor(task.priority)}`}>{task.priority}</span></td>
+                      <td><span className={`badge ${getStatusColor(task.status)}`}>{task.status.replace('_', ' ')}</span></td>
+                      <td><button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'task', id: task.id })}><Trash2 size={14} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'invoices' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Invoices & Payments</h3>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('invoice')}>+ Invoice</button>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>Invoice #</th><th>Type</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {jobInvoices.length === 0 ? <tr><td colSpan={7} className="text-center text-muted">No invoices</td></tr> : jobInvoices.map(inv => {
+                    const invPayments = payments.filter(p => p.invoiceId === inv.id);
+                    const paid = invPayments.reduce((s, p) => s + p.amount, 0);
+                    return (
+                      <tr key={inv.id}>
+                        <td>{inv.invoiceNumber}</td>
+                        <td><span className="badge badge-gray">{inv.type}</span></td>
+                        <td>{formatCurrency(inv.amount)}</td>
+                        <td>{formatCurrency(paid)}</td>
+                        <td className="font-medium">{formatCurrency(inv.amount - paid)}</td>
+                        <td><span className={`badge ${getStatusColor(inv.status)}`}>{inv.status}</span></td>
+                        <td>
+                          <div className="flex gap-2">
+                            {inv.status !== 'paid' && <button className="btn btn-sm btn-secondary" onClick={() => { setSelectedInvoice(inv.id); setShowModal('payment'); }}>Pay</button>}
+                            <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'invoice', id: inv.id })}><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'changeorders' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Change Orders ({jobChangeOrders.length})</h3>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('changeorder')}>+ Add</button>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>Description</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {jobChangeOrders.length === 0 ? <tr><td colSpan={4} className="text-center text-muted">No change orders</td></tr> : jobChangeOrders.map(co => (
+                    <tr key={co.id}>
+                      <td>{co.description}</td>
+                      <td>{formatCurrency(co.amount)}</td>
+                      <td><span className={`badge ${getStatusColor(co.status)}`}>{co.status}</span></td>
+                      <td>
+                        <div className="flex gap-2">
+                          {co.status === 'pending' && (
+                            <button className="btn btn-sm btn-primary" onClick={() => approveChangeOrder(co.id)}>Approve</button>
+                          )}
+                          <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'changeOrder', id: co.id })}><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'photos' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Photos ({jobPhotos.length})</h3>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowModal('photo')}>+ Add</button>
+            </div>
+            <div className="card-body">
+              {jobPhotos.length === 0 ? (
+                <div className="text-center text-muted py-8">No photos yet</div>
+              ) : (
+                <div className="grid-3 gap-4">
+                  {jobPhotos.map(photo => (
+                    <div key={photo.id} className="relative rounded-lg overflow-hidden bg-gray-100 aspect-video">
+                      <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                        <Camera size={32} />
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/50 p-2">
+                        <div className="text-xs text-white">{photo.category}</div>
+                        <div className="text-xs text-gray-300">{photo.description}</div>
+                      </div>
+                      <button className="absolute top-2 right-2 btn btn-sm btn-danger" onClick={() => setDeleteConfirm({ type: 'photo', id: photo.id })}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'notes' && (
+          <div>
+            <div className="card mb-4">
+              <div className="card-header"><h3 className="card-title">Add Note</h3></div>
+              <div className="card-body">
+                <textarea className="form-textarea" value={noteForm} onChange={e => setNoteForm(e.target.value)} placeholder="Write a note..." />
+                <button className="btn btn-primary mt-2" onClick={handleAddNote} disabled={!noteForm.trim()}>Add Note</button>
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header"><h3 className="card-title">Notes ({jobNotes.length})</h3></div>
+              <div className="card-body">
+                {jobNotes.length === 0 ? <p className="text-muted text-center">No notes yet</p> : jobNotes.map(note => (
+                  <div key={note.id} className="list-item">
+                    <div className="list-item-content">
+                      <div className="list-item-title">{note.content}</div>
+                      <div className="list-item-subtitle">{formatDate(note.createdAt)}</div>
+                    </div>
+                    <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'note', id: note.id })}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'schedule' && (
+          <div className="card">
+            <div className="card-header"><h3 className="card-title">Schedule</h3></div>
+            <div className="card-body">
+              <div className="grid-2 gap-4">
+                <div><span className="text-muted">Start Date:</span> {formatDate(job.startDate)}</div>
+                <div><span className="text-muted">Due Date:</span> {formatDate(job.dueDate)}</div>
+              </div>
+              <h4 className="font-medium mt-6 mb-4">Task Schedule</h4>
+              <div className="space-y-2">
+                {jobTasks.map((task, i) => (
+                  <div key={task.id} className={`flex items-center justify-between p-3 rounded-lg ${task.status === 'done' ? 'bg-green-50' : task.dueDate && new Date(task.dueDate) < new Date() ? 'bg-red-50' : 'bg-gray-50'}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted">{i + 1}.</span>
+                      <span className={task.status === 'done' ? 'line-through' : ''}>{task.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {task.dueDate && <span className="text-sm text-muted">{formatDate(task.dueDate)}</span>}
+                      <span className={`badge ${getStatusColor(task.status)}`}>{task.status.replace('_', ' ')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'workers' && (
+          <div className="card">
+            <div className="card-header"><h3 className="card-title">Team ({[...new Set(jobTimeEntries.map(t => t.workerId))].length} workers)</h3></div>
+            <div className="card-body">
+              <div className="space-y-2">
+                {[...new Set(jobTimeEntries.map(t => t.workerId))].map(workerId => {
+                  const worker = workers.find(w => w.id === workerId);
+                  const workerEntries = jobTimeEntries.filter(t => t.workerId === workerId);
+                  const hours = workerEntries.reduce((s, t) => s + t.totalHours, 0);
+                  const cost = workerEntries.reduce((s, t) => s + t.laborCost, 0);
+                  return (
+                    <div key={workerId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <div className="font-medium">{worker?.name}</div>
+                        <div className="text-sm text-muted">{worker?.trade}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">{hours.toFixed(1)}h</div>
+                        <div className="text-sm text-muted">{formatCurrency(cost)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Modal isOpen={showModal === 'time'} onClose={() => setShowModal(null)} title="Add Time Entry">
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Worker *</label>
+            <select className="form-select" value={timeEntryForm.workerId} onChange={e => setTimeEntryForm({...timeEntryForm, workerId: e.target.value})}>
+              <option value="">Select worker</option>
+              {workers.filter(w => w.status === 'active').map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Date</label>
+            <input className="form-input" type="date" value={timeEntryForm.date} onChange={e => setTimeEntryForm({...timeEntryForm, date: e.target.value})} />
+          </div>
+        </div>
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Start</label>
+            <input className="form-input" type="time" value={timeEntryForm.startTime} onChange={e => setTimeEntryForm({...timeEntryForm, startTime: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">End</label>
+            <input className="form-input" type="time" value={timeEntryForm.endTime} onChange={e => setTimeEntryForm({...timeEntryForm, endTime: e.target.value})} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Notes</label>
+          <textarea className="form-textarea" value={timeEntryForm.notes} onChange={e => setTimeEntryForm({...timeEntryForm, notes: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddTimeEntry}>Add Entry</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'expense'} onClose={() => setShowModal(null)} title="Add Expense">
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Vendor *</label>
+            <input className="form-input" value={expenseForm.vendor} onChange={e => setExpenseForm({...expenseForm, vendor: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Amount *</label>
+            <input className="form-input" type="number" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} />
+          </div>
+        </div>
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Date</label>
+            <input className="form-input" type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Category</label>
+            <select className="form-select" value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})}>
+              {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Notes</label>
+          <textarea className="form-textarea" value={expenseForm.notes} onChange={e => setExpenseForm({...expenseForm, notes: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddExpense}>Add Expense</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'task'} onClose={() => setShowModal(null)} title="Add Task">
+        <div className="form-group">
+          <label className="form-label">Title *</label>
+          <input className="form-input" value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Description</label>
+          <textarea className="form-textarea" value={taskForm.description} onChange={e => setTaskForm({...taskForm, description: e.target.value})} />
+        </div>
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Due Date</label>
+            <input className="form-input" type="date" value={taskForm.dueDate} onChange={e => setTaskForm({...taskForm, dueDate: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Priority</label>
+            <select className="form-select" value={taskForm.priority} onChange={e => setTaskForm({...taskForm, priority: e.target.value})}>
+              {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddTask}>Add Task</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'invoice'} onClose={() => setShowModal(null)} title="Create Invoice">
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Invoice #</label>
+            <input className="form-input" value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm({...invoiceForm, invoiceNumber: e.target.value})} placeholder="Auto" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Amount *</label>
+            <input className="form-input" type="number" value={invoiceForm.amount} onChange={e => setInvoiceForm({...invoiceForm, amount: e.target.value})} />
+          </div>
+        </div>
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Type</label>
+            <select className="form-select" value={invoiceForm.type} onChange={e => setInvoiceForm({...invoiceForm, type: e.target.value})}>
+              {INVOICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Due Date</label>
+            <input className="form-input" type="date" value={invoiceForm.dueDate} onChange={e => setInvoiceForm({...invoiceForm, dueDate: e.target.value})} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Notes</label>
+          <textarea className="form-textarea" value={invoiceForm.notes} onChange={e => setInvoiceForm({...invoiceForm, notes: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddInvoice}>Create Invoice</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'payment'} onClose={() => setShowModal(null)} title="Record Payment">
+        <div className="form-group">
+          <label className="form-label">Amount *</label>
+          <input className="form-input" type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} />
+        </div>
+        <div className="form-row form-row-2">
+          <div className="form-group">
+            <label className="form-label">Date</label>
+            <input className="form-input" type="date" value={paymentForm.date} onChange={e => setPaymentForm({...paymentForm, date: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Method</label>
+            <select className="form-select" value={paymentForm.method} onChange={e => setPaymentForm({...paymentForm, method: e.target.value})}>
+              <option value="check">Check</option><option value="cash">Cash</option><option value="ach">ACH</option><option value="card">Card</option>
+            </select>
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Check #</label>
+          <input className="form-input" value={paymentForm.checkNumber} onChange={e => setPaymentForm({...paymentForm, checkNumber: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'changeorder'} onClose={() => setShowModal(null)} title="Create Change Order">
+        <div className="form-group">
+          <label className="form-label">Description *</label>
+          <textarea className="form-textarea" value={changeOrderForm.description} onChange={e => setChangeOrderForm({...changeOrderForm, description: e.target.value})} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Amount *</label>
+          <input className="form-input" type="number" value={changeOrderForm.amount} onChange={e => setChangeOrderForm({...changeOrderForm, amount: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddChangeOrder}>Create Change Order</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'photo'} onClose={() => setShowModal(null)} title="Add Photo">
+        <div className="form-group">
+          <label className="form-label">Photo URL *</label>
+          <input className="form-input" value={photoForm.url} onChange={e => setPhotoForm({...photoForm, url: e.target.value})} placeholder="https://..." />
+          <p className="text-xs text-muted mt-1">Enter a URL or use camera to capture</p>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Category</label>
+          <select className="form-select" value={photoForm.category} onChange={e => setPhotoForm({...photoForm, category: e.target.value})}>
+            {PHOTO_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Description</label>
+          <input className="form-input" value={photoForm.description} onChange={e => setPhotoForm({...photoForm, description: e.target.value})} />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddPhoto}>Add Photo</button>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={handleDelete}
+        title="Confirm Delete"
+        message="Are you sure you want to delete this item? This action cannot be undone."
+        confirmLabel="Delete"
+        danger
+      />
+    </div>
+  );
+}

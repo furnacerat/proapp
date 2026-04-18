@@ -1,0 +1,268 @@
+export type JobStatus = 'lead' | 'estimate_sent' | 'approved' | 'scheduled' | 'active' | 'awaiting_materials' | 'awaiting_payment' | 'completed' | 'closed';
+export type JobType = 'flip' | 'remodel' | 'new_build' | 'addition' | 'repair' | 'other';
+export type WorkerType = 'employee' | 'subcontractor';
+export type WorkerStatus = 'active' | 'inactive';
+export type PayType = 'hourly' | 'flat';
+export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'done';
+export type Priority = 'low' | 'medium' | 'high' | 'urgent';
+export type ExpenseCategory = 'materials' | 'permits' | 'dump_fees' | 'fuel' | 'rental' | 'subcontractor' | 'equipment' | 'misc';
+export type PaymentSource = 'company_card' | 'cash' | 'check' | 'finance' | 'credit' | 'other';
+export type InvoiceType = 'deposit' | 'progress' | 'final' | 'change_order';
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue';
+export type PaymentMethod = 'cash' | 'check' | 'ach' | 'card' | 'other';
+export type ChangeOrderStatus = 'pending' | 'approved' | 'rejected';
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertType = 'task_overdue' | 'job_overdue' | 'invoice_overdue' | 'budget_warning' | 'payment_due';
+
+export interface Job {
+  id: string;
+  name: string;
+  customer: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  address: string;
+  type: JobType;
+  contractAmount: number;
+  estimatedCost: number;
+  actualCost: number;
+  startDate: string;
+  dueDate: string;
+  status: JobStatus;
+  notes?: string;
+  templateId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Worker {
+  id: string;
+  name: string;
+  type: WorkerType;
+  trade?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  payType: PayType;
+  hourlyRate?: number;
+  flatRate?: number;
+  status: WorkerStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  jobId: string;
+  workerId: string;
+  date: string;
+  startTime: string;
+  endTime?: string;
+  totalHours: number;
+  overtime: boolean;
+  laborCost: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Expense {
+  id: string;
+  jobId: string;
+  date: string;
+  vendor: string;
+  amount: number;
+  category: ExpenseCategory;
+  paymentSource?: PaymentSource;
+  notes?: string;
+  receipt?: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  assignedTo?: string;
+  jobId?: string;
+  priority: Priority;
+  status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  jobId: string;
+  amount: number;
+  type: InvoiceType;
+  dueDate: string;
+  status: InvoiceStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  date: string;
+  method?: PaymentMethod;
+  checkNumber?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Note {
+  id: string;
+  jobId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface Photo {
+  id: string;
+  jobId: string;
+  url: string;
+  description?: string;
+  category: 'progress' | 'before' | 'after' | 'issue' | 'other';
+  createdAt: string;
+}
+
+export interface ChangeOrder {
+  id: string;
+  jobId: string;
+  description: string;
+  amount: number;
+  status: ChangeOrderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JobTemplate {
+  id: string;
+  name: string;
+  type: JobType;
+  estimatedCost: number;
+  tasks: { title: string; description?: string; priority: Priority }[];
+  materials: { name: string; category: ExpenseCategory; estimatedCost: number }[];
+  createdAt: string;
+}
+
+export interface Alert {
+  id: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  jobId?: string;
+  taskId?: string;
+  invoiceId?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface AppData {
+  jobs: Job[];
+  workers: Worker[];
+  timeEntries: TimeEntry[];
+  expenses: Expense[];
+  tasks: Task[];
+  invoices: Invoice[];
+  payments: Payment[];
+  notes: Note[];
+  photos: Photo[];
+  changeOrders: ChangeOrder[];
+  jobTemplates: JobTemplate[];
+  alerts: Alert[];
+}
+
+export const JOB_STATUSES: { value: JobStatus; label: string }[] = [
+  { value: 'lead', label: 'Lead' },
+  { value: 'estimate_sent', label: 'Estimate Sent' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'active', label: 'Active' },
+  { value: 'awaiting_materials', label: 'Awaiting Materials' },
+  { value: 'awaiting_payment', label: 'Awaiting Payment' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
+];
+
+export const JOB_TYPES: { value: JobType; label: string }[] = [
+  { value: 'flip', label: 'House Flip' },
+  { value: 'remodel', label: 'Remodel' },
+  { value: 'new_build', label: 'New Build' },
+  { value: 'addition', label: 'Addition' },
+  { value: 'repair', label: 'Repair' },
+  { value: 'other', label: 'Other' },
+];
+
+export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
+  { value: 'materials', label: 'Materials' },
+  { value: 'permits', label: 'Permits' },
+  { value: 'dump_fees', label: 'Dump Fees' },
+  { value: 'fuel', label: 'Fuel' },
+  { value: 'rental', label: 'Equipment Rental' },
+  { value: 'subcontractor', label: 'Subcontractor' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'misc', label: 'Miscellaneous' },
+];
+
+export const TASK_STATUSES: { value: TaskStatus; label: string }[] = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'blocked', label: 'Blocked' },
+  { value: 'done', label: 'Done' },
+];
+
+export const PRIORITIES: { value: Priority; label: string }[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'urgent', label: 'Urgent' },
+];
+
+export const INVOICE_STATUSES: { value: InvoiceStatus; label: string }[] = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'partial', label: 'Partial' },
+  { value: 'overdue', label: 'Overdue' },
+];
+
+export const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
+  { value: 'deposit', label: 'Deposit' },
+  { value: 'progress', label: 'Progress Payment' },
+  { value: 'final', label: 'Final Payment' },
+  { value: 'change_order', label: 'Change Order' },
+];
+
+export const CHANGE_ORDER_STATUSES: { value: ChangeOrderStatus; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+export const TRADES = [
+  'Carpentry',
+  'Electrical',
+  'Plumbing',
+  'HVAC',
+  'Roofing',
+  'Drywall',
+  'Painting',
+  'Flooring',
+  'General',
+  'Demolition',
+  'Landscaping',
+  'Other',
+];
+
+export const PHOTO_CATEGORIES = [
+  { value: 'progress', label: 'Progress' },
+  { value: 'before', label: 'Before' },
+  { value: 'after', label: 'After' },
+  { value: 'issue', label: 'Issue/Damage' },
+  { value: 'other', label: 'Other' },
+];
