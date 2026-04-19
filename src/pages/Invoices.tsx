@@ -66,6 +66,7 @@ export function Invoices() {
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
+    alert('handlePrintInvoice called')
     console.log('handlePrintInvoice called')
     // Simple test content
     const content = '<div style="padding:40px;font-family:Arial;text-align:center;"><h1>TEST PRINT</h1><p>If you see this, the print window works.</p></div>'
