@@ -1,3 +1,4 @@
+import '../components/print/printStyles.css'
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -6,8 +7,9 @@ import { INVOICE_TYPES, INVOICE_STATUSES } from '../data/types';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, Trash2 } from 'lucide-react';
-import { openPrintWindow } from '../utils/printWindow';
+import { Plus, Search, Trash2, FileText } from 'lucide-react';
+import PrintTemplateModal from '../components/print/PrintTemplateModal';
+import { buildClientInvoiceData } from '../utils/buildPrintData';
 
 export function Invoices() {
   const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice, branding } = useApp();
@@ -19,7 +21,8 @@ export function Invoices() {
   const [showModal, setShowModal] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [printInvoice, setPrintInvoice] = useState<any>(null);
+  const [printData, setPrintData] = useState<any>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   
   const [formData, setFormData] = useState({
     jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: ''
@@ -67,8 +70,11 @@ export function Invoices() {
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
-    setPrintInvoice(inv)
-    setTimeout(() => window.print(), 100)
+    const job = jobs.find(j => j.id === inv.jobId)
+    const invPayments = payments.filter(p => p.invoiceId === inv.id)
+    const data = buildClientInvoiceData(inv, job, invPayments, branding)
+    setPrintData(data)
+    setShowPrintModal(true)
   }
 
   return (
@@ -109,7 +115,7 @@ export function Invoices() {
                       <td>
                         <div className="flex gap-2">
                           <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handlePrintInvoice(inv)}>Print</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handlePrintInvoice(inv)} title="Preview & Print Invoice"><FileText size={14} /></button>
                           <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
                         </div>
                       </td>
@@ -144,6 +150,14 @@ export function Invoices() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
       </Modal>
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
+      {printData && (
+        <PrintTemplateModal
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          title={`Invoice ${printData.invoiceNumber}`}
+          data={printData}
+        />
+      )}
     </div>
   );
 }
