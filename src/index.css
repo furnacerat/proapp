@@ -1310,10 +1310,3 @@ body {
 .shadow { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
 .hidden { display: none; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.header-brand { display: flex; align-items: center; gap: 8px; }
-.logo { height: 28px; width: auto; }
-.topbar { height: 64px; display:flex; align-items:center; justify-content: space-between; padding: 0 16px; background: white; border-bottom: 1px solid var(--card-border); }
-.topbar .brand { display:flex; align-items:center; gap:12px; }
-.sidebar { width: 260px; position: fixed; top: 0; bottom: 0; left: 0; background: #0b1220; color: white; }
-.layout { display: flex; }
-.page { margin-left: 260px; }
