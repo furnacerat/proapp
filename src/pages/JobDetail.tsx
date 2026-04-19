@@ -774,13 +774,10 @@ export function JobDetail() {
         )}
 
         {activeTab === 'timeline' && (
-          <PrintRegion title="Timeline">
-            <div className="card">
+          <div className="card">
             <div className="card-header">
               <h3 className="card-title">Activity Timeline</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('timeline')}>+ Add Entry</button>
-              <button className="btn btn-sm btn-secondary" onClick={() => setPrintPreview({section:'timeline', open:true})} style={{ marginLeft:8 }}>Print Preview</button>
-              <button className="btn btn-sm btn-secondary" onClick={() => setPrintPreview({section:'timeline', open:true})} style={{ marginLeft:8 }}>Print Preview</button>
             </div>
             <div className="card-body">
               {timeline.length === 0 ? (
@@ -806,8 +803,7 @@ export function JobDetail() {
         )}
 
         {activeTab === 'dailylog' && (
-          <PrintRegion title="Daily Logs">
-            <div className="card">
+          <div className="card">
             <div className="card-header">
               <h3 className="card-title">Daily Logs</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('dailylog')}>+ Add Log</button>
@@ -836,8 +832,7 @@ export function JobDetail() {
         )}
 
         {activeTab === 'punchlist' && (
-          <PrintRegion title="Punch List">
-            <div className="card">
+          <div className="card">
             <div className="card-header">
               <h3 className="card-title">Punch List ({punchList.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('punchlist')}>+ Add Item</button>
@@ -865,8 +860,7 @@ export function JobDetail() {
         )}
 
         {activeTab === 'issues' && (
-          <PrintRegion title="Issues">
-            <div className="card">
+          <div className="card">
             <div className="card-header">
               <h3 className="card-title">Issues ({issues.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('issue')}>+ Log Issue</button>
@@ -903,8 +897,7 @@ export function JobDetail() {
         )}
 
         {activeTab === 'files' && (
-        <PrintRegion title="Files">
-            <div className="card">
+          <div className="card">
             <div className="card-header">
               <h3 className="card-title">File Attachments ({attachments.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('file')}>+ Add File</button>
@@ -927,13 +920,6 @@ export function JobDetail() {
               )}
             </div>
           </div>
-        </PrintRegion>
-        <PrintPreviewModal isOpen={printPreview.open && printPreview.section==='timeline'} onClose={()=>setPrintPreview({section:'', open:false})} title="Print Preview: Timeline" render={() => (
-          <div>
-            <BrandHeader />
-            <div>Timeline entries: {timeline.length}</div>
-          </div>
-        )} />
         )}
       </div>
 
