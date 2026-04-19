@@ -14,6 +14,8 @@ import {
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
   Flag, Paperclip, Eye, Calendar, Send
 } from 'lucide-react';
+import PrintPreviewModal from '../components/PrintPreviewModal';
+import BrandHeader from '../components/BrandHeader';
 
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +30,7 @@ export function JobDetail() {
   const job = jobs.find(j => j.id === id);
   const [activeTab, setActiveTab] = useState('overview');
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
+  const [printPreview, setPrintPreview] = useState<{ section: string; open: boolean }>({ section: '', open: false });
 
   const [timeEntryForm, setTimeEntryForm] = useState({ workerId: '', date: new Date().toISOString().split('T')[0], startTime: '07:00', endTime: '16:00', notes: '' });
   const [expenseForm, setExpenseForm] = useState({ date: new Date().toISOString().split('T')[0], vendor: '', amount: '', category: 'materials', paymentSource: 'company_card', notes: '' });
@@ -426,6 +429,18 @@ export function JobDetail() {
             ))}
           </div>
         )}
+        <PrintPreviewModal isOpen={printPreview.open && printPreview.section==='timeline'} onClose={()=>setPrintPreview({section:'timeline', open:false})} title="Print Preview: Timeline" render={()=>(
+          <div>
+            <BrandHeader />
+            <div>Timeline entries: {timeline.length}</div>
+          </div>
+        )} />
+        <PrintPreviewModal isOpen={printPreview.open && printPreview.section==='timeline'} onClose={()=>setPrintPreview({section:'', open:false})} title={`Print Preview: Timeline`} render={()=>(
+          <div>
+            <BrandHeader />
+            <div>Timeline entries: {timeline.length}</div>
+          </div>
+        )} />
 
         <div className="tabs mb-4 overflow-x-auto">
           {tabs.map(tab => (
@@ -764,6 +779,8 @@ export function JobDetail() {
             <div className="card-header">
               <h3 className="card-title">Activity Timeline</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('timeline')}>+ Add Entry</button>
+              <button className="btn btn-sm btn-secondary" onClick={() => setPrintPreview({section:'timeline', open:true})} style={{ marginLeft:8 }}>Print Preview</button>
+              <button className="btn btn-sm btn-secondary" onClick={() => setPrintPreview({section:'timeline', open:true})} style={{ marginLeft:8 }}>Print Preview</button>
             </div>
             <div className="card-body">
               {timeline.length === 0 ? (
@@ -911,6 +928,12 @@ export function JobDetail() {
             </div>
           </div>
         </PrintRegion>
+        <PrintPreviewModal isOpen={printPreview.open && printPreview.section==='timeline'} onClose={()=>setPrintPreview({section:'', open:false})} title="Print Preview: Timeline" render={() => (
+          <div>
+            <BrandHeader />
+            <div>Timeline entries: {timeline.length}</div>
+          </div>
+        )} />
         )}
       </div>
 
