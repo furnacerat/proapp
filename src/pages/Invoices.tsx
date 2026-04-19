@@ -66,11 +66,85 @@ export function Invoices() {
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
-    alert('handlePrintInvoice called')
-    console.log('handlePrintInvoice called')
-    // Simple test content
-    const content = '<div style="padding:40px;font-family:Arial;text-align:center;"><h1>TEST PRINT</h1><p>If you see this, the print window works.</p></div>'
-    openPrintWindow(`Test Invoice`, content, branding)
+    const invPayments = getInvoicePayments(inv.id)
+    const job = jobs.find(j => j.id === inv.jobId)
+    const totalPaid = invPayments.reduce((s, p) => s + p.amount, 0)
+    const balance = inv.amount - totalPaid
+
+    const brandName = branding?.brandName || 'Allens Hub'
+    const brandEmail = branding?.emailFromAddress || ''
+    const brandLogo = branding?.logoDataUrl || ''
+    const brandTerms = branding?.termsText || ''
+
+    const content = `
+<div class="invoice-header">
+${brandLogo ? `<img src="${brandLogo}" alt="${brandName}" style="max-height:60px;max-width:200px;margin-bottom:16px;" />` : ''}
+<div class="invoice-title" style="font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin:16px 0;">INVOICE</div>
+<div class="invoice-number" style="font-size:16px;color:#555;">${inv.invoiceNumber}</div>
+</div>
+
+<div class="section" style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #eee;">
+<div style="display:flex;justify-content:space-between;">
+<div>
+<div class="label" style="font-size:11px;color:#777;text-transform:uppercase;">From</div>
+<div class="value" style="font-size:14px;font-weight:600;">${brandName}</div>
+${brandEmail ? `<div class="value" style="font-size:13px;color:#555;">${brandEmail}</div>` : ''}
+</div>
+<div style="text-align:right;">
+<div class="label" style="font-size:11px;color:#777;text-transform:uppercase;">Date</div>
+<div class="value" style="font-size:14px;font-weight:600;">${inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : ''}</div>
+</div>
+</div>
+</div>
+
+<div class="section" style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #eee;">
+<div class="label" style="font-size:11px;color:#777;text-transform:uppercase;">Bill To</div>
+<div class="value" style="font-size:14px;font-weight:600;">${job?.customer || 'Customer'}</div>
+${job?.address ? `<div class="value" style="font-size:13px;color:#555;">${job.address}</div>` : ''}
+</div>
+
+<div class="section" style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #eee;">
+<div class="label" style="font-size:11px;color:#777;text-transform:uppercase;">Project</div>
+<div class="value" style="font-size:14px;font-weight:600;">${job?.name || 'N/A'}</div>
+</div>
+
+<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+<thead><tr><th style="text-align:left;padding:8px 0;font-size:11px;color:#777;text-transform:uppercase;border-bottom:2px solid #333;">Description</th><th style="text-align:right;padding:8px 0;font-size:11px;color:#777;text-transform:uppercase;border-bottom:2px solid #333;">Amount</th></tr></thead>
+<tbody>
+<tr><td style="padding:12px 0;border-bottom:1px solid #eee;">Contract Amount</td><td style="text-align:right;padding:12px 0;border-bottom:1px solid #eee;">${formatCurrency(inv.amount)}</td></tr>
+</tbody>
+</table>
+
+<div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
+<div style="width:240px;">
+<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;"><span style="color:#777;">Amount Due</span><span style="font-weight:600;">${formatCurrency(inv.amount)}</span></div>
+${totalPaid > 0 ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;"><span style="color:#777;">Payments</span><span style="font-weight:600;">-${formatCurrency(totalPaid)}</span></div>` : ''}
+<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:2px solid #333;"><span style="font-weight:700;">Balance Due</span><span style="font-weight:700;font-size:18px;">${formatCurrency(balance)}</span></div>
+</div>
+</div>
+
+${invPayments.length > 0 ? `
+<div class="section" style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #eee;">
+<div class="label" style="font-size:11px;color:#777;text-transform:uppercase;margin-bottom:8px;">Payment History</div>
+<table style="width:100%;border-collapse:collapse;">
+<tbody>
+${invPayments.map(p => `<tr><td style="padding:4px 0;font-size:13px;">${p.date ? new Date(p.date).toLocaleDateString() : ''}</td><td style="padding:4px 0;font-size:13px;">${formatCurrency(p.amount)}</td><td style="padding:4px 0;font-size:13px;color:#777;text-align:right;">${p.method}</td></tr>`).join('')}
+</tbody>
+</table>
+</div>
+` : ''}
+
+${brandTerms ? `
+<div class="terms" style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#777;">
+<div style="font-weight:600;margin-bottom:4px;">Terms & Conditions</div>
+<div>${brandTerms}</div>
+</div>
+` : ''}
+
+<div class="footer" style="margin-top:32px;text-align:center;font-size:11px;color:#999;">Thank you for your business!</div>
+    `.trim()
+
+    openPrintWindow(`Invoice ${inv.invoiceNumber}`, content, branding)
   }
 
   return (
@@ -111,7 +185,7 @@ export function Invoices() {
                       <td>
                         <div className="flex gap-2">
                           <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => alert('Print button clicked directly!')}>Print</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => handlePrintInvoice(inv)}>Print</button>
                           <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
                         </div>
                       </td>
