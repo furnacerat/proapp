@@ -8,12 +8,16 @@ import { useToast } from '../../components/common/Toast';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { Modal } from '../../components/common/Modal';
 import { 
-  Plus, Trash2, Save, Send, CheckCircle, ArrowLeft, Copy, FileText, 
+  Plus, Trash2, Save, Send, CheckCircle, ArrowLeft, Copy, FileText,
+  Printer,
   Package, Clock, DollarSign, ChevronDown, ChevronUp, GripVertical,
   AlertTriangle, Calculator, X, Eye, Archive, FolderOpen, CheckSquare,
   MoreHorizontal, Edit3, RotateCcw, FileCheck, Briefcase
 } from 'lucide-react';
 import { renderEmailHTML, renderEmailAll } from '../../utils/emailTemplates';
+import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
+import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
+import type { PrintEstimateData } from '../../data/printTypes';
 
 export function EstimateBuilder() {
   const { id } = useParams();
@@ -55,7 +59,15 @@ export function EstimateBuilder() {
   const [emailHtmlPreview, setEmailHtmlPreview] = useState<{ subject: string; html: string } | null>(null);
   const [emailHtmlOpen, setEmailHtmlOpen] = useState(false);
 
-  const handlePrint = () => window.print();
+  // ── Print preview state ────────────────────────────────────
+  const [estimatePrintData, setEstimatePrintData] = useState<PrintEstimateData | null>(null);
+
+  /** Opens the sanitized client-facing print preview — never exposes internal cost/markup/profit */
+  const handlePrint = () => {
+    if (!estimate) return;
+    const data = buildClientEstimatePrintData(estimate, customer, branding, undefined);
+    setEstimatePrintData(data);
+  };
 
   const handleEmailWithFallback = (subject: string, body: string, existingEmail?: string) => {
     if (existingEmail) {
@@ -824,8 +836,8 @@ export function EstimateBuilder() {
           <button className="btn btn-secondary" onClick={() => setShowProposal(true)}>
             <Eye size={16} /> Preview
           </button>
-          <button className="btn btn-secondary" onClick={handlePrint}>
-            <FileText size={16} /> Print
+          <button className="btn btn-secondary" onClick={handlePrint} title="Preview & Print — Client Only View">
+            <Printer size={16} /> Preview &amp; Print
           </button>
           <button className="btn btn-secondary" onClick={() => {
             // Email with branding signature if available
@@ -1643,6 +1655,16 @@ export function EstimateBuilder() {
         message="This will create a new job from this estimate."
         confirmLabel="Convert"
       />
+
+      {/* ── Print Preview Overlay (portal into #print-root, never prints app UI) ── */}
+      {estimatePrintData && (
+        <PrintTemplateModal
+          isOpen={!!estimatePrintData}
+          onClose={() => setEstimatePrintData(null)}
+          title={`Estimate ${estimatePrintData.estimateNumber}`}
+          data={estimatePrintData}
+        />
+      )}
     </div>
   );
 }

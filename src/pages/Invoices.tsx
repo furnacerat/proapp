@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/formatters';
 import { INVOICE_TYPES, INVOICE_STATUSES } from '../data/types';
+import type { Invoice } from '../data/types';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, Trash2, FileText } from 'lucide-react';
+import { Plus, Search, Trash2, Printer } from 'lucide-react';
 import { buildClientInvoiceData } from '../utils/buildPrintData';
-import { printInvoice } from '../utils/printDocument';
+import { PrintTemplateModal } from '../components/print/PrintTemplateModal';
+import type { PrintInvoiceData } from '../data/printTypes';
+import { DEFAULT_PRINT_SETTINGS } from '../data/printTypes';
 
 export function Invoices() {
   const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice, branding } = useApp();
@@ -20,7 +23,10 @@ export function Invoices() {
   const [showModal, setShowModal] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  
+
+  // ── Print preview state ────────────────────────────────────────
+  const [printData, setPrintData] = useState<PrintInvoiceData | null>(null);
+
   const [formData, setFormData] = useState({
     jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: ''
   });
@@ -66,17 +72,19 @@ export function Invoices() {
   const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
-  const handlePrintInvoice = (inv: any) => {
-    const job = jobs.find(j => j.id === inv.jobId)
-    const invPayments = payments.filter(p => p.invoiceId === inv.id)
-    const data = buildClientInvoiceData(inv, job, invPayments, branding)
-    printInvoice(data)
-  }
+  /** Opens the print preview overlay with sanitized client-facing data only */
+  const handlePrintInvoice = (inv: Invoice) => {
+    const job = jobs.find(j => j.id === inv.jobId);
+    const invPayments = payments.filter(p => p.invoiceId === inv.id);
+    // buildClientInvoiceData applies whitelist — no internal cost/profit fields passed through
+    const data = buildClientInvoiceData(inv, job, invPayments, branding, DEFAULT_PRINT_SETTINGS);
+    setPrintData(data);
+  };
 
   return (
-    <div className="print-area">
-      <div className="page-header no-print">
-        <h1 className="page-title">Invoices & Payments</h1>
+    <div>
+      <div className="page-header">
+        <h1 className="page-title">Invoices &amp; Payments</h1>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={18} /> Create Invoice</button>
       </div>
       <div className="page-content">
@@ -111,7 +119,13 @@ export function Invoices() {
                       <td>
                         <div className="flex gap-2">
                           <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handlePrintInvoice(inv)} title="Preview & Print Invoice"><FileText size={14} /></button>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => handlePrintInvoice(inv)}
+                            title="Preview &amp; Print Invoice"
+                          >
+                            <Printer size={14} />
+                          </button>
                           <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
                         </div>
                       </td>
@@ -123,6 +137,8 @@ export function Invoices() {
           </div>
         </div>
       </div>
+
+      {/* ── Create Invoice Modal ── */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Invoice">
         <div className="form-group"><label className="form-label">Job *</label><select className="form-select" value={formData.jobId} onChange={e => setFormData({...formData, jobId: e.target.value})}><option value="">Select job</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}</select></div>
         <div className="form-row form-row-2">
@@ -133,9 +149,11 @@ export function Invoices() {
           <div className="form-group"><label className="form-label">Type</label><select className="form-select" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>{INVOICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Due Date</label><input className="form-input" type="date" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} /></div>
         </div>
-        <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} /></div>
+        <div className="form-group"><label className="form-label">Notes (Client-visible)</label><textarea className="form-textarea" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Notes shown on client invoice" /></div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSave}>Create Invoice</button></div>
       </Modal>
+
+      {/* ── Record Payment Modal ── */}
       <Modal isOpen={!!paymentModalId} onClose={() => setPaymentModalId(null)} title="Record Payment">
         <div className="form-group"><label className="form-label">Amount *</label><input className="form-input" type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} /></div>
         <div className="form-row form-row-2">
@@ -145,7 +163,19 @@ export function Invoices() {
         <div className="form-group"><label className="form-label">Check #</label><input className="form-input" value={paymentForm.checkNumber} onChange={e => setPaymentForm({...paymentForm, checkNumber: e.target.value})} /></div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
       </Modal>
+
+      {/* ── Delete Confirm ── */}
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
+
+      {/* ── Print Preview Overlay (portal into #print-root) ── */}
+      {printData && (
+        <PrintTemplateModal
+          isOpen={!!printData}
+          onClose={() => setPrintData(null)}
+          title={`Invoice ${printData.invoiceNumber}`}
+          data={printData}
+        />
+      )}
     </div>
   );
 }

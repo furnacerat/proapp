@@ -164,13 +164,24 @@ body {
 }
 
 @media print {
-  /* Hide app chrome when printing - only show print-area content */
-  .no-print, .page-header, .sidebar, nav, header, footer, .btn { display: none !important; }
-  .page-content { padding: 0; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; }
-  img { max-width: 100%; height: auto; }
+  /*
+   * PRINT ISOLATION — Only #print-root prints (the PrintTemplateModal portal).
+   * The entire app shell (#root) is hidden. This means window.print() triggered
+   * from within PrintTemplateModal will render only the clean document template,
+   * never the sidebar, nav, topbar, or any app UI.
+   */
+  #root           { display: none !important; }
+  #print-root     { display: block !important; }
+
+  /* Fallback: hide any remaining app chrome in case of old print calls */
+  .sidebar,
+  .page-header,
+  .btn,
+  nav,
+  header,
+  .modal-overlay  { display: none !important; }
 }
+
 
 .card {
   background: var(--bg-secondary);

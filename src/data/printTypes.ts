@@ -4,6 +4,7 @@ export interface PrintBranding {
   brandName: string
   emailFromAddress?: string
   phone?: string
+  address?: string
   primaryColor?: string
   fontFamily?: string
   logoDataUrl?: string

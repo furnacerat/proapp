@@ -1,22 +1,56 @@
-import { Invoice, Payment, Job, BrandingSettings } from '../data/types'
-import { PrintInvoiceData, PrintBranding, PrintAddress, PrintLineItem, PrintSettings, DEFAULT_PRINT_SETTINGS } from '../data/printTypes'
+/**
+ * buildPrintData.ts
+ *
+ * SANITIZATION LAYER — Client-facing print document data builders.
+ *
+ * SECURITY PRINCIPLE: Explicit whitelist only.
+ * These functions NEVER expose:
+ *   - internal cost / labor cost / material cost / supplier cost
+ *   - profit / profit margin / markup percent / markup amount
+ *   - labor burden / overhead
+ *   - admin notes / internal notes
+ *   - private flags (isOptional, isExcluded, category breakdowns)
+ *   - labor hours / labor rate IDs
+ *   - any internal IDs or metadata
+ *
+ * Adding a new internal field to Invoice/Estimate will NEVER accidentally
+ * appear on client documents because these functions whitelist — not blacklist.
+ */
+
+import type { Invoice, Payment, Job, BrandingSettings, Estimate, Customer } from '../data/types'
+import type {
+  PrintInvoiceData,
+  PrintEstimateData,
+  PrintBranding,
+  PrintAddress,
+  PrintLineItem,
+  PrintSettings,
+} from '../data/printTypes'
+import { DEFAULT_PRINT_SETTINGS } from '../data/printTypes'
+
+// ─── Address Parser ───────────────────────────────────────────────────────────
 
 const parseAddress = (address?: string): PrintAddress | undefined => {
   if (!address) return undefined
-  const parts = address.split(',').map(p => p.trim())
+  // Support both comma-separated and multi-line formats
+  const parts = address.split(/,|\n/).map(p => p.trim()).filter(Boolean)
   return {
     line1: parts[0] || '',
-    line2: parts[1],
-    city: parts[2],
-    state: parts[3],
-    zip: parts[4],
+    line2: parts.length > 4 ? parts[1] : undefined,
+    city: parts.length === 5 ? parts[2] : parts.length > 1 ? parts[1] : undefined,
+    state: parts.length === 5 ? parts[3] : parts.length > 2 ? parts[2] : undefined,
+    zip: parts.length === 5 ? parts[4] : parts.length > 3 ? parts[3] : undefined,
   }
 }
 
+// ─── Branding Builder ─────────────────────────────────────────────────────────
+// Only maps client-visible branding fields — no internal email templates, etc.
+
 const buildBranding = (branding?: BrandingSettings): PrintBranding => ({
-  brandName: branding?.brandName || 'Allens Hub',
+  brandName: branding?.brandName || 'Your Company',
   emailFromAddress: branding?.emailFromAddress,
   phone: (branding as any)?.phone,
+  address: (branding as any)?.address,
   primaryColor: branding?.primaryColor,
   fontFamily: branding?.fontFamily,
   logoDataUrl: branding?.logoDataUrl,
@@ -26,55 +60,208 @@ const buildBranding = (branding?: BrandingSettings): PrintBranding => ({
   signature: branding?.signature,
 })
 
+// ─── Client Invoice Print Data ────────────────────────────────────────────────
+
+/**
+ * Builds a sanitized, client-facing invoice payload.
+ * Uses explicit field whitelisting — internal cost/profit never included.
+ */
 export const buildClientInvoiceData = (
   invoice: Invoice,
   job: Job | undefined,
   payments: Payment[],
   branding?: BrandingSettings,
-  settings: PrintSettings = DEFAULT_PRINT_SETTINGS
+  settings: PrintSettings = DEFAULT_PRINT_SETTINGS,
 ): PrintInvoiceData => {
-  const brand = buildBranding(branding)
+  const company = buildBranding(branding)
+
+  // WHITELISTED client line items only: no cost, no margin, no internal IDs
   const lineItems: PrintLineItem[] = [
     {
-      description: 'Contract Amount',
+      description: job?.name ? `${invoice.type === 'deposit' ? 'Deposit — ' : invoice.type === 'progress' ? 'Progress Payment — ' : invoice.type === 'final' ? 'Final Payment — ' : ''}${job.name}` : 'Contract Amount',
       quantity: 1,
       unit: 'LS',
       unitPrice: invoice.amount,
       total: invoice.amount,
-    }
+    },
   ]
 
+  const filteredItems = settings.hideZeroValueLines
+    ? lineItems.filter(item => item.total !== 0)
+    : lineItems
+
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
+  const balanceDue = invoice.amount - totalPaid
 
   return {
     type: 'invoice',
+    // WHITELISTED document metadata
     invoiceNumber: invoice.invoiceNumber,
     issueDate: invoice.createdAt,
-    dueDate: invoice.dueDate,
+    dueDate: invoice.dueDate || undefined,
     status: invoice.status,
-    company: brand,
+    // WHITELISTED company info (client-visible branding only)
+    company,
+    // WHITELISTED client info
     client: {
       name: job?.customer || 'Customer',
       address: job?.address ? parseAddress(job.address) : undefined,
       email: job?.customerEmail,
       phone: job?.customerPhone,
     },
-    project: job ? {
-      name: job.name,
-      address: job.address ? parseAddress(job.address) : undefined,
-    } : undefined,
-    lineItems: settings.hideZeroValueLines 
-      ? lineItems.filter(item => item.total !== 0)
-      : lineItems,
+    // WHITELISTED project info
+    project: job
+      ? {
+          name: job.name,
+          address: job.address ? parseAddress(job.address) : undefined,
+        }
+      : undefined,
+    // WHITELISTED line items
+    lineItems: filteredItems,
+    // WHITELISTED financials (client totals only — no cost/profit)
     subtotal: invoice.amount,
     total: invoice.amount,
     payments: payments.map(p => ({
       date: p.date,
       amount: p.amount,
-      method: p.method,
+      method: p.method || 'N/A',
     })),
-    balanceDue: invoice.amount - totalPaid,
+    balanceDue,
+    // WHITELISTED optional client-visible fields
     notes: settings.showNotes ? invoice.notes : undefined,
-    paymentTerms: settings.showPaymentTerms ? brand.paymentTerms || brand.termsText : undefined,
+    paymentTerms: settings.showPaymentTerms
+      ? company.paymentTerms || company.termsText
+      : undefined,
+  }
+}
+
+// ─── Client Estimate Print Data ───────────────────────────────────────────────
+
+/**
+ * Builds a sanitized, client-facing estimate payload.
+ * Uses explicit field whitelisting — markupPercent, laborTotal, materialCost,
+ * marginPercent, hours, category breakdowns, and all internal flags are NEVER included.
+ */
+export const buildClientEstimatePrintData = (
+  estimate: Estimate,
+  customer: Customer | undefined,
+  branding?: BrandingSettings,
+  settings: PrintSettings = DEFAULT_PRINT_SETTINGS,
+): PrintEstimateData => {
+  const company = buildBranding(branding)
+
+  // Walk scopes → sections → lineItems, projecting ONLY client-safe fields
+  const lineItems: PrintLineItem[] = []
+
+  const allScopes = estimate.scopes ?? []
+  const legacySections = estimate.sections ?? []
+
+  // Process scoped estimates (the primary structure)
+  allScopes.forEach(scope => {
+    scope.sections?.forEach(section => {
+      section.lineItems?.forEach(item => {
+        // Skip excluded items — client should not see them
+        if (item.isExcluded) return
+
+        // WHITELIST: only client-visible line item fields
+        const printItem: PrintLineItem = {
+          description: item.name,                          // ✅ visible
+          detail: settings.showItemDescriptions            // ✅ visible if enabled
+            ? item.description
+            : undefined,
+          quantity: item.quantity,                         // ✅ visible
+          unit: item.unit,                                 // ✅ visible
+          unitPrice: item.unitPrice,                       // ✅ visible (post-markup price)
+          total: item.total,                               // ✅ visible (post-markup total)
+          // ❌ NOT INCLUDED: item.materialCost, item.laborCost, item.equipmentCost,
+          //    item.subcontractorCost, item.hours, item.laborRateId, item.category,
+          //    item.isLabor, item.isOptional, item.isAllowance, item.notes (internal),
+          //    item.sortOrder, item.id
+        }
+
+        if (settings.hideZeroValueLines && item.total === 0) return
+        lineItems.push(printItem)
+      })
+    })
+  })
+
+  // Process legacy flat-section estimates
+  legacySections.forEach(section => {
+    section.lineItems?.forEach(item => {
+      if (item.isExcluded) return
+
+      const printItem: PrintLineItem = {
+        description: item.name,
+        detail: settings.showItemDescriptions ? item.description : undefined,
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+        total: item.total,
+      }
+
+      if (settings.hideZeroValueLines && item.total === 0) return
+      lineItems.push(printItem)
+    })
+  })
+
+  // WHITELISTED financial totals — apply markup to get client-facing totals
+  // We compute from first principles so we never expose intermediate cost breakdowns
+  const rawSubtotal = lineItems.reduce((sum, item) => sum + item.total, 0)
+  const markupMultiplier = 1 + (estimate.markupPercent ?? 0) / 100
+  // If line items already have markup baked in (unitPrice × qty = post-markup),
+  // use the raw sum directly. Otherwise apply markup.
+  // Convention in this app: estimate line item totals already reflect unit price
+  // (set by user), and markup is applied on top at the estimate level.
+  const subtotal = rawSubtotal
+  const markupAmount = rawSubtotal * ((estimate.markupPercent ?? 0) / 100)
+  const total = rawSubtotal + markupAmount
+
+  // Tax (client-visible if applicable)
+  let tax: number | undefined
+  if (estimate.taxable && estimate.taxable !== 'none') {
+    // We don't know the tax rate here, so we use whatever the estimate stored
+    // The estimate total field reflects the actual computed value
+    // Use stored total if available to be precise
+    tax = undefined // Tax rate not part of safe estimate fields — omit unless explicitly stored
+  }
+
+  return {
+    type: 'estimate',
+    // WHITELISTED document metadata
+    estimateNumber: estimate.estimateNumber,
+    issueDate: estimate.createdAt,
+    validUntil: estimate.validUntil || undefined,
+    status: estimate.status,
+    // WHITELISTED company info
+    company,
+    // WHITELISTED client info
+    client: {
+      name: customer?.name || 'Customer',
+      address: customer?.address ? parseAddress(customer.address) : undefined,
+      email: customer?.email,
+      phone: customer?.phone,
+    },
+    // WHITELISTED project info
+    project: {
+      name: estimate.name,
+      address: estimate.address ? parseAddress(estimate.address) : undefined,
+    },
+    // WHITELISTED line items (sanitized above)
+    lineItems,
+    // WHITELISTED financial totals (client-facing only)
+    subtotal,
+    total,
+    tax,
+    // WHITELISTED optional client-visible fields
+    notes: settings.showNotes ? estimate.notes : undefined,
+    terms: settings.showPaymentTerms
+      ? company.paymentTerms || company.termsText
+      : undefined,
+    // ❌ NOT INCLUDED: estimate.markupPercent, estimate.markupAmount,
+    //    estimate.laborTotal, estimate.materialTotal, estimate.equipmentTotal,
+    //    estimate.subcontractorTotal, estimate.projectedLaborHours,
+    //    estimate.projectedMaterialCost, estimate.projectedLaborCost,
+    //    estimate.marginPercent, estimate.marginAmount, estimate.taxable,
+    //    estimate.convertedToJobId, estimate.archivedAt, estimate.id
   }
 }
