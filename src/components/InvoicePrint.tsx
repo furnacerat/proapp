@@ -2,64 +2,125 @@ import React from 'react'
 import { Invoice } from '../data/types'
 import { Job } from '../data/types'
 import { Payment } from '../data/types'
+import { BrandingSettings } from '../data/types'
 import { formatCurrency } from '../utils/formatters'
 
 type Props = {
   invoice: Invoice
   job?: Job
   payments: Payment[]
+  branding?: BrandingSettings
 }
 
-const InvoicePrint: React.FC<Props> = ({ invoice, job, payments }) => {
+const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
   const balance = invoice.amount - totalPaid
+  const brandName = branding?.brandName || 'Your Contractor'
 
   return (
-    <div style={{ fontFamily: 'ui-sans-serif, system-ui, Arial', padding: 8 }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, marginBottom: 8 }}>{/* Optional branding header can go here */}</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontWeight: 700 }}>{invoice.invoiceNumber}</div>
-          <div>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString() : ''}</div>
+    <div className="invoice-print" style={{ fontFamily: branding?.fontFamily || 'ui-sans-serif, system-ui, Arial', padding: 24, maxWidth: 800, margin: '0 auto' }}>
+      {branding?.logoDataUrl && (
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <img src={branding.logoDataUrl} alt={brandName} style={{ maxHeight: 60, maxWidth: 200 }} />
         </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 12 }}>
+      )}
+
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: branding?.primaryColor || '#1a1a1a' }}>INVOICE</h1>
+        <div style={{ fontSize: 18, color: '#555' }}>{invoice.invoiceNumber}</div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, borderBottom: '1px solid #eee', paddingBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 14, color: '#555' }}>Job</div>
-          <div style={{ fontWeight: 600 }}>{job?.name ?? ''}</div>
+          <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase' }}>From</div>
+          <div style={{ fontWeight: 600 }}>{brandName}</div>
+          {branding?.emailFromAddress && <div style={{ fontSize: 14, color: '#555' }}>{branding.emailFromAddress}</div>}
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 14, color: '#555' }}>Balance</div>
-          <div style={{ fontWeight: 600 }}>{formatCurrency(balance)}</div>
+          <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase' }}>Date</div>
+          <div style={{ fontWeight: 600 }}>{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString() : ''}</div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 6 }}>
-        <div className="card" style={{ padding: 12, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: '#555' }}>Amount</div>
-          <div style={{ fontWeight: 700 }}>{formatCurrency(invoice.amount)}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: '#555' }}>Paid</div>
-          <div style={{ fontWeight: 700 }}>{formatCurrency(totalPaid)}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: '#555' }}>Balance</div>
-          <div style={{ fontWeight: 700 }}>{formatCurrency(balance)}</div>
-        </div>
-        <div className="card" style={{ padding: 12, borderRadius: 8 }}>
-          <div style={{ fontSize: 12, color: '#555' }}>Status</div>
-          <div style={{ fontWeight: 700 }}>{invoice.status}</div>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase', marginBottom: 4 }}>Bill To</div>
+        <div style={{ fontWeight: 600 }}>{job?.customer || 'Customer'}</div>
+        {job?.address && <div style={{ fontSize: 14, color: '#555' }}>{job.address}</div>}
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase', marginBottom: 4 }}>Project</div>
+        <div style={{ fontWeight: 600 }}>{job?.name || 'N/A'}</div>
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid #333' }}>
+            <th style={{ textAlign: 'left', padding: '8px 0', fontSize: 12, color: '#777', textTransform: 'uppercase' }}>Description</th>
+            <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 12, color: '#777', textTransform: 'uppercase' }}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ borderBottom: '1px solid #eee' }}>
+            <td style={{ padding: '12px 0', fontSize: 14 }}>Contract Amount</td>
+            <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 14 }}>{formatCurrency(invoice.amount)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+        <div style={{ width: 240 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+            <span style={{ color: '#777' }}>Amount Due</span>
+            <span style={{ fontWeight: 700, fontSize: 18 }}>{formatCurrency(invoice.amount)}</span>
+          </div>
+          {totalPaid > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+              <span style={{ color: '#777' }}>Payments Received</span>
+              <span style={{ fontWeight: 600 }}>-{formatCurrency(totalPaid)}</span>
+            </div>
+          )}
+          {balance > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #333' }}>
+              <span style={{ fontWeight: 700 }}>Balance Due</span>
+              <span style={{ fontWeight: 700, fontSize: 20, color: branding?.primaryColor || '#1a1a1a' }}>{formatCurrency(balance)}</span>
+            </div>
+          )}
+          {balance <= 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+              <span style={{ fontWeight: 700, color: '#22c55e' }}>Paid in Full</span>
+              <span style={{ fontWeight: 700, color: '#22c55e' }}>{formatCurrency(0)}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <details>
-          <summary>Payments</summary>
-          <ul>
-            {payments.map(p => (
-              <li key={p.id}>{p.date ? new Date(p.date).toLocaleDateString() : ''} - {formatCurrency(p.amount)} - {p.method}</li>
-            ))}
-          </ul>
-        </details>
+      {payments.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase', marginBottom: 8 }}>Payment History</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {payments.map((p, i) => (
+                <tr key={p.id}>
+                  <td style={{ padding: '4px 0', fontSize: 13, color: '#555' }}>{p.date ? new Date(p.date).toLocaleDateString() : ''}</td>
+                  <td style={{ padding: '4px 0', fontSize: 13 }}>{formatCurrency(p.amount)}</td>
+                  <td style={{ padding: '4px 0', fontSize: 13, color: '#777', textAlign: 'right' }}>{p.method}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {branding?.termsText && (
+        <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #eee', fontSize: 12, color: '#777' }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Terms & Conditions</div>
+          <div>{branding.termsText}</div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 32, textAlign: 'center', fontSize: 11, color: '#999' }}>
+        Thank you for your business!
       </div>
     </div>
   )
