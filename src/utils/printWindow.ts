@@ -157,11 +157,18 @@ ${content}
 </html>
 `
 
-  printWindow.document.write(html)
-  printWindow.document.close()
+  try {
+    printWindow.document.write(html)
+    printWindow.document.close()
 
-  setTimeout(() => {
-    printWindow.focus()
-    printWindow.print()
-  }, 250)
+    setTimeout(() => {
+      if (printWindow && !printWindow.closed) {
+        printWindow.focus()
+        printWindow.print()
+      }
+    }, 500)
+  } catch (err) {
+    console.error('Print window error:', err)
+    alert('Error opening print window: ' + err)
+  }
 }

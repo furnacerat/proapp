@@ -66,80 +66,33 @@ export function Invoices() {
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
-    const invPayments = getInvoicePayments(inv.id);
-    const job = jobs.find(j => j.id === inv.jobId);
-    const totalPaid = invPayments.reduce((s, p) => s + p.amount, 0);
-    const balance = inv.amount - totalPaid;
+    console.log('handlePrintInvoice called', inv)
+    const invPayments = getInvoicePayments(inv.id)
+    const job = jobs.find(j => j.id === inv.jobId)
+    const totalPaid = invPayments.reduce((s, p) => s + p.amount, 0)
+    const balance = inv.amount - totalPaid
+
+    console.log('branding:', branding)
+    console.log('invPayments:', invPayments)
 
     const brandName = branding?.brandName || 'Allens Hub'
     const brandEmail = branding?.emailFromAddress || ''
     const brandLogo = branding?.logoDataUrl || ''
     const brandTerms = branding?.termsText || ''
 
-    const content = `
-<div class="invoice-header">
-${brandLogo ? `<img src="${brandLogo}" alt="${brandName}" />` : ''}
-<div class="invoice-title">INVOICE</div>
-<div class="invoice-number">${inv.invoiceNumber}</div>
-</div>
+    const content = '<div style="padding:40px;font-family:Arial">' +
+      '<h1 style="text-align:center;color:#1a1a1a">INVOICE</h1>' +
+      '<p><strong>' + inv.invoiceNumber + '</strong></p>' +
+      '<p>Date: ' + (inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : 'N/A') + '</p>' +
+      '<p>Job: ' + (job?.name || 'N/A') + '</p>' +
+      '<p>Customer: ' + (job?.customer || 'Customer') + '</p>' +
+      '<hr/>' +
+      '<p>Amount: <strong>' + formatCurrency(inv.amount) + '</strong></p>' +
+      '<p>Paid: ' + formatCurrency(totalPaid) + '</p>' +
+      '<p>Balance Due: <strong>' + formatCurrency(balance) + '</strong></p>' +
+      '</div>'
 
-<div class="section row">
-<div>
-<div class="label">From</div>
-<div class="value">${brandName}</div>
-${brandEmail ? `<div class="value" style="font-size:13px;color:#555">${brandEmail}</div>` : ''}
-</div>
-<div class="text-right">
-<div class="label">Date</div>
-<div class="value">${inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : ''}</div>
-</div>
-</div>
-
-<div class="section">
-<div class="label">Bill To</div>
-<div class="value">${job?.customer || 'Customer'}</div>
-${job?.address ? `<div class="value" style="font-size:13px;color:#555">${job.address}</div>` : ''}
-</div>
-
-<div class="section">
-<div class="label">Project</div>
-<div class="value">${job?.name || 'N/A'}</div>
-</div>
-
-<table>
-<thead><tr><th>Description</th><th class="text-right">Amount</th></tr></thead>
-<tbody>
-<tr><td>Contract Amount</td><td class="text-right">${formatCurrency(inv.amount)}</td></tr>
-</tbody>
-</table>
-
-<div class="totals">
-<div class="totals-box">
-<div class="totals-row"><span>Amount Due</span><span>${formatCurrency(inv.amount)}</span></div>
-${totalPaid > 0 ? `<div class="totals-row"><span>Payments</span><span>-${formatCurrency(totalPaid)}</span></div>` : ''}
-<div class="totals-row total"><span>Balance Due</span><span>${formatCurrency(balance)}</span></div>
-</div>
-</div>
-
-${invPayments.length > 0 ? `
-<div class="section">
-<div class="label">Payment History</div>
-<table><tbody>
-${invPayments.map(p => `<tr><td style="font-size:13px">${p.date ? new Date(p.date).toLocaleDateString() : ''}</td><td style="font-size:13px">${formatCurrency(p.amount)}</td><td class="text-right" style="font-size:13px;color:#777">${p.method}</td></tr>`).join('')}
-</tbody></table>
-</div>
-` : ''}
-
-${brandTerms ? `
-<div class="terms">
-<div class="terms-title">Terms & Conditions</div>
-<div>${brandTerms}</div>
-</div>
-` : ''}
-
-<div class="footer">Thank you for your business!</div>
-    `.trim()
-
+    console.log('content:', content)
     openPrintWindow(`Invoice ${inv.invoiceNumber}`, content, branding)
   }
 
