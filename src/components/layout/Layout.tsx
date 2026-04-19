@@ -1,7 +1,8 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { Sidebar } from './Sidebar';
-import { MobileNav } from './MobileNav';
+import { Menu } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -9,23 +10,48 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { branding } = useApp();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Close sidebar automatically on route change
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
   return (
-    <div className="app-layout" style={{ minHeight: '100vh' }}>
-      <div style={{ height: 60, display: 'flex', alignItems: 'center', padding: '0 16px', background: 'var(--surface)', borderBottom: '1px solid var(--card-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="app-layout">
+      {/* Mobile / Tablet Topbar */}
+      <header className="mobile-topbar hidden-desktop">
+        <button 
+          className="btn btn-icon btn-menu" 
+          onClick={() => setIsSidebarOpen(true)}
+          aria-label="Open menu"
+        >
+          <Menu size={24} />
+        </button>
+        <div className="mobile-brand">
           {branding?.logoDataUrl ? (
-            <img src={branding.logoDataUrl} alt="logo" style={{ height: 28 }} />
+            <img src={branding.logoDataUrl} alt="logo" className="logo" />
           ) : branding?.logoUrl ? (
-            <img src={branding.logoUrl} alt="logo" style={{ height: 28 }} />
+            <img src={branding.logoUrl} alt="logo" className="logo" />
           ) : null}
-          <strong style={{ fontSize: 16 }}>{branding?.brandName || "Allen's Contractor's"}</strong>
+          <strong>{branding?.brandName || "Allen's Contractor's"}</strong>
         </div>
-      </div>
-      <Sidebar />
-      <main className="main-content" style={{ paddingTop: 16 }}>
+      </header>
+
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="sidebar-overlay" 
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      
+      <main className="main-content">
         {children}
       </main>
-      <MobileNav />
     </div>
   );
 }

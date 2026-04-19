@@ -128,7 +128,7 @@ export function Expenses() {
         
         <div className="card">
           <div className="table-container">
-            <table className="table">
+            <table className="table table-responsive">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -147,13 +147,13 @@ export function Expenses() {
                   const job = jobs.find(j => j.id === exp.jobId);
                   return (
                     <tr key={exp.id}>
-                      <td>{formatDate(exp.date)}</td>
-                      <td><Link to={`/jobs/${exp.jobId}`}>{job?.name}</Link></td>
-                      <td>{exp.vendor}</td>
-                      <td><span className="badge badge-gray">{exp.category}</span></td>
-                      <td className="font-medium">{formatCurrency(exp.amount)}</td>
-                      <td className="truncate" style={{maxWidth: '150px'}}>{exp.notes}</td>
-                      <td>
+                      <td data-label="Date">{formatDate(exp.date)}</td>
+                      <td data-label="Job"><Link to={`/jobs/${exp.jobId}`}>{job?.name}</Link></td>
+                      <td data-label="Vendor">{exp.vendor}</td>
+                      <td data-label="Category"><span className="badge badge-gray">{exp.category}</span></td>
+                      <td data-label="Amount" className="font-medium">{formatCurrency(exp.amount)}</td>
+                      <td data-label="Notes" className="truncate" style={{maxWidth: '150px'}}>{exp.notes}</td>
+                      <td data-label="Actions">
                         <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(exp.id)}>
                           <Trash2 size={14} />
                         </button>

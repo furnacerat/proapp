@@ -176,7 +176,7 @@ const handleSave = () => {
         
         <div className="card">
           <div className="table-container">
-            <table className="table table-sortable">
+            <table className="table table-sortable table-responsive">
               <thead>
                 <tr>
                   <th onClick={() => handleSort('name')}>
@@ -203,15 +203,15 @@ const handleSave = () => {
                 ) : (
                   filteredJobs.map(job => (
                     <tr key={job.id}>
-                      <td><Link to={`/jobs/${job.id}`} className="font-medium">{job.name}</Link></td>
-                      <td>{job.customer}</td>
-                      <td className="truncate" style={{maxWidth: '200px'}}>{job.address}</td>
-                      <td className="text-sm text-secondary">{job.type.replace('_', ' ')}</td>
-                      <td>{formatDate(job.dueDate)}</td>
-                      <td>{formatCurrency(job.contractAmount)}</td>
-                      <td><span className={`badge ${getStatusBadgeClass(job.status)}`}>{job.status.replace('_', ' ')}</span></td>
-                      <td>
-                        <div className="flex gap-2">
+                      <td data-label="Job"><Link to={`/jobs/${job.id}`} className="font-medium">{job.name}</Link></td>
+                      <td data-label="Customer">{job.customer}</td>
+                      <td data-label="Address" className="truncate" style={{maxWidth: '200px'}}>{job.address}</td>
+                      <td data-label="Type" className="text-sm text-secondary">{job.type.replace('_', ' ')}</td>
+                      <td data-label="Due">{formatDate(job.dueDate)}</td>
+                      <td data-label="Amount">{formatCurrency(job.contractAmount)}</td>
+                      <td data-label="Status"><span className={`badge ${getStatusBadgeClass(job.status)}`}>{job.status.replace('_', ' ')}</span></td>
+                      <td data-label="Actions">
+                        <div className="flex gap-2 justify-end">
                           <Link to={`/jobs/${job.id}`} className="btn btn-sm btn-secondary btn-icon">
                             <Eye size={16} />
                           </Link>

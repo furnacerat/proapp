@@ -100,7 +100,7 @@ export function Invoices() {
         </div>
         <div className="card">
           <div className="table-container">
-            <table className="table">
+            <table className="table table-responsive">
               <thead><tr><th>Invoice</th><th>Job</th><th>Type</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {filteredInvoices.length === 0 ? <tr><td colSpan={8} className="text-center text-muted">No invoices</td></tr> : filteredInvoices.map(inv => {
@@ -109,15 +109,15 @@ export function Invoices() {
                   const paid = invPayments.reduce((s, p) => s + p.amount, 0);
                   return (
                     <tr key={inv.id}>
-                      <td className="font-medium">{inv.invoiceNumber}</td>
-                      <td><Link to={`/jobs/${inv.jobId}`}>{job?.name}</Link></td>
-                      <td><span className="badge badge-gray">{inv.type}</span></td>
-                      <td>{formatCurrency(inv.amount)}</td>
-                      <td className="text-success">{formatCurrency(paid)}</td>
-                      <td className="font-medium">{formatCurrency(inv.amount - paid)}</td>
-                      <td><span className={`badge ${inv.status === 'paid' ? 'badge-green' : inv.status === 'partial' ? 'badge-yellow' : 'badge-blue'}`}>{inv.status}</span></td>
-                      <td>
-                        <div className="flex gap-2">
+                      <td data-label="Invoice" className="font-medium">{inv.invoiceNumber}</td>
+                      <td data-label="Job"><Link to={`/jobs/${inv.jobId}`}>{job?.name}</Link></td>
+                      <td data-label="Type"><span className="badge badge-gray">{inv.type}</span></td>
+                      <td data-label="Amount">{formatCurrency(inv.amount)}</td>
+                      <td data-label="Paid" className="text-success">{formatCurrency(paid)}</td>
+                      <td data-label="Balance" className="font-medium">{formatCurrency(inv.amount - paid)}</td>
+                      <td data-label="Status"><span className={`badge ${inv.status === 'paid' ? 'badge-green' : inv.status === 'partial' ? 'badge-yellow' : 'badge-blue'}`}>{inv.status}</span></td>
+                      <td data-label="Actions">
+                        <div className="flex gap-2 justify-end">
                           <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
                           <button
                             className="btn btn-sm btn-secondary"

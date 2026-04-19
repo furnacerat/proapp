@@ -195,102 +195,104 @@ export function EstimatesList() {
           </div>
         ) : (
           <div className="card">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Estimate</th>
-                  <th>Customer</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('total')}>
-                    <div className="flex items-center gap-1">Total <SortIcon field="total" /></div>
-                  </th>
-                  <th className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('updatedAt')}>
-                    <div className="flex items-center gap-1">Updated <SortIcon field="updatedAt" /></div>
-                  </th>
-                  <th className="w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEstimates.map(estimate => {
-                  const customer = getEstimateCustomer(estimate.id);
-                  return (
-                    <tr key={estimate.id} className="hover:bg-gray-50">
-                      <td>
-                        <Link to={`/estimates/${estimate.id}`} className="font-medium">
-                          {estimate.name}
-                        </Link>
-                        <div className="text-xs text-muted">{estimate.estimateNumber}</div>
-                      </td>
-                      <td>{customer?.name || '—'}</td>
-                      <td>{JOB_TYPES.find(t => t.value === estimate.type)?.label}</td>
-                      <td>
-                        <span className={`badge ${getStatusBadge(estimate.status)}`}>
-                          {ESTIMATE_STATUSES.find(s => s.value === estimate.status)?.label}
-                        </span>
-                      </td>
-                      <td className="font-medium">{formatCurrency(estimate.total)}</td>
-                      <td className="text-muted">{formatDate(estimate.updatedAt)}</td>
-                      <td>
-                        <div className="relative">
-                          <button
-                            className="btn btn-sm btn-icon"
-                            onClick={() => setShowActions(showActions === estimate.id ? null : estimate.id)}
-                          >
-                            <MoreVertical size={14} />
-                          </button>
-                          {showActions === estimate.id && (
-                            <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-10 min-w-40">
-                              <Link
-                                to={`/estimates/${estimate.id}`}
-                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full"
-                                onClick={() => setShowActions(null)}
-                              >
-                                <Eye size={14} /> View/Edit
-                              </Link>
-                              <button
-                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full"
-                                onClick={() => handleDuplicate(estimate.id)}
-                              >
-                                <Copy size={14} /> Duplicate
-                              </button>
-                              {estimate.status === 'approved' && !estimate.convertedToJobId && (
+            <div className="table-container">
+              <table className="table table-responsive">
+                <thead>
+                  <tr>
+                    <th>Estimate</th>
+                    <th>Customer</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('total')}>
+                      <div className="flex items-center gap-1">Total <SortIcon field="total" /></div>
+                    </th>
+                    <th className="cursor-pointer hover:bg-gray-50" onClick={() => handleSort('updatedAt')}>
+                      <div className="flex items-center gap-1">Updated <SortIcon field="updatedAt" /></div>
+                    </th>
+                    <th className="w-20"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEstimates.map(estimate => {
+                    const customer = getEstimateCustomer(estimate.id);
+                    return (
+                      <tr key={estimate.id} className="hover:bg-gray-50">
+                        <td data-label="Estimate">
+                          <Link to={`/estimates/${estimate.id}`} className="font-medium">
+                            {estimate.name}
+                          </Link>
+                          <div className="text-xs text-muted mt-1">{estimate.estimateNumber}</div>
+                        </td>
+                        <td data-label="Customer">{customer?.name || '—'}</td>
+                        <td data-label="Type">{JOB_TYPES.find(t => t.value === estimate.type)?.label}</td>
+                        <td data-label="Status">
+                          <span className={`badge ${getStatusBadge(estimate.status)}`}>
+                            {ESTIMATE_STATUSES.find(s => s.value === estimate.status)?.label}
+                          </span>
+                        </td>
+                        <td data-label="Total" className="font-medium">{formatCurrency(estimate.total)}</td>
+                        <td data-label="Updated" className="text-muted text-sm">{formatDate(estimate.updatedAt)}</td>
+                        <td data-label="Actions">
+                          <div className="relative inline-block">
+                            <button
+                              className="btn btn-sm btn-icon"
+                              onClick={() => setShowActions(showActions === estimate.id ? null : estimate.id)}
+                            >
+                              <MoreVertical size={14} />
+                            </button>
+                            {showActions === estimate.id && (
+                              <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-10 w-48 text-left">
+                                <Link
+                                  to={`/estimates/${estimate.id}`}
+                                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm border-b"
+                                  onClick={() => setShowActions(null)}
+                                >
+                                  <Eye size={14} /> View/Edit
+                                </Link>
                                 <button
-                                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full text-green-600"
+                                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full text-left"
+                                  onClick={() => handleDuplicate(estimate.id)}
+                                >
+                                  <Copy size={14} /> Duplicate
+                                </button>
+                                {estimate.status === 'approved' && !estimate.convertedToJobId && (
+                                  <button
+                                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full text-left font-medium text-green-700"
+                                    onClick={() => {
+                                      convertEstimateToJob(estimate.id);
+                                      setShowActions(null);
+                                    }}
+                                  >
+                                    <FileText size={14} /> Convert to Job
+                                  </button>
+                                )}
+                                {estimate.status !== 'archived' && (
+                                  <button
+                                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full text-left border-t"
+                                    onClick={() => handleArchive(estimate.id)}
+                                  >
+                                    <Archive size={14} /> Archive
+                                  </button>
+                                )}
+                                <button
+                                  className="flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-sm w-full text-left text-red-600"
                                   onClick={() => {
-                                    convertEstimateToJob(estimate.id);
+                                    setDeleteId(estimate.id);
                                     setShowActions(null);
                                   }}
                                 >
-                                  <FileText size={14} /> Convert to Job
+                                  <Trash2 size={14} /> Delete
                                 </button>
-                              )}
-                              {estimate.status !== 'archived' && (
-                                <button
-                                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full"
-                                  onClick={() => handleArchive(estimate.id)}
-                                >
-                                  <Archive size={14} /> Archive
-                                </button>
-                              )}
-                              <button
-                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full text-red-600"
-                                onClick={() => {
-                                  setDeleteId(estimate.id);
-                                  setShowActions(null);
-                                }}
-                              >
-                                <Trash2 size={14} /> Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
