@@ -438,6 +438,25 @@
   position: relative;
 }
 
+/* ── Mobile Layout Fixes ────────────────────────────────────── */
+@media screen and (max-width: 768px) {
+  .print-preview-toolbar,
+  .print-preview-settings {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .print-preview-toolbar-left,
+  .print-preview-toolbar-right {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .print-preview-body {
+    padding: 16px 8px;
+  }
+  /* The sheet remains 8.5in to preserve the document layout,
+     the parent print-preview-body will scroll it. */
+}
+
 /* ── @media print: full isolation ──────────────────────────── */
 @media print {
   /* Hide the preview toolbar, settings bar, and overlay chrome */

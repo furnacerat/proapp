@@ -188,6 +188,7 @@ body {
   border-radius: var(--radius-lg);
   box-shadow: var(--card-shadow);
   overflow: hidden;
+  max-width: 100%;
 }
 
 .card-header {
@@ -433,6 +434,8 @@ body {
 
 .table-container {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .table {

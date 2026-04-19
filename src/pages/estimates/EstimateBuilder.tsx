@@ -816,30 +816,30 @@ export function EstimateBuilder() {
   return (
     <div className="estimate-builder">
       {/* HEADER BAR */}
-      <div className="page-header flex justify-between items-center bg-white border-b sticky top-0 z-50 px-6 py-3">
-        <div className="flex items-center gap-4">
-          <Link to="/estimates" className="btn btn-icon">
+      <div className="page-header flex flex-wrap justify-between items-center bg-white border-b sticky top-0 z-50 px-6 py-3 gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Link to="/estimates" className="btn btn-icon shrink-0">
             <ArrowLeft size={18} />
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <input
-              className="text-xl font-semibold bg-transparent border-none outline-none hover:border hover:border-gray-300 rounded px-2 py-1"
+              className="text-xl font-semibold bg-transparent border-none outline-none hover:border hover:border-gray-300 rounded px-2 py-1 max-w-full"
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
             />
-            <span className={`badge ${getStatusBadge(estimate.status)}`}>
+            <span className={`badge ${getStatusBadge(estimate.status)} shrink-0`}>
               {estimate.status.replace('_', ' ')}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="btn btn-secondary" onClick={() => setShowProposal(true)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn btn-secondary shrink-0" onClick={() => setShowProposal(true)}>
             <Eye size={16} /> Preview
           </button>
-          <button className="btn btn-secondary" onClick={handlePrint} title="Preview & Print — Client Only View">
+          <button className="btn btn-secondary shrink-0" onClick={handlePrint} title="Preview & Print — Client Only View">
             <Printer size={16} /> Preview &amp; Print
           </button>
-          <button className="btn btn-secondary" onClick={() => {
+          <button className="btn btn-secondary shrink-0" onClick={() => {
             // Email with branding signature if available
             const brandingSig = branding?.brandName ? `\n\n${branding.brandName}` + (branding.logoUrl ? `\n${branding.logoUrl}` : '') : '';
             const subjectText = `Estimate: ${estimate.name}`;
@@ -850,29 +850,29 @@ export function EstimateBuilder() {
             <Send size={16} /> Email
           </button>
           {estimate.status === 'draft' && (
-            <button className="btn btn-secondary" onClick={() => updateEstimate(estimate.id, { status: 'sent' })}>
+            <button className="btn btn-secondary shrink-0" onClick={() => updateEstimate(estimate.id, { status: 'sent' })}>
               <Send size={16} /> Mark Sent
             </button>
           )}
           {estimate.status === 'approved' && !estimate.convertedToJobId && (
-            <button className="btn btn-success" onClick={() => setShowConvertConfirm(true)}>
+            <button className="btn btn-success shrink-0" onClick={() => setShowConvertConfirm(true)}>
               <Briefcase size={16} /> Convert to Job
             </button>
           )}
           {estimate.convertedToJobId && (
-            <Link to={`/jobs/${estimate.convertedToJobId}`} className="btn btn-secondary">
+            <Link to={`/jobs/${estimate.convertedToJobId}`} className="btn btn-secondary shrink-0">
               <FileCheck size={16} /> View Job
             </Link>
           )}
-          <button className="btn btn-primary" onClick={handleSave}>
+          <button className="btn btn-primary shrink-0" onClick={handleSave}>
             <Save size={16} /> Save
           </button>
         </div>
       </div>
 
       {/* STICKY SUMMARY BAR */}
-      <div className="sticky top-[73px] z-40 bg-slate-800 text-white px-6 py-3 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-8">
+      <div className="sticky top-[73px] z-40 bg-slate-800 text-white px-6 py-3 flex flex-wrap items-center justify-between shadow-lg gap-4">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-8">
           <div>
             <div className="text-xs text-slate-400">Total</div>
             <div className="text-2xl font-bold">{formatCurrency(totals.total)}</div>
@@ -890,7 +890,7 @@ export function EstimateBuilder() {
             <div className="text-lg">{formatCurrency(totals.markupAmount)}</div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 shrink-0">
           <div className="text-sm text-slate-400">
             {totals.itemsCount} items • {totals.hours}h labor
           </div>
