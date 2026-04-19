@@ -14,7 +14,6 @@ import {
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
   Flag, Paperclip, Eye, Calendar, Send
 } from 'lucide-react';
-import PrintPreviewModal from '../components/PrintPreviewModal';
 import BrandHeader from '../components/BrandHeader';
 
 export function JobDetail() {
@@ -429,18 +428,6 @@ export function JobDetail() {
             ))}
           </div>
         )}
-        <PrintPreviewModal isOpen={printPreview.open && printPreview.section==='timeline'} onClose={()=>setPrintPreview({section:'timeline', open:false})} title="Print Preview: Timeline" render={()=>(
-          <div>
-            <BrandHeader />
-            <div>Timeline entries: {timeline.length}</div>
-          </div>
-        )} />
-        <PrintPreviewModal isOpen={printPreview.open && printPreview.section==='timeline'} onClose={()=>setPrintPreview({section:'', open:false})} title={`Print Preview: Timeline`} render={()=>(
-          <div>
-            <BrandHeader />
-            <div>Timeline entries: {timeline.length}</div>
-          </div>
-        )} />
 
         <div className="tabs mb-4 overflow-x-auto">
           {tabs.map(tab => (

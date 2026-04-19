@@ -66,6 +66,7 @@ export function Invoices() {
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
+    alert('Print clicked! Invoice: ' + inv.invoiceNumber)
     console.log('handlePrintInvoice called', inv)
     const invPayments = getInvoicePayments(inv.id)
     const job = jobs.find(j => j.id === inv.jobId)
