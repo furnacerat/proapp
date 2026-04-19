@@ -5,8 +5,16 @@ export const openPrintWindow = (
   content: string,
   branding?: BrandingSettings
 ): void => {
-  const printWindow = window.open('', '_blank', 'width=800,height=600')
-  if (!printWindow) return
+  let printWindow: Window | null = null
+  try {
+    printWindow = window.open('', '_blank', 'width=800,height=600')
+  } catch (e) {
+    console.error('Popup blocked:', e)
+  }
+  if (!printWindow) {
+    alert('Please allow pop-ups to print documents')
+    return
+  }
 
   const brandName = branding?.brandName || ''
   const primaryColor = branding?.primaryColor || '#1a1a1a'
