@@ -23,8 +23,10 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <Briefcase size={24} />
-          <span>Allen's</span>
+          <Briefcase size={24} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: '1rem', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            Allen's Contractor's
+          </span>
         </div>
       </div>
       <nav className="sidebar-nav">

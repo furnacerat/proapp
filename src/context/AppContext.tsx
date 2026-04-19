@@ -158,8 +158,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Simple branding configuration accessible app-wide
   const [branding, setBranding] = useState<BrandingSettings>({
-    brandName: 'Allens Hub',
-    emailFromName: 'Allens Hub',
+    brandName: "Allen's Contractor's",
+    emailFromName: "Allen's Contractor's",
     primaryColor: '#1f3a8a',
     secondaryColor: '#2563eb',
     fontFamily: 'Inter, system-ui, Arial',

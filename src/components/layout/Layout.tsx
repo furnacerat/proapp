@@ -18,7 +18,7 @@ export function Layout({ children }: LayoutProps) {
           ) : branding?.logoUrl ? (
             <img src={branding.logoUrl} alt="logo" style={{ height: 28 }} />
           ) : null}
-          <strong style={{ fontSize: 16 }}>{branding?.brandName || 'Allens Hub'}</strong>
+          <strong style={{ fontSize: 16 }}>{branding?.brandName || "Allen's Contractor's"}</strong>
         </div>
       </div>
       <Sidebar />
