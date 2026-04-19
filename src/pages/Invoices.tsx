@@ -66,35 +66,10 @@ export function Invoices() {
   const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
 
   const handlePrintInvoice = (inv: any) => {
-    alert('🔥 Print clicked! Invoice: ' + inv.invoiceNumber)
-    console.log('handlePrintInvoice called', inv)
-    const invPayments = getInvoicePayments(inv.id)
-    const job = jobs.find(j => j.id === inv.jobId)
-    const totalPaid = invPayments.reduce((s, p) => s + p.amount, 0)
-    const balance = inv.amount - totalPaid
-
-    console.log('branding:', branding)
-    console.log('invPayments:', invPayments)
-
-    const brandName = branding?.brandName || 'Allens Hub'
-    const brandEmail = branding?.emailFromAddress || ''
-    const brandLogo = branding?.logoDataUrl || ''
-    const brandTerms = branding?.termsText || ''
-
-    const content = '<div style="padding:40px;font-family:Arial">' +
-      '<h1 style="text-align:center;color:#1a1a1a">INVOICE</h1>' +
-      '<p><strong>' + inv.invoiceNumber + '</strong></p>' +
-      '<p>Date: ' + (inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : 'N/A') + '</p>' +
-      '<p>Job: ' + (job?.name || 'N/A') + '</p>' +
-      '<p>Customer: ' + (job?.customer || 'Customer') + '</p>' +
-      '<hr/>' +
-      '<p>Amount: <strong>' + formatCurrency(inv.amount) + '</strong></p>' +
-      '<p>Paid: ' + formatCurrency(totalPaid) + '</p>' +
-      '<p>Balance Due: <strong>' + formatCurrency(balance) + '</strong></p>' +
-      '</div>'
-
-    console.log('content:', content)
-    openPrintWindow(`Invoice ${inv.invoiceNumber}`, content, branding)
+    console.log('handlePrintInvoice called')
+    // Simple test content
+    const content = '<div style="padding:40px;font-family:Arial;text-align:center;"><h1>TEST PRINT</h1><p>If you see this, the print window works.</p></div>'
+    openPrintWindow(`Test Invoice`, content, branding)
   }
 
   return (
@@ -135,7 +110,7 @@ export function Invoices() {
                       <td>
                         <div className="flex gap-2">
                           <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handlePrintInvoice(inv)} style={{ marginLeft: 6 }}>Print</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => { alert('Button clicked directly!'); handlePrintInvoice(inv); }} style={{ marginLeft: 6 }}>Print</button>
                           <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
                         </div>
                       </td>

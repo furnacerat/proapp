@@ -5,22 +5,27 @@ export const openPrintWindow = (
   content: string,
   branding?: BrandingSettings
 ): void => {
+  console.log('openPrintWindow called with title:', title, 'content length:', content?.length || 0)
   let printWindow: Window | null = null
   try {
     printWindow = window.open('', '_blank', 'width=800,height=600')
   } catch (e) {
     console.error('Popup blocked:', e)
+    alert('Popup blocked. Please allow pop-ups for this site to print.')
+    return
   }
   if (!printWindow) {
     alert('Please allow pop-ups to print documents')
     return
   }
 
-  const brandName = branding?.brandName || ''
-  const primaryColor = branding?.primaryColor || '#1a1a1a'
-  const fontFamily = branding?.fontFamily || 'ui-sans-serif, system-ui, Arial, sans-serif'
+  try {
+    console.log('Writing to print window...')
+    const brandName = branding?.brandName || ''
+    const primaryColor = branding?.primaryColor || '#1a1a1a'
+    const fontFamily = branding?.fontFamily || 'ui-sans-serif, system-ui, Arial, sans-serif'
 
-  const html = `
+    const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -155,20 +160,23 @@ export const openPrintWindow = (
 ${content}
 </body>
 </html>
-`
+`.trim()
 
-  try {
+    console.log('HTML string length:', html.length)
+    
     printWindow.document.write(html)
     printWindow.document.close()
+    console.log('Document written and closed')
 
     setTimeout(() => {
       if (printWindow && !printWindow.closed) {
+        console.log('Focusing and printing...')
         printWindow.focus()
         printWindow.print()
       }
     }, 500)
   } catch (err) {
-    console.error('Print window error:', err)
-    alert('Error opening print window: ' + err)
+    console.error('Error in openPrintWindow:', err)
+    alert('Error creating print preview: ' + err)
   }
 }
