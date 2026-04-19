@@ -111,7 +111,7 @@ export function Invoices() {
                       <td>
                         <div className="flex gap-2">
                           <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => { alert('Button clicked directly!'); handlePrintInvoice(inv); }} style={{ marginLeft: 6 }}>Print</button>
+                          <button className="btn btn-sm btn-secondary" onClick={() => alert('Print button clicked directly!')}>Print</button>
                           <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
                         </div>
                       </td>
