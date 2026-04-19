@@ -1,4 +1,3 @@
-import '../components/print/printStyles.css'
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -8,8 +7,8 @@ import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { Plus, Search, Trash2, FileText } from 'lucide-react';
-import PrintTemplateModal from '../components/print/PrintTemplateModal';
 import { buildClientInvoiceData } from '../utils/buildPrintData';
+import { printInvoice } from '../utils/printDocument';
 
 export function Invoices() {
   const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice, branding } = useApp();
@@ -21,8 +20,6 @@ export function Invoices() {
   const [showModal, setShowModal] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [printData, setPrintData] = useState<any>(null);
-  const [showPrintModal, setShowPrintModal] = useState(false);
   
   const [formData, setFormData] = useState({
     jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: ''
@@ -73,8 +70,7 @@ export function Invoices() {
     const job = jobs.find(j => j.id === inv.jobId)
     const invPayments = payments.filter(p => p.invoiceId === inv.id)
     const data = buildClientInvoiceData(inv, job, invPayments, branding)
-    setPrintData(data)
-    setShowPrintModal(true)
+    printInvoice(data)
   }
 
   return (
@@ -150,14 +146,6 @@ export function Invoices() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
       </Modal>
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
-      {printData && (
-        <PrintTemplateModal
-          isOpen={showPrintModal}
-          onClose={() => setShowPrintModal(false)}
-          title={`Invoice ${printData.invoiceNumber}`}
-          data={printData}
-        />
-      )}
     </div>
   );
 }
