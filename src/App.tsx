@@ -19,6 +19,7 @@ import { TemplatesLibrary } from './pages/estimates/TemplatesLibrary';
 import { AssembliesLibrary } from './pages/estimates/AssembliesLibrary';
 import { PriceBook } from './pages/estimates/PriceBook';
 import { Settings } from './pages/Settings';
+import { Customers } from './pages/Customers';
 import './index.css';
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/customers" element={<Customers />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/schedule" element={<Calendar />} />
               <Route path="/reports" element={<Reports />} />

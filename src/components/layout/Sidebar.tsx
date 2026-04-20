@@ -15,7 +15,8 @@ import {
   Copy,
   DollarSign,
   FilePlus,
-  Settings
+  Settings,
+  User
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -94,6 +95,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
             <Settings size={20} />
             <span>Settings</span>
+          </NavLink>
+          <NavLink to="/customers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+            <User size={20} />
+            <span>Customers</span>
           </NavLink>
         </div>
         <div className="nav-section">
