@@ -60,6 +60,9 @@ export function JobDetail() {
   const [receiptForm, setReceiptForm] = useState({ url: '', vendor: '', amount: '', notes: '' });
   const [emailForm, setEmailForm] = useState({ email: '', subject: '', body: '' });
   const [pendingEmailAction, setPendingEmailAction] = useState<(() => void) | null>(null);
+  const [photoCategory, setPhotoCategory] = useState<'before' | 'after' | 'progress' | 'issue' | 'other'>('progress');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoDescription, setPhotoDescription] = useState('');
 
   const handlePrint = () => window.print();
 
@@ -908,6 +911,73 @@ export function JobDetail() {
             </div>
           </div>
         )}
+
+        {activeTab === 'photos' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Before & After Photos ({jobPhotos.length})</h3>
+              <div className="flex gap-2">
+                <button className="btn btn-sm btn-secondary" onClick={() => { setPhotoCategory('before'); setShowModal('photo'); }}>+ Before</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => { setPhotoCategory('after'); setShowModal('photo'); }}>+ After</button>
+                <button className="btn btn-sm btn-primary" onClick={() => { setPhotoCategory('progress'); setShowModal('photo'); }}>+ Other</button>
+              </div>
+            </div>
+            <div className="card-body">
+              {jobPhotos.length === 0 ? (
+                <div className="text-center text-muted py-8">No photos yet. Click "Before" or "After" to add photos.</div>
+              ) : (
+                <div>
+                  <div className="mb-6">
+                    <h4 className="text-sm font-medium text-muted uppercase mb-3">Before Photos</h4>
+                    <div className="grid-4 gap-3">
+                      {jobPhotos.filter(p => p.category === 'before').map(photo => (
+                        <div key={photo.id} className="relative group">
+                          <img src={photo.url} alt={photo.description || 'Before'} className="w-full h-32 object-cover rounded-lg" />
+                          <button className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100" onClick={() => deletePhoto(photo.id)}>
+                            <Trash2 size={14} />
+                          </button>
+                          {photo.description && <div className="text-xs mt-1 truncate">{photo.description}</div>}
+                        </div>
+                      ))}
+                      {jobPhotos.filter(p => p.category === 'before').length === 0 && <div className="text-sm text-muted">No before photos</div>}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted uppercase mb-3">After Photos</h4>
+                    <div className="grid-4 gap-3">
+                      {jobPhotos.filter(p => p.category === 'after').map(photo => (
+                        <div key={photo.id} className="relative group">
+                          <img src={photo.url} alt={photo.description || 'After'} className="w-full h-32 object-cover rounded-lg" />
+                          <button className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100" onClick={() => deletePhoto(photo.id)}>
+                            <Trash2 size={14} />
+                          </button>
+                          {photo.description && <div className="text-xs mt-1 truncate">{photo.description}</div>}
+                        </div>
+                      ))}
+                      {jobPhotos.filter(p => p.category === 'after').length === 0 && <div className="text-sm text-muted">No after photos</div>}
+                    </div>
+                  </div>
+                  {jobPhotos.filter(p => !['before', 'after'].includes(p.category)).length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="text-sm font-medium text-muted uppercase mb-3">Other Photos</h4>
+                      <div className="grid-4 gap-3">
+                        {jobPhotos.filter(p => !['before', 'after'].includes(p.category)).map(photo => (
+                          <div key={photo.id} className="relative group">
+                            <img src={photo.url} alt={photo.description || 'Photo'} className="w-full h-32 object-cover rounded-lg" />
+                            <button className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100" onClick={() => deletePhoto(photo.id)}>
+                              <Trash2 size={14} />
+                            </button>
+                            <span className="text-xs badge">{photo.category}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <Modal isOpen={showModal === 'time'} onClose={() => setShowModal(null)} title="Add Time Entry">
@@ -1283,6 +1353,28 @@ export function JobDetail() {
         confirmLabel="Delete"
         danger
       />
+
+      <Modal isOpen={showModal === 'photo'} onClose={() => { setShowModal(null); setPhotoUrl(''); setPhotoDescription(''); }} title={`Add ${photoCategory === 'before' ? 'Before' : photoCategory === 'after' ? 'After' : 'Photo'}`}>
+        <div className="form-group">
+          <label className="form-label">Photo URL or Data URL</label>
+          <input className="form-input" value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="https://..." />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Description (optional)</label>
+          <input className="form-input" value={photoDescription} onChange={e => setPhotoDescription(e.target.value)} placeholder="e.g., Kitchen cabinets before" />
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <button className="btn btn-secondary" onClick={() => { setShowModal(null); setPhotoUrl(''); setPhotoDescription(''); }}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => {
+            if (photoUrl) {
+              addPhoto({ jobId: job.id, url: photoUrl, description: photoDescription, category: photoCategory });
+              setPhotoUrl('');
+              setPhotoDescription('');
+              setShowModal(null);
+            }
+          }}>Add Photo</button>
+        </div>
+      </Modal>
     </div>
   );
 }
