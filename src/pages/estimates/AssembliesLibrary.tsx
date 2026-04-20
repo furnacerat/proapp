@@ -315,56 +315,68 @@ export function AssembliesLibrary() {
                 <Plus size={14} /> Add Item
               </button>
             </div>
-            <div className="grid-6 gap-2 mb-2 text-sm font-medium text-muted">
-              <div>Item</div>
-              <div>Qty</div>
-              <div>Unit</div>
-              <div>Unit Price</div>
-              <div>Category</div>
-              <div></div>
+            <div className="flex gap-2 mb-2 text-xs font-medium text-muted">
+              <div className="flex-1">Item</div>
+              <div className="w-16 text-center">Qty</div>
+              <div className="w-16 text-center">Unit</div>
+              <div className="w-24 text-right">Price</div>
+              <div className="w-24 text-center">Cat</div>
+              <div className="w-8"></div>
             </div>
             <div className="space-y-2">
               {items.map((item, index) => (
-                <div key={index} className="grid-6 gap-2 items-center">
-                  <input
-                    className="form-input"
-                    value={item.name}
-                    onChange={e => updateItem(index, { name: e.target.value })}
-                    placeholder="Item name"
-                  />
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={item.quantity}
-                    onChange={e => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
-                    placeholder="1"
-                  />
-                  <input
-                    className="form-input"
-                    value={item.unit}
-                    onChange={e => updateItem(index, { unit: e.target.value })}
-                    placeholder="ea, sqft, lb, gal, hr"
-                  />
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={item.unitPrice}
-                    onChange={e => updateItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
-                    placeholder="0.00"
-                  />
-                  <select
-                    className="form-select"
-                    value={item.category}
-                    onChange={e => updateItem(index, { category: e.target.value as 'material' | 'labor' | 'equipment' | 'other' })}
-                  >
-                    <option value="material">Material</option>
-                    <option value="labor">Labor</option>
-                    <option value="equipment">Equipment</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <button className="btn btn-sm btn-icon btn-danger" onClick={() => removeItem(index)}>
-                    <Trash2 size={14} />
-                  </button>
+                <div key={index} className="flex gap-2 items-center">
+                  <div className="flex-1 min-w-0">
+                    <input
+                      className="form-input"
+                      value={item.name}
+                      onChange={e => updateItem(index, { name: e.target.value })}
+                      placeholder="Item name"
+                    />
+                  </div>
+                  <div className="w-16">
+                    <input
+                      className="form-input text-center"
+                      type="number"
+                      value={item.quantity}
+                      onChange={e => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
+                      placeholder="1"
+                    />
+                  </div>
+                  <div className="w-16">
+                    <input
+                      className="form-input text-center"
+                      value={item.unit}
+                      onChange={e => updateItem(index, { unit: e.target.value })}
+                      placeholder="ea"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <input
+                      className="form-input text-right"
+                      type="number"
+                      value={item.unitPrice}
+                      onChange={e => updateItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <select
+                      className="form-select"
+                      value={item.category}
+                      onChange={e => updateItem(index, { category: e.target.value as 'material' | 'labor' | 'equipment' | 'other' })}
+                    >
+                      <option value="material">Mat</option>
+                      <option value="labor">Lab</option>
+                      <option value="equipment">Eqp</option>
+                      <option value="other">Oth</option>
+                    </select>
+                  </div>
+                  <div className="w-8">
+                    <button className="btn btn-sm btn-icon btn-danger" onClick={() => removeItem(index)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
