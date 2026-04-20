@@ -529,6 +529,15 @@ export interface BrandingSettings {
   termsUrl?: string;
   termsText?: string;
   signature?: string;
+  // Default markups (applied to estimates/invoices)
+  defaultLaborMarkup?: number;
+  defaultMaterialMarkup?: number;
+  defaultEquipmentMarkup?: number;
+  defaultSubcontractorMarkup?: number;
+  // Payment terms
+  paymentTerms?: string;
+  // Tax rate
+  defaultTaxRate?: number;
 }
 
 export interface Alert {

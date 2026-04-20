@@ -1,20 +1,28 @@
-import React, { useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 
-// Simple branding settings page
+type SettingsTab = 'branding' | 'markups' | 'email' | 'smtp' | 'import';
+
 export function Settings() {
-  const { branding, updateBranding } = useApp();
+  const { branding, updateBranding, smtpSettings, updateSmtpSettings } = useApp();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('branding');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const exportBranding = () => {
+
+  const setBrand = (key: keyof typeof branding, value: any) => {
+    updateBranding({ [key]: value } as any);
+  };
+
+  const exportData = () => {
     const blob = new Blob([JSON.stringify(branding, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'branding.json';
+    a.download = 'settings.json';
     a.click();
     URL.revokeObjectURL(url);
   };
-  const importBranding = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const fr = new FileReader();
@@ -22,62 +30,13 @@ export function Settings() {
       try {
         const data = JSON.parse(String(fr.result));
         updateBranding(data as any);
-        alert('Branding imported');
+        alert('Settings imported');
       } catch {
-        alert('Invalid branding JSON');
+        alert('Invalid settings JSON');
       }
     };
     fr.readAsText(file);
   };
-
-  // Branding presets
-  const brandingPresets = [
-    {
-      id: 'premium-blue',
-      name: 'Premium Blue',
-      branding: {
-        brandName: 'Allen\'s Hub',
-        primaryColor: '#1f3a8a',
-        secondaryColor: '#2563eb',
-        fontFamily: 'Inter, system-ui, Arial',
-        logoUrl: '',
-        logoDataUrl: '',
-        termsText: 'All rights reserved. See Terms',
-        termsUrl: '#',
-        signature: 'Best regards, Allen\'s Hub',
-      }
-    },
-    {
-      id: 'emerald',
-      name: 'Emerald Prestige',
-      branding: {
-        brandName: 'Allen\'s Hub',
-        primaryColor: '#064e3b',
-        secondaryColor: '#10b981',
-        fontFamily: 'Inter, system-ui, Arial',
-        logoUrl: '',
-        logoDataUrl: '',
-        termsText: 'All rights reserved. See Terms',
-        termsUrl: '#',
-        signature: 'Cheers, Allen\'s Hub',
-      }
-    },
-    {
-      id: 'twilight',
-      name: 'Twilight Premium',
-      branding: {
-        brandName: 'Allen\'s Hub',
-        primaryColor: '#111827',
-        secondaryColor: '#374151',
-        fontFamily: 'Inter, system-ui, Arial',
-        logoUrl: '',
-        logoDataUrl: '',
-        termsText: 'All rights reserved. See Terms',
-        termsUrl: '#',
-        signature: '— The Team',
-      }
-    }
-  ];
 
   const onLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,48 +49,70 @@ export function Settings() {
     reader.readAsDataURL(file);
   };
 
-  const setBrand = (key: keyof typeof branding, value: any) => {
-    updateBranding({ [key]: value } as any);
-  };
-
-  // SMTP settings from app context
-  const { smtpSettings, updateSmtpSettings } = useApp();
+  const tabs = [
+    { id: 'branding', label: 'Branding' },
+    { id: 'markups', label: 'Default Markups' },
+    { id: 'email', label: 'Email & Terms' },
+    { id: 'smtp', label: 'SMTP' },
+    { id: 'import', label: 'Import/Export' },
+  ];
 
   return (
     <div className="page-content">
       <div className="page-header">
         <h1 className="page-title">Settings</h1>
       </div>
-      <div className="card">
-        <div className="card-header"><h3 className="card-title">Branding</h3></div>
-        <div className="card-body grid-2">
-          <div>
-            <div className="form-group">
-              <label className="form-label">Brand Name</label>
-              <input className="form-input" value={branding.brandName} onChange={e => setBrand('brandName', e.target.value)} />
+
+      <div className="tabs mb-4">
+        {tabs.map(tab => (
+          <button key={tab.id} className={`tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id as SettingsTab)}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'branding' && (
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Company Branding</h3></div>
+          <div className="card-body grid-2">
+            <div>
+              <div className="form-group">
+                <label className="form-label">Company Name</label>
+                <input className="form-input" value={branding.brandName} onChange={e => setBrand('brandName', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email From Name</label>
+                <input className="form-input" value={branding.emailFromName || ''} onChange={e => setBrand('emailFromName', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email From Address</label>
+                <input className="form-input" value={branding.emailFromAddress || ''} onChange={e => setBrand('emailFromAddress', e.target.value)} placeholder="info@company.com" />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Font Family</label>
-              <select className="form-select" value={branding.fontFamily} onChange={e => setBrand('fontFamily', e.target.value)}>
-                <option value="Inter, system-ui">Inter</option>
-                <option value="Arial, Helvetica, sans-serif">Arial</option>
-                <option value="Georgia, serif">Georgia</option>
-                <option value="Times New Roman, serif">Times</option>
-                <option value="Roboto, sans-serif">Roboto</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Primary Color</label>
-              <input className="form-input" type="color" value={branding.primaryColor || '#1f3a8a'} onChange={e => setBrand('primaryColor', e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Secondary Color</label>
-              <input className="form-input" type="color" value={branding.secondaryColor || '#2563eb'} onChange={e => setBrand('secondaryColor', e.target.value)} />
+            <div>
+              <div className="form-group">
+                <label className="form-label">Font Family</label>
+                <select className="form-select" value={branding.fontFamily} onChange={e => setBrand('fontFamily', e.target.value)}>
+                  <option value="Inter, system-ui">Inter</option>
+                  <option value="Arial, Helvetica, sans-serif">Arial</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="Times New Roman, serif">Times</option>
+                  <option value="Roboto, sans-serif">Roboto</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Primary Color</label>
+                <input className="form-input" type="color" value={branding.primaryColor || '#1f3a8a'} onChange={e => setBrand('primaryColor', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Secondary Color</label>
+                <input className="form-input" type="color" value={branding.secondaryColor || '#2563eb'} onChange={e => setBrand('secondaryColor', e.target.value)} />
+              </div>
             </div>
           </div>
-          <div>
+          <div className="card-body border-t">
             <div className="form-group">
-              <label className="form-label">Logo</label>
+              <label className="form-label">Company Logo</label>
               <div className="flex items-center gap-2">
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={onLogoFile} />
               </div>
@@ -141,87 +122,150 @@ export function Settings() {
                 <img src={branding.logoUrl} alt="logo" style={{ maxWidth: '200px', marginTop: '8px' }} />
               ) : null}
             </div>
-            <div className="form-group">
-              <label className="form-label">Logo URL</label>
-              <input className="form-input" value={branding.logoUrl || ''} onChange={e => setBrand('logoUrl', e.target.value)} placeholder="https://..." />
-            </div>
           </div>
         </div>
-        <div className="card-body border-t"></div>
-      </div>
+      )}
 
-      <div className="card mt-4">
-        <div className="card-header"><h3 className="card-title">Email & Documents</h3></div>
-        <div className="card-body grid-2">
-          <div className="form-group">
-            <label className="form-label">Email Signature</label>
-            <textarea className="form-textarea" value={branding.signature || ''} onChange={e => setBrand('signature', e.target.value)} placeholder="Signature to append to emails" />
+      {activeTab === 'markups' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Default Markups</h3>
+            <p className="text-sm text-muted">Applied to new estimates and invoices</p>
           </div>
-          <div className="form-group">
-            <label className="form-label">Terms & Conditions (URL or Text)</label>
-            <textarea className="form-textarea" value={branding.termsText || ''} onChange={e => setBrand('termsText', e.target.value)} placeholder="Terms text" />
+          <div className="card-body">
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Labor Markup (%)</label>
+                <input className="form-input" type="number" value={branding.defaultLaborMarkup || 30} onChange={e => setBrand('defaultLaborMarkup', Number(e.target.value))} />
+                <p className="text-xs text-muted mt-1">Added to labor costs</p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Material Markup (%)</label>
+                <input className="form-input" type="number" value={branding.defaultMaterialMarkup || 20} onChange={e => setBrand('defaultMaterialMarkup', Number(e.target.value))} />
+                <p className="text-xs text-muted mt-1">Added to material costs</p>
+              </div>
+            </div>
+            <div className="grid-2 mt-4">
+              <div className="form-group">
+                <label className="form-label">Equipment Markup (%)</label>
+                <input className="form-input" type="number" value={branding.defaultEquipmentMarkup || 15} onChange={e => setBrand('defaultEquipmentMarkup', Number(e.target.value))} />
+                <p className="text-xs text-muted mt-1">Added to equipment costs</p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Subcontractor Markup (%)</label>
+                <input className="form-input" type="number" value={branding.defaultSubcontractorMarkup || 15} onChange={e => setBrand('defaultSubcontractorMarkup', Number(e.target.value))} />
+                <p className="text-xs text-muted mt-1">Added to subcontractor costs</p>
+              </div>
+            </div>
+          </div>
+          <div className="card-body border-t">
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Default Tax Rate (%)</label>
+                <input className="form-input" type="number" step="0.01" value={branding.defaultTaxRate || 0} onChange={e => setBrand('defaultTaxRate', Number(e.target.value))} />
+                <p className="text-xs text-muted mt-1">Applied to taxable line items</p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Payment Terms</label>
+                <select className="form-select" value={branding.paymentTerms || 'net30'} onChange={e => setBrand('paymentTerms', e.target.value)}>
+                  <option value="due_on_receipt">Due on Receipt</option>
+                  <option value="net15">Net 15</option>
+                  <option value="net30">Net 30</option>
+                  <option value="net45">Net 45</option>
+                  <option value="net60">Net 60</option>
+                  <option value="50_deposit">50% Deposit, 50% on Completion</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="card-body">
-          <label className="form-label">Terms URL</label>
-          <input className="form-input" value={branding.termsUrl || ''} onChange={e => setBrand('termsUrl', e.target.value)} placeholder="https://..." />
+      )}
+
+      {activeTab === 'email' && (
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Email & Document Settings</h3></div>
+          <div className="card-body">
+            <div className="form-group">
+              <label className="form-label">Email Signature</label>
+              <textarea className="form-textarea" value={branding.signature || ''} onChange={e => setBrand('signature', e.target.value)} placeholder="Best regards, Your Company" />
+            </div>
+          </div>
+          <div className="card-body border-t">
+            <div className="form-group">
+              <label className="form-label">Terms & Conditions (shown on invoices)</label>
+              <textarea className="form-textarea" value={branding.termsText || ''} onChange={e => setBrand('termsText', e.target.value)} placeholder="Payment is due within 30 days..." rows={3} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Terms URL</label>
+              <input className="form-input" value={branding.termsUrl || ''} onChange={e => setBrand('termsUrl', e.target.value)} placeholder="https://yourcompany.com/terms" />
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="card mt-4" style={{ padding: 12 }}>
-        <div className="form-group">
-          <label className="form-label">Enable SMTP</label>
-          <input type="checkbox" checked={smtpSettings?.enabled ?? false} onChange={e => updateSmtpSettings({ enabled: e.target.checked })} />
+      )}
+
+      {activeTab === 'smtp' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">SMTP Email Settings</h3>
+            <p className="text-sm text-muted">Enable SMTP to send invoices/estimates via email instead of mailto links</p>
+          </div>
+          <div className="card-body">
+            <div className="form-group">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={smtpSettings?.enabled ?? false} onChange={e => updateSmtpSettings({ enabled: e.target.checked })} />
+                <span>Enable SMTP</span>
+              </label>
+            </div>
+            {smtpSettings?.enabled && (
+              <div className="grid-2 mt-4">
+                <div className="form-group">
+                  <label className="form-label">SMTP Host</label>
+                  <input className="form-input" value={smtpSettings.host} onChange={e => updateSmtpSettings({ host: e.target.value })} placeholder="smtp.example.com" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">SMTP Port</label>
+                  <input className="form-input" type="number" value={smtpSettings.port} onChange={e => updateSmtpSettings({ port: Number(e.target.value) })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">SMTP Username</label>
+                  <input className="form-input" value={smtpSettings.user} onChange={e => updateSmtpSettings({ user: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">SMTP Password</label>
+                  <input className="form-input" type="password" value={smtpSettings.password || ''} onChange={e => updateSmtpSettings({ password: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">From Name</label>
+                  <input className="form-input" value={smtpSettings.fromName || ''} onChange={e => updateSmtpSettings({ fromName: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">From Email</label>
+                  <input className="form-input" value={smtpSettings.fromEmail || ''} onChange={e => updateSmtpSettings({ fromEmail: e.target.value })} />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        {smtpSettings?.enabled && (
-          <>
-            <div className="form-group">
-              <label className="form-label">SMTP Host</label>
-              <input className="form-input" value={smtpSettings.host} onChange={e => updateSmtpSettings({ host: e.target.value })} placeholder="smtp.example.com" />
+      )}
+
+      {activeTab === 'import' && (
+        <div className="card">
+          <div className="card-header"><h3 className="card-title">Import / Export Settings</h3></div>
+          <div className="card-body">
+            <div className="flex gap-2">
+              <button className="btn btn-secondary" onClick={exportData}>
+                Export Settings
+              </button>
+              <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+                Import Settings
+                <input type="file" accept="application/json" onChange={importData} style={{ display: 'none' }} />
+              </label>
             </div>
-            <div className="form-group">
-              <label className="form-label">SMTP Port</label>
-              <input className="form-input" type="number" value={smtpSettings.port} onChange={e => updateSmtpSettings({ port: Number(e.target.value) })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">SMTP User</label>
-              <input className="form-input" value={smtpSettings.user} onChange={e => updateSmtpSettings({ user: e.target.value })} placeholder="username" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">SMTP Password</label>
-              <input className="form-input" type="password" value={smtpSettings.password || ''} onChange={e => updateSmtpSettings({ password: e.target.value })} placeholder="password" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">From Name</label>
-              <input className="form-input" value={smtpSettings.fromName || ''} onChange={e => updateSmtpSettings({ fromName: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">From Email</label>
-              <input className="form-input" value={smtpSettings.fromEmail || ''} onChange={e => updateSmtpSettings({ fromEmail: e.target.value })} />
-            </div>
-          </>
-        )}
-      </div>
-      <div className="card mt-4" style={{ padding: 12 }}>
-        <div className="flex gap-2">
-          <button className="btn btn-secondary" onClick={exportBranding}>Export Branding</button>
-          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-            Import Branding
-            <input type="file" accept="application/json" onChange={importBranding} style={{ display: 'none' }} />
-          </label>
+            <p className="text-sm text-muted mt-2">Export your branding and settings to back them up or import to another device.</p>
+          </div>
         </div>
-      </div>
-      <div className="card mt-4" style={{ padding: 12 }}>
-        <div className="form-group">
-          <label className="form-label">Branding Preset</label>
-          <select className="form-select" onChange={e => {
-            const preset = brandingPresets.find(p => p.id === e.target.value);
-            if (preset) updateBranding(preset.branding as any);
-          }}>
-            <option value="">Choose preset</option>
-            {brandingPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
