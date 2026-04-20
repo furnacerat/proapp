@@ -859,6 +859,9 @@ export function EstimateBuilder() {
               <Briefcase size={16} /> Convert to Job
             </button>
           )}
+          <Link to={`/estimates/${estimate.id}/materials`} className="btn btn-secondary shrink-0">
+            <Package size={16} /> Materials List
+          </Link>
           {estimate.convertedToJobId && (
             <Link to={`/jobs/${estimate.convertedToJobId}`} className="btn btn-secondary shrink-0">
               <FileCheck size={16} /> View Job

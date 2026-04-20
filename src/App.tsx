@@ -18,6 +18,7 @@ import { EstimateBuilder } from './pages/estimates/EstimateBuilder';
 import { TemplatesLibrary } from './pages/estimates/TemplatesLibrary';
 import { AssembliesLibrary } from './pages/estimates/AssembliesLibrary';
 import { PriceBook } from './pages/estimates/PriceBook';
+import { MaterialsList } from './pages/estimates/MaterialsList';
 import { Settings } from './pages/Settings';
 import { Customers } from './pages/Customers';
 import './index.css';
@@ -39,6 +40,7 @@ function App() {
               <Route path="/estimates/templates" element={<TemplatesLibrary />} />
               <Route path="/estimates/assemblies" element={<AssembliesLibrary />} />
               <Route path="/estimates/pricebook" element={<PriceBook />} />
+              <Route path="/estimates/:id/materials" element={<MaterialsList />} />
               <Route path="/workers" element={<Workers />} />
               <Route path="/time-entries" element={<TimeEntries />} />
               <Route path="/expenses" element={<Expenses />} />
