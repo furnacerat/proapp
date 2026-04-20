@@ -1476,23 +1476,42 @@ export function EstimateBuilder() {
       </Modal>
 
       <Modal isOpen={showAssemblyPicker} onClose={() => setShowAssemblyPicker(false)} title="Insert Assembly" size="lg">
-        <div className="space-y-2">
-          {assemblies.length === 0 ? (
-            <div className="text-center py-8 text-muted">No assemblies available. Create assemblies in the library.</div>
-          ) : (
-            assemblies.map(assembly => (
-              <button
-                key={assembly.id}
-                className="w-full text-left p-3 border rounded-lg hover:bg-gray-50"
-                onClick={() => handleInsertAssembly(assembly)}
-              >
-                <div className="font-medium">{assembly.name}</div>
-                <div className="text-sm text-muted">{assembly.description}</div>
-                <div className="text-xs text-muted mt-1">{assembly.items?.length} items</div>
-              </button>
-            ))
-          )}
-        </div>
+        {assemblies.length === 0 ? (
+          <div className="text-center py-8 text-muted">No assemblies available. Create assemblies in the library.</div>
+        ) : (
+          <div className="max-h-[70vh] overflow-y-auto">
+            {Object.entries(
+              assemblies.reduce((acc, a) => {
+                const cat = a.category || 'Other';
+                if (!acc[cat]) acc[cat] = [];
+                acc[cat].push(a);
+                return acc;
+              }, {} as Record<string, typeof assemblies>)
+            ).sort(([a], [b]) => a.localeCompare(b)).map(([category, categoryAssemblies]) => (
+              <div key={category} className="mb-6">
+                <h3 className="font-medium text-sm text-muted uppercase mb-2 px-1">{category}</h3>
+                <div className="space-y-1">
+                  {categoryAssemblies.map((assembly: any) => (
+                    <button
+                      key={assembly.id}
+                      className="w-full text-left p-2 border rounded hover:bg-gray-50 flex items-center justify-between"
+                      onClick={() => handleInsertAssembly(assembly)}
+                    >
+                      <div>
+                        <div className="font-medium">{assembly.name}</div>
+                        {assembly.description && <div className="text-xs text-muted">{assembly.description}</div>}
+                      </div>
+                      <div className="text-right text-sm">
+                        <div className="text-muted">{assembly.items?.length || 0} items</div>
+                        <div className="font-medium">${((assembly.items || []).reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0)).toFixed(2)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
 
       <Modal isOpen={showChecklist} onClose={() => setShowChecklist(false)} title="Smart Checklist" size="lg">
