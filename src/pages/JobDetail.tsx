@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
@@ -29,6 +29,19 @@ export function JobDetail() {
   const job = jobs.find(j => j.id === id);
   const [activeTab, setActiveTab] = useState('overview');
   const [showTabMenu, setShowTabMenu] = useState(false);
+  const tabMenuRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tabMenuRef.current && !tabMenuRef.current.contains(e.target as Node)) {
+        setShowTabMenu(false);
+      }
+    };
+    if (showTabMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showTabMenu]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
   const [printPreview, setPrintPreview] = useState<{ section: string; open: boolean }>({ section: '', open: false });
 
@@ -434,7 +447,7 @@ export function JobDetail() {
         )}
 
         <div className="tabs mb-4">
-          <div className="tab-dropdown">
+          <div className="tab-dropdown" ref={tabMenuRef}>
             <button className="tab-dropdown-btn" onClick={() => setShowTabMenu(!showTabMenu)}>
               <span className="flex items-center gap-2">{tabs.find(t => t.id === activeTab)?.icon}{tabs.find(t => t.id === activeTab)?.label}</span>
               <ChevronDown size={16} />
