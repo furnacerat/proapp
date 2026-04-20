@@ -434,17 +434,17 @@ export function JobDetail() {
         )}
 
         <div className="tabs mb-4">
-          <div className="relative">
-            <button className="tab flex items-center gap-2" onClick={() => setShowTabMenu(!showTabMenu)}>
-              <span className="flex items-center gap-1.5">{tabs.find(t => t.id === activeTab)?.icon}{tabs.find(t => t.id === activeTab)?.label}</span>
-              <ChevronDown size={14} />
+          <div className="tab-dropdown">
+            <button className="tab-dropdown-btn" onClick={() => setShowTabMenu(!showTabMenu)}>
+              <span className="flex items-center gap-2">{tabs.find(t => t.id === activeTab)?.icon}{tabs.find(t => t.id === activeTab)?.label}</span>
+              <ChevronDown size={16} />
             </button>
             {showTabMenu && (
-              <div className="absolute top-full left-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-50 py-1">
+              <div className="tab-dropdown-menu">
                 {tabs.map(tab => (
-                  <button key={tab.id} className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${activeTab === tab.id ? 'bg-gray-50 font-medium' : ''}`} onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}>
+                  <button key={tab.id} className={`tab-dropdown-item ${activeTab === tab.id ? 'active' : ''}`} onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}>
                     <span className="flex items-center gap-2">{tab.icon}{tab.label}</span>
-                    {tab.count !== null && <span className="text-xs ml-1 text-muted">({tab.count})</span>}
+                    {tab.count !== null && <span className="ml-auto text-xs opacity-70">({tab.count})</span>}
                   </button>
                 ))}
               </div>
