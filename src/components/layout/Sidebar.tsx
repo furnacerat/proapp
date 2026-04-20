@@ -42,6 +42,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <Calculator size={20} />
             <span>Dashboard</span>
           </NavLink>
+          <NavLink to="/customers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+            <User size={20} />
+            <span>Customers</span>
+          </NavLink>
           <NavLink to="/estimates/list" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
             <FileText size={20} />
             <span>All Estimates</span>
@@ -95,10 +99,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
             <Settings size={20} />
             <span>Settings</span>
-          </NavLink>
-          <NavLink to="/customers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <User size={20} />
-            <span>Customers</span>
           </NavLink>
         </div>
         <div className="nav-section">
