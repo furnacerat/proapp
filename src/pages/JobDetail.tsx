@@ -450,7 +450,7 @@ export function JobDetail() {
           <div className="tab-dropdown" ref={tabMenuRef}>
             <button type="button" className="tab-dropdown-btn" onClick={() => setShowTabMenu(!showTabMenu)}>
               <span className="flex items-center gap-2">{tabs.find(t => t.id === activeTab)?.icon}{tabs.find(t => t.id === activeTab)?.label}</span>
-              <ChevronDown size={16} style={{ transform: showTabMenu ? 'rotate(180deg)' : 'rotate(0)' }} />
+              <ChevronDown size={16} className="transition-transform" style={{ transform: showTabMenu ? 'rotate(180deg)' : 'rotate(0)' }} />
             </button>
             {showTabMenu && (
               <div className="tab-dropdown-menu">
