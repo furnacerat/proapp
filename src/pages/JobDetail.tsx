@@ -12,7 +12,7 @@ import {
   ArrowLeft, MapPin, Trash2, Plus, Camera, FileText, Clock, Receipt, CheckSquare, DollarSign, 
   AlertTriangle, TrendingUp, Wrench, Edit, Copy, Upload, AlertCircle, Clipboard, Activity,
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
-  Flag, Paperclip, Eye, Calendar, Send
+  Flag, Paperclip, Eye, Calendar, Send, ChevronDown
 } from 'lucide-react';
 import BrandHeader from '../components/BrandHeader';
 
@@ -28,6 +28,7 @@ export function JobDetail() {
   
   const job = jobs.find(j => j.id === id);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showTabMenu, setShowTabMenu] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
   const [printPreview, setPrintPreview] = useState<{ section: string; open: boolean }>({ section: '', open: false });
 
@@ -432,13 +433,23 @@ export function JobDetail() {
           </div>
         )}
 
-        <div className="tabs mb-4 overflow-x-auto">
-          {tabs.map(tab => (
-            <button key={tab.id} className={`tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>
-              <span className="flex items-center gap-1.5">{tab.icon}{tab.label}</span>
-              {tab.count !== null && <span className="ml-1 text-xs">({tab.count})</span>}
+        <div className="tabs mb-4">
+          <div className="relative">
+            <button className="tab flex items-center gap-2" onClick={() => setShowTabMenu(!showTabMenu)}>
+              <span className="flex items-center gap-1.5">{tabs.find(t => t.id === activeTab)?.icon}{tabs.find(t => t.id === activeTab)?.label}</span>
+              <ChevronDown size={14} />
             </button>
-          ))}
+            {showTabMenu && (
+              <div className="absolute top-full left-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-50 py-1">
+                {tabs.map(tab => (
+                  <button key={tab.id} className={`w-full text-left px-4 py-2 hover:bg-gray-100 ${activeTab === tab.id ? 'bg-gray-50 font-medium' : ''}`} onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}>
+                    <span className="flex items-center gap-2">{tab.icon}{tab.label}</span>
+                    {tab.count !== null && <span className="text-xs ml-1 text-muted">({tab.count})</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {activeTab === 'overview' && (
