@@ -57,6 +57,7 @@ export interface LaborRate {
 export interface Material {
   id: string;
   name: string;
+  description?: string;
   category: string;
   unit: string;
   unitPrice: number;
@@ -203,6 +204,8 @@ export interface EstimateLineItem {
   isAllowance?: boolean;
   notes?: string;
   sortOrder?: number;
+  linkedMaterialId?: string;
+  linkedLaborRateId?: string;
 }
 
 export interface EstimateSection {
