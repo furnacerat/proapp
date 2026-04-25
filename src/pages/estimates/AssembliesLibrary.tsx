@@ -92,7 +92,25 @@ export function AssembliesLibrary() {
   };
 
   const calculateTotal = (assemblyItems: AssemblyItem[]) => {
-    return assemblyItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    let materialTotal = 0;
+    let laborTotal = 0;
+    let equipmentTotal = 0;
+    let otherTotal = 0;
+    
+    assemblyItems.forEach(item => {
+      const itemTotal = item.quantity * item.unitPrice;
+      if (item.category === 'material' || item.category === 'allowance') {
+        materialTotal += itemTotal;
+      } else if (item.category === 'labor') {
+        laborTotal += itemTotal;
+      } else if (item.category === 'equipment') {
+        equipmentTotal += itemTotal;
+      } else {
+        otherTotal += itemTotal;
+      }
+    });
+    
+    return { materialTotal, laborTotal, equipmentTotal, otherTotal, subtotal: materialTotal + laborTotal + equipmentTotal + otherTotal };
   };
 
   const starterAssemblies = [
@@ -242,7 +260,10 @@ export function AssembliesLibrary() {
                         <div className="text-sm text-muted mt-1">{assembly.description}</div>
                       )}
                       <div className="text-xs text-muted mt-1">
-                        {assembly.laborHours}h labor • {assembly.items?.length || 0} items • {formatCurrency(calculateTotal(assembly.items || []))}
+                        {assembly.laborHours}h labor • {assembly.items?.length || 0} items
+                      </div>
+                      <div className="text-xs text-muted">
+                        Materials: {formatCurrency(calculateTotal(assembly.items || []).materialTotal)} • Labor: {formatCurrency(calculateTotal(assembly.items || []).laborTotal)} • Total: {formatCurrency(calculateTotal(assembly.items || []).subtotal)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -388,8 +409,15 @@ export function AssembliesLibrary() {
                 </div>
               ))}
             </div>
-            <div className="text-right mt-2 text-sm text-muted">
-              Total: {formatCurrency(calculateTotal(items))}
+            <div className="mt-3 pt-3 border-t flex justify-between text-sm">
+              <div className="space-y-1">
+                <div className="text-muted">Materials: {formatCurrency(calculateTotal(items).materialTotal)}</div>
+                <div className="text-muted">Labor: {formatCurrency(calculateTotal(items).laborTotal)}</div>
+                <div className="text-muted">Equipment: {formatCurrency(calculateTotal(items).equipmentTotal)}</div>
+              </div>
+              <div className="text-right">
+                <div className="font-medium text-lg">Total: {formatCurrency(calculateTotal(items).subtotal)}</div>
+              </div>
             </div>
           </div>
         </div>
