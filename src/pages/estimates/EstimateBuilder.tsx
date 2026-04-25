@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
-import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus } from '../../data/types';
+import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
 import {
@@ -66,6 +66,12 @@ export function EstimateBuilder() {
   const [showProjectTypePicker, setShowProjectTypePicker] = useState(!estimate?.type);
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAssemblyPicker, setShowAssemblyPicker] = useState(false);
+  const [assemblySearch, setAssemblySearch] = useState('');
+  const [assemblyTarget, setAssemblyTarget] = useState<{ scopeId?: string; sectionId?: string } | null>(null);
+  const [showPricePicker, setShowPricePicker] = useState(false);
+  const [priceSearch, setPriceSearch] = useState('');
+  const [pricePickerTab, setPricePickerTab] = useState<'materials' | 'labor'>('materials');
+  const [priceTarget, setPriceTarget] = useState<{ scopeId?: string; sectionId?: string } | null>(null);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
   const [newItemForm, setNewItemForm] = useState({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' as EstimateLineCategory });
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -124,6 +130,19 @@ export function EstimateBuilder() {
     handleAddItemToSection(sectionId);
   };
 
+  const openAssemblyPicker = (target?: { scopeId?: string; sectionId?: string }) => {
+    setAssemblyTarget(target || null);
+    setAssemblySearch('');
+    setShowAssemblyPicker(true);
+  };
+
+  const openPricePicker = (target?: { scopeId?: string; sectionId?: string }, tab: 'materials' | 'labor' = 'materials') => {
+    setPriceTarget(target || null);
+    setPricePickerTab(tab);
+    setPriceSearch('');
+    setShowPricePicker(true);
+  };
+
   // Auto-save
   const saveEstimate = useCallback(() => {
     if (isNew) return;
@@ -174,6 +193,171 @@ export function EstimateBuilder() {
     setScopes([...scopes, newScope]);
     setActiveScopeId(newScope.id);
   };
+
+  const getAssemblyTotal = (assembly: Assembly) => {
+    return (assembly.items || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+  };
+
+  const assemblyToLineItems = (assembly: Assembly): EstimateLineItem[] => {
+    return (assembly.items || []).map((item, index) => ({
+      id: crypto.randomUUID(),
+      name: item.name,
+      description: item.description || assembly.name,
+      quantity: item.quantity || 0,
+      unit: item.unit || 'ea',
+      unitPrice: item.unitPrice || 0,
+      category: item.category as EstimateLineCategory,
+      isLabor: item.category === 'labor',
+      hours: item.category === 'labor' ? item.quantity : undefined,
+      linkedMaterialId: item.linkedMaterialId,
+      linkedLaborRateId: item.linkedLaborRateId,
+      notes: `Assembly: ${assembly.name}`,
+      sortOrder: index,
+      total: (item.quantity || 0) * (item.unitPrice || 0),
+    }));
+  };
+
+  const handleSelectAssembly = (assembly: Assembly) => {
+    const lineItems = assemblyToLineItems(assembly);
+
+    if (assemblyTarget?.sectionId) {
+      setScopes(scopes.map(scope => ({
+        ...scope,
+        sections: scope.sections?.map(section => section.id === assemblyTarget.sectionId
+          ? { ...section, lineItems: [...(section.lineItems || []), ...lineItems] }
+          : section)
+      })));
+      setActiveSectionId(assemblyTarget.sectionId);
+    } else if (assemblyTarget?.scopeId) {
+      const newSection: EstimateSection = { id: crypto.randomUUID(), name: assembly.name, lineItems };
+      setScopes(scopes.map(scope => scope.id === assemblyTarget.scopeId
+        ? { ...scope, sections: [...(scope.sections || []), newSection] }
+        : scope));
+      setActiveScopeId(assemblyTarget.scopeId);
+      setActiveSectionId(newSection.id);
+    } else {
+      const sectionId = crypto.randomUUID();
+      const newScope: EstimateScope = {
+        id: crypto.randomUUID(),
+        name: assembly.name,
+        projectType: formData.type as any,
+        sections: [{ id: sectionId, name: assembly.name, lineItems }],
+        subtotal: getAssemblyTotal(assembly),
+        isOptional: false,
+        sortOrder: scopes.length,
+      };
+      setScopes([...scopes, newScope]);
+      setActiveScopeId(newScope.id);
+      setActiveSectionId(sectionId);
+    }
+
+    setShowAssemblyPicker(false);
+    setAssemblyTarget(null);
+    setAssemblySearch('');
+    showToast('Assembly added to estimate');
+  };
+
+  const filteredAssemblies = useMemo(() => {
+    const term = assemblySearch.trim().toLowerCase();
+    if (!term) return assemblies || [];
+    return (assemblies || []).filter(assembly =>
+      assembly.name.toLowerCase().includes(term) ||
+      assembly.category?.toLowerCase().includes(term) ||
+      assembly.description?.toLowerCase().includes(term)
+    );
+  }, [assemblies, assemblySearch]);
+
+  const addPriceLineItem = (item: EstimateLineItem) => {
+    if (priceTarget?.sectionId) {
+      setScopes(scopes.map(scope => ({
+        ...scope,
+        sections: scope.sections?.map(section => section.id === priceTarget.sectionId
+          ? { ...section, lineItems: [...(section.lineItems || []), item] }
+          : section)
+      })));
+      setActiveSectionId(priceTarget.sectionId);
+    } else if (priceTarget?.scopeId) {
+      const sectionId = crypto.randomUUID();
+      const newSection: EstimateSection = { id: sectionId, name: 'Price Book Items', lineItems: [item] };
+      setScopes(scopes.map(scope => scope.id === priceTarget.scopeId
+        ? { ...scope, sections: [...(scope.sections || []), newSection] }
+        : scope));
+      setActiveScopeId(priceTarget.scopeId);
+      setActiveSectionId(sectionId);
+    } else {
+      const sectionId = crypto.randomUUID();
+      const newScope: EstimateScope = {
+        id: crypto.randomUUID(),
+        name: 'Price Book Items',
+        projectType: formData.type as any,
+        sections: [{ id: sectionId, name: 'Price Book Items', lineItems: [item] }],
+        subtotal: item.total,
+        isOptional: false,
+        sortOrder: scopes.length,
+      };
+      setScopes([...scopes, newScope]);
+      setActiveScopeId(newScope.id);
+      setActiveSectionId(sectionId);
+    }
+
+    setShowPricePicker(false);
+    setPriceTarget(null);
+    setPriceSearch('');
+    showToast('Price book item added');
+  };
+
+  const handleSelectMaterial = (material: Material) => {
+    addPriceLineItem({
+      id: crypto.randomUUID(),
+      name: material.name,
+      description: material.description || material.supplier || material.category,
+      quantity: 1,
+      unit: material.unit || 'ea',
+      unitPrice: material.unitPrice || 0,
+      category: 'material',
+      isLabor: false,
+      linkedMaterialId: material.id,
+      total: material.unitPrice || 0,
+    });
+  };
+
+  const handleSelectLaborRate = (rate: LaborRate) => {
+    addPriceLineItem({
+      id: crypto.randomUUID(),
+      name: rate.name,
+      description: rate.trade,
+      quantity: 1,
+      unit: 'hr',
+      unitPrice: rate.hourlyRate || 0,
+      category: 'labor',
+      isLabor: true,
+      hours: 1,
+      linkedLaborRateId: rate.id,
+      total: rate.hourlyRate || 0,
+    });
+  };
+
+  const filteredMaterials = useMemo(() => {
+    const term = priceSearch.trim().toLowerCase();
+    return (materials || [])
+      .filter(material => material.isActive !== false)
+      .filter(material => !term ||
+        material.name.toLowerCase().includes(term) ||
+        material.category?.toLowerCase().includes(term) ||
+        material.supplier?.toLowerCase().includes(term) ||
+        material.sku?.toLowerCase().includes(term)
+      );
+  }, [materials, priceSearch]);
+
+  const filteredLaborRates = useMemo(() => {
+    const term = priceSearch.trim().toLowerCase();
+    return (laborRates || [])
+      .filter(rate => rate.isActive !== false)
+      .filter(rate => !term ||
+        rate.name.toLowerCase().includes(term) ||
+        rate.trade?.toLowerCase().includes(term)
+      );
+  }, [laborRates, priceSearch]);
 
   // Add item
   const addItem = (sectionId: string, item: EstimateLineItem) => {
@@ -325,6 +509,8 @@ export function EstimateBuilder() {
               <div className="eb-emptyScopeTitle">Start building your estimate</div>
               <div className="eb-emptyScopeActions">
                 <button className="btn btn-primary btn-lg" onClick={() => addScope('Scope 1')}><Plus size={18} /><span>Add Scope</span></button>
+                <button className="btn btn-secondary btn-lg" onClick={() => openAssemblyPicker()}><Package size={18} /><span>Add Assembly</span></button>
+                <button className="btn btn-secondary btn-lg" onClick={() => openPricePicker()}><DollarSign size={18} /><span>From Price Book</span></button>
                 {projectTypeTemplates?.[0] && <button className="btn btn-secondary btn-lg"><CheckSquare size={18} /><span>From Template</span></button>}
               </div>
             </div>
@@ -338,6 +524,8 @@ export function EstimateBuilder() {
                   </div>
                   <div className="eb-scopeActions">
                     <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); handleAddSection(scope.id); }}><Plus size={14} /></button>
+                    <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); openAssemblyPicker({ scopeId: scope.id }); }} title="Add assembly"><Package size={14} /></button>
+                    <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); openPricePicker({ scopeId: scope.id }); }} title="Add from price book"><DollarSign size={14} /></button>
                     <button className="eb-iconBtn eb-iconBtnDanger" onClick={(e) => { e.stopPropagation(); handleDeleteScope(scope.id); }}><Trash2 size={14} /></button>
                     {activeScopeId === scope.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </div>
@@ -347,6 +535,8 @@ export function EstimateBuilder() {
                     {(scope.sections?.length || 0) === 0 ? (
                       <div className="eb-noSections">
                         <button className="btn btn-secondary" onClick={() => handleAddSection(scope.id)}><Plus size={14} /><span>Add Section</span></button>
+                        <button className="btn btn-secondary" onClick={() => openAssemblyPicker({ scopeId: scope.id })}><Package size={14} /><span>Add Assembly</span></button>
+                        <button className="btn btn-secondary" onClick={() => openPricePicker({ scopeId: scope.id })}><DollarSign size={14} /><span>From Price Book</span></button>
                       </div>
                     ) : (
                       scope.sections?.map(section => (
@@ -355,6 +545,8 @@ export function EstimateBuilder() {
                             <input className="eb-sectionNameInput" value={section.name} onChange={e => handleSectionNameUpdate(section.id, e.target.value)} />
                             <div className="eb-sectionActions">
                               <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); handleAddItemToSection(section.id); }}><Plus size={14} /></button>
+                              <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); openAssemblyPicker({ sectionId: section.id }); }} title="Add assembly"><Package size={14} /></button>
+                              <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); openPricePicker({ sectionId: section.id }); }} title="Add from price book"><DollarSign size={14} /></button>
                               {activeSectionId === section.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </div>
                           </div>
@@ -387,6 +579,8 @@ export function EstimateBuilder() {
                               )}
                               <div className="eb-sectionFooter">
                                 <button className="eb-addItemBtn" onClick={() => handleAddItemFromFooter(section.id)}><Plus size={14} />Add Item</button>
+                                <button className="eb-addItemBtn" onClick={() => openAssemblyPicker({ sectionId: section.id })}><Package size={14} />Add Assembly</button>
+                                <button className="eb-addItemBtn" onClick={() => openPricePicker({ sectionId: section.id })}><DollarSign size={14} />From Price Book</button>
                               </div>
                             </div>
                           )}
@@ -401,9 +595,17 @@ export function EstimateBuilder() {
 
           {/* Add Scope Button */}
           {!showProjectTypePicker && (
-            <button className="eb-addScopeBtn" onClick={() => addScope(`Scope ${scopes.length + 1}`)}>
-              <Plus size={18} /><span>Add Another Scope</span>
-            </button>
+            <div className="eb-builderActions">
+              <button className="eb-addScopeBtn" onClick={() => addScope(`Scope ${scopes.length + 1}`)}>
+                <Plus size={18} /><span>Add Another Scope</span>
+              </button>
+              <button className="eb-addScopeBtn" onClick={() => openAssemblyPicker()}>
+                <Package size={18} /><span>Add Assembly as Scope</span>
+              </button>
+              <button className="eb-addScopeBtn" onClick={() => openPricePicker()}>
+                <DollarSign size={18} /><span>Add Price Book Item</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -535,6 +737,140 @@ export function EstimateBuilder() {
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
           <Link to="/customers" className="btn btn-secondary" onClick={() => setShowCustomerPicker(false)}>Manage Customers</Link>
+        </div>
+      </Modal>
+
+      {/* Assembly Picker Modal */}
+      <Modal isOpen={showAssemblyPicker} onClose={() => { setShowAssemblyPicker(false); setAssemblyTarget(null); setAssemblySearch(''); }} title="Select Assembly" size="lg">
+        <div className="eb-assemblyPicker">
+          <div className="search-bar mb-4">
+            <Search size={18} />
+            <input
+              className="form-input"
+              value={assemblySearch}
+              onChange={e => setAssemblySearch(e.target.value)}
+              placeholder="Search assemblies by name, category, or description"
+            />
+          </div>
+
+          {(assemblies?.length || 0) === 0 ? (
+            <div className="eb-assemblyEmpty">
+              <Package size={34} />
+              <div>
+                <div className="eb-assemblyEmptyTitle">No assemblies yet</div>
+                <p>Create assemblies in the library, then select them here for estimates.</p>
+              </div>
+              <Link to="/estimates/assemblies" className="btn btn-primary" onClick={() => setShowAssemblyPicker(false)}>Open Assemblies</Link>
+            </div>
+          ) : (
+            <div className="eb-assemblyList">
+              {filteredAssemblies.map(assembly => (
+                <button key={assembly.id} className="eb-assemblyOption" onClick={() => handleSelectAssembly(assembly)}>
+                  <div className="eb-assemblyOptionMain">
+                    <div className="eb-assemblyOptionIcon"><Package size={18} /></div>
+                    <div>
+                      <div className="eb-assemblyOptionName">{assembly.name}</div>
+                      {assembly.description && <div className="eb-assemblyOptionDesc">{assembly.description}</div>}
+                      <div className="eb-assemblyOptionMeta">
+                        <span>{assembly.category || 'Uncategorized'}</span>
+                        <span>{assembly.laborHours || 0}h labor</span>
+                        <span>{assembly.items?.length || 0} items</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="eb-assemblyOptionTotal">
+                    <span>{formatCurrency(getAssemblyTotal(assembly))}</span>
+                    <small>Select</small>
+                  </div>
+                </button>
+              ))}
+              {filteredAssemblies.length === 0 && (
+                <div className="eb-assemblyNoResults">No assemblies match your search.</div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Price Book Picker Modal */}
+      <Modal isOpen={showPricePicker} onClose={() => { setShowPricePicker(false); setPriceTarget(null); setPriceSearch(''); }} title="Select from Price Book" size="lg">
+        <div className="eb-pricePicker">
+          <div className="eb-priceTabs">
+            <button className={`eb-priceTab ${pricePickerTab === 'materials' ? 'active' : ''}`} onClick={() => setPricePickerTab('materials')}>
+              <Package size={16} /> Materials ({materials?.filter(m => m.isActive !== false).length || 0})
+            </button>
+            <button className={`eb-priceTab ${pricePickerTab === 'labor' ? 'active' : ''}`} onClick={() => setPricePickerTab('labor')}>
+              <Users size={16} /> Labor ({laborRates?.filter(r => r.isActive !== false).length || 0})
+            </button>
+          </div>
+
+          <div className="search-bar mb-4">
+            <Search size={18} />
+            <input
+              className="form-input"
+              value={priceSearch}
+              onChange={e => setPriceSearch(e.target.value)}
+              placeholder={pricePickerTab === 'materials' ? 'Search materials, categories, suppliers, or SKU' : 'Search labor rates or trades'}
+            />
+          </div>
+
+          {pricePickerTab === 'materials' ? (
+            <div className="eb-priceList">
+              {filteredMaterials.map(material => (
+                <button key={material.id} className="eb-priceOption" onClick={() => handleSelectMaterial(material)}>
+                  <div className="eb-priceOptionMain">
+                    <div className="eb-priceOptionIcon"><Package size={18} /></div>
+                    <div>
+                      <div className="eb-priceOptionName">{material.name}</div>
+                      <div className="eb-priceOptionMeta">
+                        <span>{material.category || 'Uncategorized'}</span>
+                        {material.supplier && <span>{material.supplier}</span>}
+                        {material.sku && <span>SKU {material.sku}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="eb-priceOptionTotal">
+                    <span>{formatCurrency(material.unitPrice)}</span>
+                    <small>/{material.unit || 'ea'}</small>
+                  </div>
+                </button>
+              ))}
+              {filteredMaterials.length === 0 && <div className="eb-priceNoResults">No active materials match your search.</div>}
+            </div>
+          ) : (
+            <div className="eb-priceList">
+              {filteredLaborRates.map(rate => (
+                <button key={rate.id} className="eb-priceOption" onClick={() => handleSelectLaborRate(rate)}>
+                  <div className="eb-priceOptionMain">
+                    <div className="eb-priceOptionIcon"><Users size={18} /></div>
+                    <div>
+                      <div className="eb-priceOptionName">{rate.name}</div>
+                      <div className="eb-priceOptionMeta">
+                        <span>{rate.trade || 'General'}</span>
+                        {rate.overtimeRate ? <span>OT {formatCurrency(rate.overtimeRate)}/hr</span> : null}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="eb-priceOptionTotal">
+                    <span>{formatCurrency(rate.hourlyRate)}</span>
+                    <small>/hr</small>
+                  </div>
+                </button>
+              ))}
+              {filteredLaborRates.length === 0 && <div className="eb-priceNoResults">No active labor rates match your search.</div>}
+            </div>
+          )}
+
+          {(materials?.length || 0) === 0 && (laborRates?.length || 0) === 0 && (
+            <div className="eb-priceEmpty">
+              <DollarSign size={34} />
+              <div>
+                <div className="eb-assemblyEmptyTitle">No price book items yet</div>
+                <p>Add materials or labor rates in the Price Book, then select them here for estimates.</p>
+              </div>
+              <Link to="/estimates/pricebook" className="btn btn-primary" onClick={() => setShowPricePicker(false)}>Open Price Book</Link>
+            </div>
+          )}
         </div>
       </Modal>
 
