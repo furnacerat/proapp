@@ -8,7 +8,7 @@ import { useToast } from '../components/common/Toast';
 import { Modal } from '../components/common/Modal';
 import {
   Plus, AlertTriangle, TrendingUp, DollarSign, Clock, CheckSquare, Users,
-  Briefcase, Receipt, Activity, Zap, Target, AlertCircle
+  Briefcase, Receipt, Activity, Zap, Target, AlertCircle, FileText
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -51,13 +51,21 @@ export function Dashboard() {
   return (
     <div>
       <div className="page-header">
-        <div className="flex items-center gap-3">
-          <h1 className="page-title">Command Center</h1>
-          {unreadAlerts.length > 0 && (
-            <button onClick={clearAllAlerts} className="btn btn-sm btn-secondary">
-              <AlertCircle size={16} /> {unreadAlerts.length} Alerts
-            </button>
-          )}
+        <div>
+          <div className="page-eyebrow">Operations Dashboard</div>
+          <div className="flex items-center gap-3">
+            <h1 className="page-title">Command Center</h1>
+            {unreadAlerts.length > 0 && (
+              <button onClick={clearAllAlerts} className="btn btn-sm btn-secondary">
+                <AlertCircle size={16} /> {unreadAlerts.length} Alerts
+              </button>
+            )}
+          </div>
+          <p className="page-subtitle">See what needs attention today across jobs, labor, cash flow, and open invoices.</p>
+        </div>
+        <div className="quick-actions">
+          <Link to="/jobs" className="btn btn-primary"><Plus size={18} /> New Job</Link>
+          <Link to="/estimates/new" className="btn btn-secondary"><FileText size={18} /> New Estimate</Link>
         </div>
       </div>
 

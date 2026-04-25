@@ -72,8 +72,12 @@ export function EstimatesDashboard() {
   return (
     <div>
       <div className="page-header">
-        <div className="flex items-center gap-3">
-          <h1 className="page-title">Estimates</h1>
+        <div>
+          <div className="page-eyebrow">Sales Pipeline</div>
+          <div className="flex items-center gap-3">
+            <h1 className="page-title">Estimates</h1>
+          </div>
+          <p className="page-subtitle">Track draft, sent, approved, and converted estimates from one focused estimating dashboard.</p>
         </div>
         <Link to="/estimates/new" className="btn btn-primary">
           <Plus size={18} /> New Estimate
