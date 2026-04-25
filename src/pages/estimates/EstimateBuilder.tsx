@@ -22,7 +22,7 @@ import type { PrintEstimateData } from '../../data/printTypes';
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer, sendEmail } = useApp();
+  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer, sendEmail, addCustomer } = useApp();
   const { showToast } = useToast();
   
   const isNew = id === 'new';
@@ -31,6 +31,8 @@ export function EstimateBuilder() {
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
   
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(isNew);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', company: '', email: '', phone: '', address: '', notes: '' });
   
   const [formData, setFormData] = useState({
     name: estimate?.name || '',
@@ -784,10 +786,15 @@ export function EstimateBuilder() {
               </div>
               <div className="form-group">
                 <label className="form-label">Customer *</label>
-                <select className="form-select" value={formData.customerId} onChange={e => setFormData({ ...formData, customerId: e.target.value })}>
-                  <option value="">Select customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div className="flex gap-2">
+                  <select className="form-select" value={formData.customerId} onChange={e => setFormData({ ...formData, customerId: e.target.value })} style={{ flex: 1 }}>
+                    <option value="">Select customer...</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowNewCustomer(true)}>
+                    <Plus size={16} /> New
+                  </button>
+                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Project Address</label>
@@ -812,6 +819,49 @@ export function EstimateBuilder() {
             </div>
           </div>
         </div>
+
+        <Modal isOpen={showNewCustomer} onClose={() => setShowNewCustomer(false)} title="New Customer">
+          <div className="form-group">
+            <label className="form-label">Name *</label>
+            <input className="form-input" value={newCustomerForm.name} onChange={e => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })} placeholder="Customer name" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Company</label>
+            <input className="form-input" value={newCustomerForm.company} onChange={e => setNewCustomerForm({ ...newCustomerForm, company: e.target.value })} placeholder="Company name" />
+          </div>
+          <div className="grid-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input className="form-input" type="email" value={newCustomerForm.email} onChange={e => setNewCustomerForm({ ...newCustomerForm, email: e.target.value })} placeholder="email@example.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Phone</label>
+              <input className="form-input" value={newCustomerForm.phone} onChange={e => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })} placeholder="(555) 555-5555" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Address</label>
+            <input className="form-input" value={newCustomerForm.address} onChange={e => setNewCustomerForm({ ...newCustomerForm, address: e.target.value })} placeholder="Customer address" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <textarea className="form-textarea" value={newCustomerForm.notes} onChange={e => setNewCustomerForm({ ...newCustomerForm, notes: e.target.value })} placeholder="Notes" />
+          </div>
+          <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+            <button className="btn btn-secondary" onClick={() => setShowNewCustomer(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={() => {
+              if (!newCustomerForm.name.trim()) {
+                showToast('Name is required', 'error');
+                return;
+              }
+              const newId = addCustomer(newCustomerForm);
+              setFormData({ ...formData, customerId: newId });
+              setNewCustomerForm({ name: '', company: '', email: '', phone: '', address: '', notes: '' });
+              setShowNewCustomer(false);
+              showToast('Customer created');
+            }}>Add Customer</button>
+          </div>
+        </Modal>
       </div>
     );
   }
