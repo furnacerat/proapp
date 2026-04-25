@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
-import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType } from '../../data/types';
+import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
 import {
@@ -265,24 +265,61 @@ export function EstimateBuilder() {
       <div className="eb-body">
         {/* LEFT: Builder Panel */}
         <div className="eb-builder">
-          {/* Project Type Picker */}
-          {showProjectTypePicker && (
-            <div className="eb-section">
-              <div className="eb-sectionHeader"><h2>Select Project Type</h2></div>
-              <div className="eb-typeGrid">
-                {PROJECT_TYPES.map(pt => (
-                  <button key={pt.value} className={`eb-typeCard ${formData.type === pt.value ? 'selected' : ''}`}
-                    onClick={() => { setFormData({...formData, type: pt.value as JobType}); setShowProjectTypePicker(false); }}>
-                    <div className="eb-typeIcon" style={{background: `${pt.color}20`, color: pt.color}}><pt.icon size={24} /></div>
-                    <div className="eb-typeLabel">{pt.label}</div>
-                  </button>
-                ))}
+          {/* Project Type */}
+          <div className="eb-section">
+            <div className="eb-sectionHeader">
+              <div>
+                <p className="eb-sectionEyebrow">Estimate Setup</p>
+                <h2>Project Type</h2>
+              </div>
+              {projectType && <span className="eb-sectionPill">{projectType.label}</span>}
+            </div>
+            <div className="eb-typeGrid">
+              {PROJECT_TYPES.map(pt => (
+                <button key={pt.value} className={`eb-typeCard ${formData.type === pt.value ? 'selected' : ''}`}
+                  onClick={() => { setFormData({...formData, type: pt.value as JobType}); setShowProjectTypePicker(false); }}>
+                  <div className="eb-typeIcon" style={{background: `${pt.color}20`, color: pt.color}}><pt.icon size={24} /></div>
+                  <div className="eb-typeLabel">{pt.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="eb-section">
+            <div className="eb-sectionHeader">
+              <div>
+                <p className="eb-sectionEyebrow">Customer & Scope</p>
+                <h2>Estimate Details</h2>
               </div>
             </div>
-          )}
+            <div className="eb-detailsGrid">
+              <div className="form-group">
+                <label className="form-label">Status</label>
+                <select className="form-select" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as EstimateStatus})}>
+                  {ESTIMATE_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Markup %</label>
+                <input className="form-input" type="number" min="0" step="0.1" value={formData.markupPercent} onChange={e => setFormData({...formData, markupPercent: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Valid Until</label>
+                <input className="form-input" type="date" value={formData.validUntil} onChange={e => setFormData({...formData, validUntil: e.target.value})} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Project Address</label>
+              <input className="form-input" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Street, city, state" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Internal Notes</label>
+              <textarea className="form-textarea" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Scope assumptions, exclusions, or reminders" />
+            </div>
+          </div>
 
           {/* Scopes & Sections */}
-          {scopes.length === 0 && !showProjectTypePicker ? (
+          {scopes.length === 0 ? (
             <div className="eb-emptyScope">
               <div className="eb-emptyScopeIcon"><Zap size={32} /></div>
               <div className="eb-emptyScopeTitle">Start building your estimate</div>
