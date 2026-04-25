@@ -1265,7 +1265,7 @@ body {
   }
 
   .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
   }
 
@@ -1489,3 +1489,48 @@ body {
 .shadow { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
 .hidden { display: none; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Estimates Dashboard refinements ──────────────────────────────────────── */
+
+/* Card hover lift */
+.card { transition: box-shadow 0.2s ease, transform 0.2s ease; }
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+.kpi-card { transition: box-shadow 0.2s ease, transform 0.2s ease; cursor: default; }
+.kpi-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1); transform: translateY(-2px); }
+
+/* Next Action cards */
+.nextActionCard { border-left: 3px solid var(--primary); background: #f8faff; }
+.nextActionHint { border-left: 3px solid var(--secondary); background: #f0f9ff; }
+.nextActionIconPrimary { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.nextActionIconSecondary { width: 40px; height: 40px; border-radius: 50%; background: var(--secondary); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* Empty State grid */
+.emptyStateCard { background: linear-gradient(135deg, #eff6ff 0%, #fafbff 100%); }
+.emptyStateGrid { display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center; }
+.emptyStateHeadline { font-size: 1.3rem; font-weight: 700; color: #1e3a5f; margin-bottom: 12px; line-height: 1.3; }
+.emptyStateBody { color: #4a5568; line-height: 1.6; max-width: 440px; }
+.emptyStateRight { display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #bfdbfe; padding-left: 32px; }
+.emptyFeature { display: flex; align-items: center; gap: 10px; color: #2d5a87; font-weight: 500; }
+.emptyFeature svg { color: #10b981; flex-shrink: 0; }
+
+/* Pipeline bar */
+.pipelineBar { display: flex; flex-direction: column; gap: 16px; }
+.pipelineRow { display: flex; flex-direction: column; gap: 6px; }
+.pipelineTrack { height: 8px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+.pipelineFill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+.pipelineLabel { display: flex; align-items: center; justify-content: space-between; }
+.pipelineDot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.pipelineCount { font-size: 1.1rem; font-weight: 700; }
+
+/* Action sections */
+.actionSection { display: flex; flex-direction: column; gap: 8px; }
+.actionSectionLabel { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 2px; }
+.actionDivider { height: 1px; background: #e5e7eb; margin: 8px 0; }
+
+/* Pending row hover */
+.pendingRow { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; transition: background 0.15s ease; }
+.pendingRow:hover { background: var(--gray-50); }
+
+/* Text sizes */
+.text-3xl { font-size: 1.875rem; }
+.text-4xl { font-size: 2.25rem; }
