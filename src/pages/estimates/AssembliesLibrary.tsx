@@ -4,7 +4,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
-import { Plus, Edit, Trash2, Package, Calculator } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Calculator, Search } from 'lucide-react';
 import type { Assembly, AssemblyItem } from '../../data/types';
 
 export function AssembliesLibrary() {
@@ -14,6 +14,9 @@ export function AssembliesLibrary() {
   const [showModal, setShowModal] = useState(false);
   const [editingAssembly, setEditingAssembly] = useState<Assembly | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showPricePicker, setShowPricePicker] = useState(false);
+  const [pricePickerTab, setPricePickerTab] = useState<'materials' | 'labor'>('materials');
+  const [priceSearch, setPriceSearch] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -311,9 +314,14 @@ export function AssembliesLibrary() {
           <div className="border-t pt-4">
             <div className="flex items-center justify-between mb-3">
               <label className="form-label mb-0">Line Items</label>
-              <button className="btn btn-sm btn-secondary" onClick={addItem}>
-                <Plus size={14} /> Add Item
-              </button>
+              <div className="flex gap-2">
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowPricePicker(true)}>
+                  <Search size={14} /> From Price List
+                </button>
+                <button className="btn btn-sm btn-secondary" onClick={addItem}>
+                  <Plus size={14} /> Add Item
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 mb-2 text-xs font-medium text-muted">
               <div className="flex-1">Item</div>
@@ -402,6 +410,96 @@ export function AssembliesLibrary() {
         confirmLabel="Delete"
         danger
       />
+
+      <Modal isOpen={showPricePicker} onClose={() => { setShowPricePicker(false); setPriceSearch(''); }} title="Select from Price Book" size="lg">
+        <div className="mb-4">
+          <div className="flex gap-2 mb-3">
+            <button className={`btn btn-sm ${pricePickerTab === 'materials' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPricePickerTab('materials')}>
+              Materials ({materials?.length || 0})
+            </button>
+            <button className={`btn btn-sm ${pricePickerTab === 'labor' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPricePickerTab('labor')}>
+              Labor ({laborRates?.length || 0})
+            </button>
+          </div>
+          <input
+            className="form-input"
+            placeholder={`Search ${pricePickerTab}...`}
+            value={priceSearch}
+            onChange={e => setPriceSearch(e.target.value)}
+          />
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto">
+          {pricePickerTab === 'materials' ? (
+            <div className="space-y-1">
+              {materials
+                ?.filter(m => m.isActive !== false && m.name.toLowerCase().includes(priceSearch.toLowerCase()))
+                .map(m => (
+                  <button
+                    key={m.id}
+                    className="w-full flex items-center justify-between p-2 border rounded hover:bg-gray-50 text-left"
+                    onClick={() => {
+                      setItems([...items, {
+                        name: m.name,
+                        description: m.description || '',
+                        quantity: 1,
+                        unit: m.unit,
+                        unitPrice: m.unitPrice,
+                        category: 'material' as const,
+                        linkedMaterialId: m.id,
+                      }]);
+                      setShowPricePicker(false);
+                      setPriceSearch('');
+                      showToast('Item added');
+                    }}
+                  >
+                    <div>
+                      <div className="font-medium">{m.name}</div>
+                      <div className="text-xs text-muted">{m.category} • {m.supplier || 'No supplier'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(m.unitPrice)}</div>
+                      <div className="text-xs text-muted">/{m.unit}</div>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {laborRates
+                ?.filter(r => r.isActive !== false && r.name.toLowerCase().includes(priceSearch.toLowerCase()))
+                .map(r => (
+                  <button
+                    key={r.id}
+                    className="w-full flex items-center justify-between p-2 border rounded hover:bg-gray-50 text-left"
+                    onClick={() => {
+                      setItems([...items, {
+                        name: r.name,
+                        description: r.trade,
+                        quantity: 1,
+                        unit: 'hr',
+                        unitPrice: r.hourlyRate,
+                        category: 'labor' as const,
+                        linkedLaborRateId: r.id,
+                      }]);
+                      setShowPricePicker(false);
+                      setPriceSearch('');
+                      showToast('Item added');
+                    }}
+                  >
+                    <div>
+                      <div className="font-medium">{r.name}</div>
+                      <div className="text-xs text-muted">{r.trade}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(r.hourlyRate)}</div>
+                      <div className="text-xs text-muted">/hr</div>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
