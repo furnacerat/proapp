@@ -18,12 +18,19 @@ import BrandHeader from '../components/BrandHeader';
 
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
-  const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, branding, 
+  const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, branding,
     updateJob, deleteJob, duplicateJob,
     addTimeEntry, deleteTimeEntry, addExpense, deleteExpense,
     addTask, deleteTask, addInvoice, updateInvoice, deleteInvoice, addPayment, addNote, deleteNote, addPhoto, deletePhoto,
     addChangeOrder, updateChangeOrder, deleteChangeOrder, approveChangeOrder,
-    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobActualCost, getJobProfit, getJobBalance, getJobProgress, updateExpense } = useApp();
+    getJobLaborCost, getJobExpenseTotal, getJobChangeOrderTotal, getJobActualCost, getJobProfit, getJobBalance, getJobProgress, updateExpense,
+    timeline, jobLogs, punchLists, jobIssues, fileAttachments,
+    addTimelineEntry, updateTimelineEntry, deleteTimelineEntry,
+    addJobLog, updateJobLog, deleteJobLog,
+    addPunchListItem, updatePunchListItem, deletePunchListItem,
+    addJobIssue, updateJobIssue, deleteJobIssue,
+    addFileAttachment, updateFileAttachment, deleteFileAttachment,
+  } = useApp();
   const { showToast } = useToast();
   
   const job = jobs.find(j => j.id === id);
@@ -75,105 +82,50 @@ export function JobDetail() {
     }
   };
   
-  // Mock data - in real app these would come from context
-  const [timeline, setTimeline] = useState<JobTimelineEntry[]>([]);
-  const [jobLogs, setJobLogs] = useState<JobLog[]>([]);
-  const [punchList, setPunchList] = useState<PunchListItem[]>([]);
-  const [issues, setIssues] = useState<JobIssue[]>([]);
-  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
-  
   // Add timeline entry
   const handleAddTimelineEntry = () => {
     if (!timelineForm.title) { showToast('Enter a title', 'error'); return; }
-    const entry: JobTimelineEntry = {
-      id: crypto.randomUUID(),
-      jobId: job.id,
-      type: timelineForm.type,
-      title: timelineForm.title,
-      description: timelineForm.description,
-      timestamp: new Date().toISOString(),
-    };
-    setTimeline([entry, ...timeline]);
+    addTimelineEntry({ jobId: job.id, type: timelineForm.type, title: timelineForm.title, description: timelineForm.description, timestamp: new Date().toISOString() });
     showToast('Timeline entry added');
     setTimelineForm({ type: 'note', title: '', description: '' });
     setShowModal(null);
   };
-  
+
   // Add daily log
   const handleAddJobLog = () => {
     if (!jobLogForm.workCompleted) { showToast('Enter work completed', 'error'); return; }
-    const log: JobLog = {
-      id: crypto.randomUUID(),
-      jobId: job.id,
-      date: jobLogForm.date,
-      workCompleted: jobLogForm.workCompleted,
-      workers: jobLogForm.workers.split(',').map(w => w.trim()).filter(Boolean),
-      issues: jobLogForm.issues,
-      notes: jobLogForm.notes,
-      hoursWorked: parseFloat(jobLogForm.hoursWorked) || 0,
-      createdAt: new Date().toISOString(),
-    };
-    setJobLogs([log, ...jobLogs]);
+    addJobLog({ jobId: job.id, date: jobLogForm.date, workCompleted: jobLogForm.workCompleted, workers: jobLogForm.workers.split(',').map(w => w.trim()).filter(Boolean), issues: jobLogForm.issues, notes: jobLogForm.notes, hoursWorked: parseFloat(jobLogForm.hoursWorked) || 0 });
     showToast('Daily log added');
     setJobLogForm({ date: new Date().toISOString().split('T')[0], workCompleted: '', workers: '', issues: '', notes: '', hoursWorked: '0' });
     setShowModal(null);
   };
-  
+
   // Add punch list item
   const handleAddPunchListItem = () => {
     if (!punchListForm.description) { showToast('Enter description', 'error'); return; }
-    const item: PunchListItem = {
-      id: crypto.randomUUID(),
-      jobId: job.id,
-      description: punchListForm.description,
-      status: punchListForm.status,
-      createdAt: new Date().toISOString(),
-    };
-    setPunchList([...punchList, item]);
+    addPunchListItem({ jobId: job.id, description: punchListForm.description, status: punchListForm.status });
     showToast('Punch list item added');
     setPunchListForm({ description: '', status: 'open' });
     setShowModal(null);
   };
-  
+
   // Update punch list item
-  const handleUpdatePunchListItem = (id: string, status: PunchListItem['status']) => {
-    setPunchList(punchList.map(item => 
-      item.id === id ? { ...item, status, completedAt: status === 'done' ? new Date().toISOString() : undefined } : item
-    ));
+  const handleUpdatePunchListItem = (itemId: string, status: PunchListItem['status']) => {
+    updatePunchListItem(itemId, { status, completedAt: status === 'done' ? new Date().toISOString() : undefined });
   };
-  
+
   // Add issue
   const handleAddIssue = () => {
     if (!issueForm.title) { showToast('Enter issue title', 'error'); return; }
-    const issue: JobIssue = {
-      id: crypto.randomUUID(),
-      jobId: job.id,
-      title: issueForm.title,
-      description: issueForm.description,
-      severity: issueForm.severity,
-      status: issueForm.status,
-      estimatedCost: issueForm.estimatedCost ? parseFloat(issueForm.estimatedCost) : undefined,
-      estimatedHours: issueForm.estimatedHours || undefined,
-      createdAt: new Date().toISOString(),
-    };
-    setIssues([...issues, issue]);
+    addJobIssue({ jobId: job.id, title: issueForm.title, description: issueForm.description, severity: issueForm.severity, status: issueForm.status, estimatedCost: issueForm.estimatedCost ? parseFloat(issueForm.estimatedCost) : undefined, estimatedHours: issueForm.estimatedHours || undefined });
     showToast('Issue logged');
     setIssueForm({ title: '', description: '', severity: 'medium', status: 'open', estimatedCost: '', estimatedHours: '' });
     setShowModal(null);
   };
-  
+
   // Update issue
-  const handleUpdateIssue = (id: string, updates: Partial<JobIssue>) => {
-    setIssues(issues.map(issue => {
-      if (issue.id === id) {
-        const updated = { ...issue, ...updates };
-        if (updates.status === 'resolved') {
-          updated.resolvedAt = new Date().toISOString();
-        }
-        return updated;
-      }
-      return issue;
-    }));
+  const handleUpdateIssue = (issueId: string, updates: Partial<JobIssue>) => {
+    updateJobIssue(issueId, updates);
   };
 
   const jobTimeEntries = useMemo(() => timeEntries.filter(t => t.jobId === id), [timeEntries, id]);
@@ -183,6 +135,11 @@ export function JobDetail() {
   const jobNotes = useMemo(() => notes.filter(n => n.jobId === id), [notes, id]);
   const jobPhotos = useMemo(() => photos.filter(p => p.jobId === id), [photos, id]);
   const jobChangeOrders = useMemo(() => changeOrders.filter(co => co.jobId === id), [changeOrders, id]);
+  const jobTimeline = useMemo(() => (timeline || []).filter(t => t.jobId === id), [timeline, id]);
+  const jobLogEntries = useMemo(() => (jobLogs || []).filter(l => l.jobId === id), [jobLogs, id]);
+  const jobPunchList = useMemo(() => (punchLists || []).filter(p => p.jobId === id), [punchLists, id]);
+  const jobIssueEntries = useMemo(() => (jobIssues || []).filter(i => i.jobId === id), [jobIssues, id]);
+  const jobAttachments = useMemo(() => (fileAttachments || []).filter(f => f.jobId === id), [fileAttachments, id]);
 
   const profit = useMemo(() => getJobProfit(id!), [id, job, getJobProfit]);
   const balance = useMemo(() => getJobBalance(id!), [id, jobInvoices, payments]);
@@ -780,7 +737,7 @@ export function JobDetail() {
                 <div className="text-center text-muted py-8">No timeline entries yet</div>
               ) : (
                 <div className="space-y-3">
-                  {timeline.map(entry => (
+                  {jobTimeline.map(entry => (
                     <div key={entry.id} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                         {entry.type === 'photo' ? <Camera size={14} /> : entry.type === 'payment' ? <Receipt size={14} /> : entry.type === 'change_order' ? <Edit size={14} /> : <Clock size={14} />}
@@ -805,11 +762,11 @@ export function JobDetail() {
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('dailylog')}>+ Add Log</button>
             </div>
             <div className="card-body">
-              {jobLogs.length === 0 ? (
+              {jobLogEntries.length === 0 ? (
                 <div className="text-center text-muted py-8">No daily logs yet</div>
               ) : (
                 <div className="space-y-4">
-                  {jobLogs.map(log => (
+                  {jobLogEntries.map(log => (
                     <div key={log.id} className="p-4 border rounded-lg">
                       <div className="flex justify-between items-start mb-2">
                         <div className="font-medium">{formatDate(log.date)}</div>
@@ -830,15 +787,15 @@ export function JobDetail() {
         {activeTab === 'punchlist' && (
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Punch List ({punchList.length})</h3>
+              <h3 className="card-title">Punch List ({jobPunchList.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('punchlist')}>+ Add Item</button>
             </div>
             <div className="card-body">
-              {punchList.length === 0 ? (
+              {jobPunchList.length === 0 ? (
                 <div className="text-center text-muted py-8">No punch list items yet</div>
               ) : (
                 <div className="space-y-2">
-                  {punchList.map(item => (
+                  {jobPunchList.map(item => (
                     <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <button className={`btn btn-sm btn-icon ${item.status === 'done' ? 'btn-success' : 'btn-secondary'}`} onClick={() => handleUpdatePunchListItem(item.id, item.status === 'done' ? 'open' : 'done')}>
@@ -858,15 +815,15 @@ export function JobDetail() {
         {activeTab === 'issues' && (
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Issues ({issues.length})</h3>
+              <h3 className="card-title">Issues ({jobIssueEntries.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('issue')}>+ Log Issue</button>
             </div>
             <div className="card-body">
-              {issues.length === 0 ? (
+              {jobIssueEntries.length === 0 ? (
                 <div className="text-center text-muted py-8">No issues logged</div>
               ) : (
                 <div className="space-y-3">
-                  {issues.map(issue => (
+                  {jobIssueEntries.map(issue => (
                     <div key={issue.id} className={`p-4 border rounded-lg border-l-4 ${issue.severity === 'critical' ? 'border-l-red-500' : issue.severity === 'high' ? 'border-l-orange-500' : 'border-l-yellow-500'}`}>
                       <div className="flex justify-between items-start mb-2">
                         <div className="font-medium">{issue.title}</div>
@@ -895,15 +852,15 @@ export function JobDetail() {
         {activeTab === 'files' && (
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">File Attachments ({attachments.length})</h3>
+              <h3 className="card-title">File Attachments ({jobAttachments.length})</h3>
               <button className="btn btn-sm btn-primary" onClick={() => setShowModal('file')}>+ Add File</button>
             </div>
             <div className="card-body">
-              {attachments.length === 0 ? (
+              {jobAttachments.length === 0 ? (
                 <div className="text-center text-muted py-8">No files attached</div>
               ) : (
                 <div className="grid-3 gap-3">
-                  {attachments.map(file => (
+                  {jobAttachments.map(file => (
                     <div key={file.id} className="p-3 bg-gray-50 rounded-lg flex items-center gap-3">
                       <div className="flex-shrink-0"><File size={20} /></div>
                       <div className="flex-1 min-w-0">
@@ -1327,7 +1284,7 @@ export function JobDetail() {
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
           <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => { setAttachments([...attachments, { ...fileForm, id: crypto.randomUUID(), jobId: job.id, size: fileForm.size || 0, createdAt: new Date().toISOString(), category: fileForm.category || 'document' }]); showToast('File added'); setShowModal(null); setFileForm({ name: '', url: '', type: '', size: 0, category: '' }); }}>Add File</button>
+          <button className="btn btn-primary" onClick={() => { addFileAttachment({ jobId: job.id, name: fileForm.name, url: fileForm.url, type: fileForm.type, size: fileForm.size || 0, category: fileForm.category || 'document' }); showToast('File added'); setShowModal(null); setFileForm({ name: '', url: '', type: '', size: 0, category: '' }); }}>Add File</button>
         </div>
       </Modal>
 

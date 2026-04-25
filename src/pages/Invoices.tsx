@@ -84,11 +84,15 @@ export function Invoices() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Invoices &amp; Payments</h1>
+        <div>
+          <div className="page-eyebrow">Finance</div>
+          <h1 className="page-title">Invoices &amp; Payments</h1>
+          <p className="page-subtitle">Track invoicing, payments received, and outstanding balances across all jobs.</p>
+        </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={18} /> Create Invoice</button>
       </div>
       <div className="page-content">
-        <div className="kpi-grid mb-4">
+        <div className="kpi-grid mb-6">
           <div className="kpi-card"><div className="kpi-label">Total Invoiced</div><div className="kpi-value kpi-primary">{formatCurrency(totalInvoiced)}</div></div>
           <div className="kpi-card"><div className="kpi-label">Total Paid</div><div className="kpi-value kpi-success">{formatCurrency(totalPaidInv)}</div></div>
           <div className="kpi-card"><div className="kpi-label">Outstanding</div><div className="kpi-value kpi-accent">{formatCurrency(totalInvoiced - totalPaidInv)}</div></div>

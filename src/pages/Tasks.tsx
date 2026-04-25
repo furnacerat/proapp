@@ -74,13 +74,39 @@ export function Tasks() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Tasks</h1>
+        <div>
+          <div className="page-eyebrow">Planning</div>
+          <h1 className="page-title">Tasks</h1>
+          <p className="page-subtitle">Assign, track, and complete tasks across all active jobs and crew members.</p>
+        </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <Plus size={18} /> Add Task
         </button>
       </div>
-      
+
       <div className="page-content">
+        <div className="kpi-grid mb-6">
+          <div className="kpi-card">
+            <div className="kpi-label">Open Tasks</div>
+            <div className="kpi-value kpi-primary">{tasks.filter(t => t.status === 'open').length}</div>
+            <div className="kpi-sub">{tasks.filter(t => t.status === 'in_progress').length} in progress</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Overdue</div>
+            <div className="kpi-value kpi-danger">{tasks.filter(t => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length}</div>
+            <div className="kpi-sub">past due date</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Completed</div>
+            <div className="kpi-value kpi-success">{tasks.filter(t => t.status === 'done').length}</div>
+            <div className="kpi-sub">done</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">High Priority</div>
+            <div className="kpi-value">{tasks.filter(t => t.priority === 'high').length}</div>
+            <div className="kpi-sub">urgent tasks</div>
+          </div>
+        </div>
         <div className="filters">
           <div className="search-bar">
             <Search />

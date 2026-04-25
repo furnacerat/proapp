@@ -16,7 +16,9 @@ import {
   DollarSign,
   FilePlus,
   Settings,
-  User
+  User,
+  Truck,
+  ShoppingCart,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -65,6 +67,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <NavLink to="/estimates/pricebook" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
             <DollarSign size={20} />
             <span>Price Book</span>
+          </NavLink>
+          <NavLink to="/estimates/orders" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+            <ShoppingCart size={20} />
+            <span>Orders</span>
+          </NavLink>
+          <NavLink to="/estimates/suppliers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+            <Truck size={20} />
+            <span>Suppliers</span>
           </NavLink>
         </div>
         <div className="nav-section">

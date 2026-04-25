@@ -144,15 +144,41 @@ const handleSave = () => {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Jobs</h1>
+        <div>
+          <div className="page-eyebrow">Operations</div>
+          <h1 className="page-title">Jobs</h1>
+          <p className="page-subtitle">Manage active projects, track progress, and monitor profitability across all job sites.</p>
+        </div>
         <div className="page-actions">
           <button className="btn btn-primary" onClick={() => openModal()}>
             <Plus size={18} /> New Job
           </button>
         </div>
       </div>
-      
+
       <div className="page-content">
+        <div className="kpi-grid mb-6">
+          <div className="kpi-card">
+            <div className="kpi-label">Active Jobs</div>
+            <div className="kpi-value kpi-primary">{jobs.filter(j => j.status === 'active').length}</div>
+            <div className="kpi-sub">{formatCurrency(jobs.filter(j => j.status === 'active').reduce((s, j) => s + j.contractAmount, 0))} contracted</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Scheduled</div>
+            <div className="kpi-value">{jobs.filter(j => j.status === 'scheduled').length}</div>
+            <div className="kpi-sub">{formatCurrency(jobs.filter(j => j.status === 'scheduled').reduce((s, j) => s + j.contractAmount, 0))} value</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Completed</div>
+            <div className="kpi-value">{jobs.filter(j => j.status === 'completed' || j.status === 'closed').length}</div>
+            <div className="kpi-sub">{formatCurrency(jobs.filter(j => j.status === 'completed' || j.status === 'closed').reduce((s, j) => s + j.contractAmount, 0))} closed</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Total Revenue</div>
+            <div className="kpi-value">{formatCurrency(jobs.reduce((s, j) => s + j.contractAmount, 0))}</div>
+            <div className="kpi-sub">{jobs.length} total jobs</div>
+          </div>
+        </div>
         <div className="filters">
           <div className="search-bar">
             <Search />

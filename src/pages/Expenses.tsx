@@ -78,14 +78,18 @@ export function Expenses() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Expenses</h1>
+        <div>
+          <div className="page-eyebrow">Finance</div>
+          <h1 className="page-title">Expenses</h1>
+          <p className="page-subtitle">Track job costs, vendor invoices, and material purchases across all active projects.</p>
+        </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <Plus size={18} /> Add Expense
         </button>
       </div>
-      
+
       <div className="page-content">
-        <div className="kpi-grid mb-4">
+        <div className="kpi-grid mb-6">
           <div className="kpi-card">
             <div className="kpi-label">Total Expenses</div>
             <div className="kpi-value">{formatCurrency(totalAmount)}</div>

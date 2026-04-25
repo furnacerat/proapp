@@ -126,26 +126,28 @@ export function EstimateBuilder() {
 
   const allScopes = estimate?.scopes ?? [];
   const legacySections = estimate?.sections ?? [];
+  const lineTotal = (item: Pick<EstimateLineItem, 'quantity' | 'unitPrice'>) => (item.quantity || 0) * (item.unitPrice || 0);
   
   const getScopeTotals = (scope: EstimateScope) => {
-    let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0;
+    let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0, subtotal = 0;
     scope.sections?.forEach(section => {
       section.lineItems?.forEach(item => {
         if (item.isExcluded) return;
+        const total = lineTotal(item);
         itemsCount++;
         if (item.isLabor || item.category === 'labor') {
-          laborTotal += item.total;
+          laborTotal += total;
           hours += item.hours || 0;
         } else if (item.category === 'material') {
-          materialTotal += item.total;
+          materialTotal += total;
         } else if (item.category === 'equipment') {
-          equipmentTotal += item.total;
+          equipmentTotal += total;
         } else if (item.category === 'subcontractor') {
-          subcontractorTotal += item.total;
+          subcontractorTotal += total;
         }
+        subtotal += total;
       });
     });
-    const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
     return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, hours, itemsCount };
   };
   
@@ -167,21 +169,24 @@ export function EstimateBuilder() {
     legacySections.forEach(section => {
       section.lineItems?.forEach(item => {
         if (item.isExcluded) return;
+        const total = lineTotal(item);
         itemsCount++;
         if (item.isLabor || item.category === 'labor') {
-          laborTotal += item.total;
+          laborTotal += total;
           hours += item.hours || 0;
         } else if (item.category === 'material') {
-          materialTotal += item.total;
+          materialTotal += total;
         } else if (item.category === 'equipment') {
-          equipmentTotal += item.total;
+          equipmentTotal += total;
         } else if (item.category === 'subcontractor') {
-          subcontractorTotal += item.total;
+          subcontractorTotal += total;
         }
       });
     });
     
-    const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
+    const subtotal = [...allScopes.flatMap(scope => scope.sections?.flatMap(section => section.lineItems || []) || []), ...legacySections.flatMap(section => section.lineItems || [])]
+      .filter(item => !item.isExcluded)
+      .reduce((sum, item) => sum + lineTotal(item), 0);
     const markupAmount = subtotal * (estimate.markupPercent / 100);
     const total = subtotal + markupAmount;
     
@@ -583,10 +588,13 @@ export function EstimateBuilder() {
       quantity: item.quantity,
       unit: item.unit || 'ea',
       unitPrice: item.unitPrice,
-      category: item.category,
+      category: item.category as EstimateLineCategory,
       isLabor: item.category === 'labor',
-      hours: item.laborHours ? item.laborHours * item.quantity : undefined,
+      hours: item.category === 'labor' ? item.quantity : undefined,
       total: item.quantity * item.unitPrice,
+      isAllowance: item.category === 'allowance',
+      linkedMaterialId: item.linkedMaterialId,
+      linkedLaborRateId: item.linkedLaborRateId,
     })) || [];
     
     if (activeScopeId && activeSectionId) {
@@ -869,92 +877,61 @@ export function EstimateBuilder() {
   return (
     <div className="estimate-builder">
       {/* HEADER BAR */}
-      <div className="page-header flex flex-wrap justify-between items-center bg-white border-b sticky top-0 z-50 px-6 py-3 gap-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          <Link to="/estimates" className="btn btn-icon shrink-0">
-            <ArrowLeft size={18} />
-          </Link>
-          <div className="flex items-center gap-3 flex-wrap">
-            <input
-              className="text-xl font-semibold bg-transparent border-none outline-none hover:border hover:border-gray-300 rounded px-2 py-1 max-w-full"
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-            />
-            <span className={`badge ${getStatusBadge(estimate.status)} shrink-0`}>
-              {estimate.status.replace('_', ' ')}
-            </span>
+      <div className="page-header sticky top-0 z-50">
+        <div>
+          <div className="page-eyebrow">Estimating</div>
+          <div className="flex items-center gap-3">
+            <h1 className="page-title">{estimate.name}</h1>
+            <span className={`badge ${getStatusBadge(estimate.status)}`}>{estimate.status.replace('_', ' ')}</span>
           </div>
+          <p className="page-subtitle">{estimate.estimateNumber} &nbsp;&bull;&nbsp; {customer?.name || 'No customer'} &nbsp;&bull;&nbsp; {estimate.address || 'No address'}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button className="btn btn-secondary shrink-0" onClick={() => setShowProposal(true)}>
-            <Eye size={16} /> Preview
-          </button>
-          <button className="btn btn-secondary shrink-0" onClick={handlePrint} title="Preview & Print — Client Only View">
-            <Printer size={16} /> Preview &amp; Print
-          </button>
+        <div className="page-actions">
+          <button className="btn btn-secondary shrink-0" onClick={() => setShowProposal(true)}><Eye size={16} /> Preview</button>
+          <button className="btn btn-secondary shrink-0" onClick={handlePrint} title="Preview & Print — Client Only View"><Printer size={16} /> Preview &amp; Print</button>
           <button className="btn btn-secondary shrink-0" onClick={() => {
-            // Email with branding signature if available
             const brandingSig = branding?.brandName ? `\n\n${branding.brandName}` + (branding.logoUrl ? `\n${branding.logoUrl}` : '') : '';
-            const subjectText = `Estimate: ${estimate.name}`;
             const bodyBase = `Hi ${customer?.name || 'Customer'},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`;
-            const body = bodyBase + brandingSig;
-            handleEmailWithFallback(subjectText, body, customer?.email);
-          }}>
-            <Send size={16} /> Email
-          </button>
+            handleEmailWithFallback(`Estimate: ${estimate.name}`, bodyBase + brandingSig, customer?.email);
+          }}><Send size={16} /> Email</button>
           {estimate.status === 'draft' && (
-            <button className="btn btn-secondary shrink-0" onClick={() => updateEstimate(estimate.id, { status: 'sent' })}>
-              <Send size={16} /> Mark Sent
-            </button>
+            <button className="btn btn-secondary shrink-0" onClick={() => updateEstimate(estimate.id, { status: 'sent' })}><Send size={16} /> Mark Sent</button>
           )}
           {estimate.status === 'approved' && !estimate.convertedToJobId && (
-            <button className="btn btn-success shrink-0" onClick={() => setShowConvertConfirm(true)}>
-              <Briefcase size={16} /> Convert to Job
-            </button>
+            <button className="btn btn-success shrink-0" onClick={() => setShowConvertConfirm(true)}><Briefcase size={16} /> Convert to Job</button>
           )}
-          <Link to={`/estimates/${estimate.id}/materials`} className="btn btn-secondary shrink-0">
-            <Package size={16} /> Materials List
-          </Link>
+          <Link to={`/estimates/${estimate.id}/materials`} className="btn btn-secondary shrink-0"><Package size={16} /> Materials</Link>
           {estimate.convertedToJobId && (
-            <Link to={`/jobs/${estimate.convertedToJobId}`} className="btn btn-secondary shrink-0">
-              <FileCheck size={16} /> View Job
-            </Link>
+            <Link to={`/jobs/${estimate.convertedToJobId}`} className="btn btn-secondary shrink-0"><FileCheck size={16} /> View Job</Link>
           )}
-          <button className="btn btn-primary shrink-0" onClick={handleSave}>
-            <Save size={16} /> Save
-          </button>
+          <button className="btn btn-primary shrink-0" onClick={handleSave}><Save size={16} /> Save</button>
         </div>
       </div>
 
-      {/* STICKY SUMMARY BAR */}
-      <div className="sticky top-[73px] z-40 bg-slate-800 text-white px-6 py-3 flex flex-wrap items-center justify-between shadow-lg gap-4">
-        <div className="flex flex-wrap items-center gap-4 sm:gap-8">
-          <div>
-            <div className="text-xs text-slate-400">Total</div>
-            <div className="text-2xl font-bold">{formatCurrency(totals.total)}</div>
+      {/* KPI STRIP */}
+      <div className="page-content p-6 pt-4">
+        <div className="kpi-grid mb-6">
+          <div className="kpi-card">
+            <div className="kpi-label">Total</div>
+            <div className="kpi-value kpi-primary">{formatCurrency(totals.total)}</div>
+            <div className="kpi-sub">{totals.itemsCount} items &bull; {totals.hours}h labor</div>
           </div>
-          <div>
-            <div className="text-xs text-slate-400">Labor</div>
-            <div className="text-lg">{formatCurrency(totals.laborTotal)}</div>
+          <div className="kpi-card">
+            <div className="kpi-label">Labor</div>
+            <div className="kpi-value">{formatCurrency(totals.laborTotal)}</div>
+            <div className="kpi-sub">{totals.hours}h projected</div>
           </div>
-          <div>
-            <div className="text-xs text-slate-400">Materials</div>
-            <div className="text-lg">{formatCurrency(totals.materialTotal)}</div>
+          <div className="kpi-card">
+            <div className="kpi-label">Materials</div>
+            <div className="kpi-value">{formatCurrency(totals.materialTotal)}</div>
+            <div className="kpi-sub">materials &amp; equipment</div>
           </div>
-          <div>
-            <div className="text-xs text-slate-400">Markup ({estimate.markupPercent}%)</div>
-            <div className="text-lg">{formatCurrency(totals.markupAmount)}</div>
+          <div className="kpi-card">
+            <div className="kpi-label">Markup ({estimate.markupPercent}%)</div>
+            <div className="kpi-value">{formatCurrency(totals.markupAmount)}</div>
+            <div className="kpi-sub">on {estimate.markupPercent}% of subtotal</div>
           </div>
         </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <div className="text-sm text-slate-400">
-            {totals.itemsCount} items • {totals.hours}h labor
-          </div>
-        </div>
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div className="page-content p-6 print-area">
         {allScopes.length === 0 && legacySections.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">📋</div>
@@ -972,12 +949,9 @@ export function EstimateBuilder() {
               const isExpanded = activeScopeId === scope.id || activeScopeId === null;
               
               return (
-                <div key={scope.id} className="scope-card border-2 border-blue-200 rounded-xl overflow-hidden">
+                <div key={scope.id} className="card">
                   {/* SCOPE HEADER */}
-                  <div 
-                    className="scope-header bg-blue-50 px-5 py-4 flex items-center justify-between cursor-pointer"
-                    onClick={() => setActiveScopeId(activeScopeId === scope.id ? null : scope.id)}
-                  >
+                  <div className="card-header" onClick={() => setActiveScopeId(activeScopeId === scope.id ? null : scope.id)}>
                     <div className="flex items-center gap-4">
                       {editingScope?.id === scope.id ? (
                         <input
@@ -1020,36 +994,22 @@ export function EstimateBuilder() {
 
                   {/* SCOPE CONTENT */}
                   {isExpanded && (
-                    <div className="scope-content bg-white">
-                      {/* CHECKLIST BUTTON */}
-                      <div className="px-5 py-3 border-b flex items-center justify-between bg-slate-50">
-                        <button 
-                          className="btn btn-sm btn-secondary"
-                          onClick={() => { setActiveScopeId(scope.id); handleChecklistSelectTemplate(projectTypeTemplates[0]); }}
-                        >
-                          <CheckSquare size={14} /> Add from Checklist
-                        </button>
-                        <button 
-                          className="btn btn-sm btn-primary"
-                          onClick={() => { setActiveScopeId(scope.id); setShowAddSection(true); }}
-                        >
-                          <Plus size={14} /> Add Section
-                        </button>
+                    <div className="card-body p-0">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 border-b">
+                        <div className="flex gap-2">
+                          <button className="btn btn-sm btn-secondary" onClick={() => { setActiveScopeId(scope.id); handleChecklistSelectTemplate(projectTypeTemplates[0]); }}><CheckSquare size={14} /> Checklist</button>
+                        </div>
+                        <button className="btn btn-sm btn-primary" onClick={() => { setActiveScopeId(scope.id); setShowAddSection(true); }}><Plus size={14} /> Add Section</button>
                       </div>
-
-                      {/* SECTIONS */}
-                      <div className="sections p-5 space-y-4">
+                      <div className="p-4 space-y-4">
                         {scope.sections?.map((section, sectionIndex) => {
                           const sectionTotals = getScopeTotals({ ...scope, sections: [section] });
                           const isSectionExpanded = activeSectionId === section.id;
                           
                           return (
-                            <div key={section.id} className="section-card border rounded-lg">
+                            <div key={section.id} className="card">
                               {/* SECTION HEADER */}
-                              <div 
-                                className="section-header bg-gray-50 px-4 py-3 flex items-center justify-between cursor-pointer"
-                                onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(activeSectionId === section.id ? null : section.id); }}
-                              >
+                              <div className="card-header" onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(activeSectionId === section.id ? null : section.id); }}>
                                 <div className="flex items-center gap-3">
                                   {editingSection?.id === section.id ? (
                                     <input
@@ -1091,14 +1051,14 @@ export function EstimateBuilder() {
                                     >
                                       <Trash2 size={14} />
                                     </button>
-                                    {isSectionExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+{isSectionExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              {/* SECTION CONTENT */}
-                              {isSectionExpanded && (
-                                <div className="section-content p-4">
+                                {/* SECTION CONTENT */}
+                                {isSectionExpanded && (
+                                  <div className="card-body">
                                   {!section.lineItems?.length ? (
                                     <div className="text-center py-6 text-muted">
                                       No items yet. Add items or assemblies.
@@ -1184,11 +1144,8 @@ export function EstimateBuilder() {
                 <h3 className="font-medium text-muted mb-4">Legacy Sections</h3>
                 <div className="space-y-4">
                   {legacySections.map((section) => (
-                    <div key={section.id} className="section-card border rounded-lg">
-                      <div 
-                        className="section-header bg-gray-50 px-4 py-3 flex items-center justify-between cursor-pointer"
-                        onClick={() => setActiveSectionId(activeSectionId === section.id ? null : section.id)}
-                      >
+                    <div key={section.id} className="card">
+                      <div className="card-header" onClick={() => setActiveSectionId(activeSectionId === section.id ? null : section.id)}>
                         <div className="flex items-center gap-3">
                           <h4 className="font-medium">{section.name}</h4>
                           <span className="badge badge-gray">{section.lineItems?.length || 0} items</span>
@@ -1196,7 +1153,7 @@ export function EstimateBuilder() {
                         {activeSectionId === section.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                       </div>
                       {activeSectionId === section.id && (
-                        <div className="p-4 border-t">
+                        <div className="card-body">
                           <div className="flex justify-end mb-3 gap-2">
                             <button className="btn btn-sm btn-secondary" onClick={() => setShowPricePicker(true)}>
                               <Search size={14} /> From Price List
@@ -1237,29 +1194,6 @@ export function EstimateBuilder() {
             )}
           </div>
         )}
-
-        {/* FLOATING QUICK ADD */}
-        <div className="fixed bottom-6 right-6 z-50">
-          <div className="relative group">
-            <button className="btn btn-primary btn-lg rounded-full w-14 h-14 flex items-center justify-center shadow-lg">
-              <Plus size={24} />
-            </button>
-            <div className="absolute bottom-14 right-0 mb-2 space-y-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
-              <button className="btn btn-secondary w-full justify-end" onClick={() => setShowAddScope(true)}>
-                <CheckSquare size={16} /> Add Scope
-              </button>
-              <button className="btn btn-secondary w-full justify-end" onClick={() => setShowAddSection(true)}>
-                <FolderOpen size={16} /> Add Section
-              </button>
-              <button className="btn btn-secondary w-full justify-end" onClick={() => setShowAddItem(true)}>
-                <Plus size={16} /> Add Item
-              </button>
-              <button className="btn btn-secondary w-full justify-end" onClick={() => setShowAssemblyPicker(true)}>
-                <Package size={16} /> Add Assembly
-              </button>
-            </div>
-          </div>
-        </div>
 
         {/* FOOTER */}
         <div className="flex justify-between text-sm text-muted mt-8 pt-4 border-t">
@@ -1454,6 +1388,7 @@ export function EstimateBuilder() {
               <option value="labor">Labor</option>
               <option value="equipment">Equipment</option>
               <option value="subcontractor">Subcontractor</option>
+              <option value="allowance">Allowance</option>
               <option value="other">Other</option>
             </select>
           </div>

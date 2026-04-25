@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 
 interface AppContextType {
@@ -77,16 +77,44 @@ interface AppContextType {
   addPhoto: (photo: Omit<PhotoType, 'id' | 'createdAt'>) => void;
   deletePhoto: (id: string) => void;
   
-  addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) => void;
+addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateChangeOrder: (id: string, updates: Partial<ChangeOrderType>) => void;
   deleteChangeOrder: (id: string) => void;
   approveChangeOrder: (id: string) => void;
-  
+
   addJobTemplate: (template: Omit<JobTemplateType, 'id' | 'createdAt'>) => void;
   updateJobTemplate: (id: string, updates: Partial<JobTemplateType>) => void;
   deleteJobTemplate: (id: string) => void;
   createJobFromTemplate: (templateId: string, name: string, address: string, customer: string) => void;
-  
+
+  addTimelineEntry: (entry: Omit<JobTimelineEntry, 'id'>) => void;
+  updateTimelineEntry: (id: string, updates: Partial<JobTimelineEntry>) => void;
+  deleteTimelineEntry: (id: string) => void;
+
+  addJobLog: (log: Omit<JobLog, 'id' | 'createdAt'>) => void;
+  updateJobLog: (id: string, updates: Partial<JobLog>) => void;
+  deleteJobLog: (id: string) => void;
+
+  addPunchListItem: (item: Omit<PunchListItem, 'id' | 'createdAt'>) => void;
+  updatePunchListItem: (id: string, updates: Partial<PunchListItem>) => void;
+  deletePunchListItem: (id: string) => void;
+
+  addJobIssue: (issue: Omit<JobIssue, 'id' | 'createdAt'>) => void;
+  updateJobIssue: (id: string, updates: Partial<JobIssue>) => void;
+  deleteJobIssue: (id: string) => void;
+
+  addFileAttachment: (file: Omit<FileAttachment, 'id' | 'createdAt'>) => void;
+  updateFileAttachment: (id: string, updates: Partial<FileAttachment>) => void;
+  deleteFileAttachment: (id: string) => void;
+
+  addSupplier: (supplier: Omit<Supplier, 'id' | 'createdAt'>) => string;
+  updateSupplier: (id: string, updates: Partial<Supplier>) => void;
+  deleteSupplier: (id: string) => void;
+
+  addMaterialOrder: (order: Omit<MaterialOrder, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateMaterialOrder: (id: string, updates: Partial<MaterialOrder>) => void;
+  deleteMaterialOrder: (id: string) => void;
+
   markAlertRead: (id: string) => void;
   clearAllAlerts: () => void;
   
@@ -122,6 +150,14 @@ interface AppContextType {
   getCustomerById: (id: string) => Customer | undefined;
   getJobCustomer: (jobId: string) => Customer | undefined;
   getEstimateCustomer: (estimateId: string) => Customer | undefined;
+  
+  timeline: JobTimelineEntry[];
+  jobLogs: JobLog[];
+  punchLists: PunchListItem[];
+  jobIssues: JobIssue[];
+  fileAttachments: FileAttachment[];
+  suppliers: Supplier[];
+  materialOrders: MaterialOrder[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -140,6 +176,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           changeOrders: parsed.changeOrders || [],
           jobTemplates: parsed.jobTemplates || [],
           alerts: parsed.alerts || [],
+          timeline: parsed.timeline || [],
+          jobLogs: parsed.jobLogs || [],
+          punchLists: parsed.punchLists || [],
+          jobIssues: parsed.jobIssues || [],
+          fileAttachments: parsed.fileAttachments || [],
+          suppliers: parsed.suppliers || [],
+          materialOrders: parsed.materialOrders || [],
         };
       } catch {
         return generateCompleteSeedData();
@@ -331,14 +374,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const jobEntries = prev.timeEntries.filter(t => t.jobId === jobId);
       const jobExpenses = prev.expenses.filter(e => e.jobId === jobId);
-      const jobChangeOrders = prev.changeOrders.filter(co => co.jobId === jobId && co.status === 'approved');
-      
       const laborCost = jobEntries.reduce((sum, t) => sum + t.laborCost, 0);
       const expenseCost = jobExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const changeOrderCost = jobChangeOrders.reduce((sum, co) => sum + co.amount, 0);
       
       const updatedJobs = prev.jobs.map(j => 
-        j.id === jobId ? { ...j, actualCost: laborCost + expenseCost + changeOrderCost, updatedAt: new Date().toISOString() } : j
+        j.id === jobId ? { ...j, actualCost: laborCost + expenseCost, updatedAt: new Date().toISOString() } : j
       );
       
       return { ...prev, jobs: updatedJobs };
@@ -371,6 +411,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notes: prev.notes.filter(n => n.jobId !== id),
       photos: prev.photos.filter(p => p.jobId !== id),
       changeOrders: prev.changeOrders.filter(co => co.jobId !== id),
+      timeline: (prev.timeline || []).filter(t => t.jobId !== id),
+      jobLogs: (prev.jobLogs || []).filter(l => l.jobId !== id),
+      punchLists: (prev.punchLists || []).filter(p => p.jobId !== id),
+      jobIssues: (prev.jobIssues || []).filter(i => i.jobId !== id),
+      fileAttachments: (prev.fileAttachments || []).filter(f => f.jobId !== id),
     }));
   };
 
@@ -627,17 +672,129 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const approveChangeOrder = (id: string) => {
+const approveChangeOrder = (id: string) => {
     const co = data.changeOrders.find(c => c.id === id);
     if (!co || co.status !== 'pending') return;
-    
+
     updateChangeOrder(id, { status: 'approved' });
-    
+
     const job = data.jobs.find(j => j.id === co.jobId);
     if (job) {
       updateJob(co.jobId, { contractAmount: job.contractAmount + co.amount });
     }
     recalcJobCosts(co.jobId);
+  };
+
+  const addTimelineEntry = (entry: Omit<JobTimelineEntry, 'id'>) => {
+    setData(prev => ({
+      ...prev,
+      timeline: [...(prev.timeline || []), { ...entry, id: crypto.randomUUID() }],
+    }));
+  };
+
+  const updateTimelineEntry = (id: string, updates: Partial<JobTimelineEntry>) => {
+    setData(prev => ({
+      ...prev,
+      timeline: (prev.timeline || []).map(e => e.id === id ? { ...e, ...updates } : e),
+    }));
+  };
+
+  const deleteTimelineEntry = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      timeline: (prev.timeline || []).filter(e => e.id !== id),
+    }));
+  };
+
+  const addJobLog = (log: Omit<JobLog, 'id' | 'createdAt'>) => {
+    setData(prev => ({
+      ...prev,
+      jobLogs: [...(prev.jobLogs || []), { ...log, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+    }));
+  };
+
+  const updateJobLog = (id: string, updates: Partial<JobLog>) => {
+    setData(prev => ({
+      ...prev,
+      jobLogs: (prev.jobLogs || []).map(l => l.id === id ? { ...l, ...updates } : l),
+    }));
+  };
+
+  const deleteJobLog = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      jobLogs: (prev.jobLogs || []).filter(l => l.id !== id),
+    }));
+  };
+
+  const addPunchListItem = (item: Omit<PunchListItem, 'id' | 'createdAt'>) => {
+    setData(prev => ({
+      ...prev,
+      punchLists: [...(prev.punchLists || []), { ...item, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+    }));
+  };
+
+  const updatePunchListItem = (id: string, updates: Partial<PunchListItem>) => {
+    setData(prev => ({
+      ...prev,
+      punchLists: (prev.punchLists || []).map(p => p.id === id ? { ...p, ...updates } : p),
+    }));
+  };
+
+  const deletePunchListItem = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      punchLists: (prev.punchLists || []).filter(p => p.id !== id),
+    }));
+  };
+
+  const addJobIssue = (issue: Omit<JobIssue, 'id' | 'createdAt'>) => {
+    setData(prev => ({
+      ...prev,
+      jobIssues: [...(prev.jobIssues || []), { ...issue, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+    }));
+  };
+
+  const updateJobIssue = (id: string, updates: Partial<JobIssue>) => {
+    setData(prev => ({
+      ...prev,
+      jobIssues: (prev.jobIssues || []).map(i => {
+        if (i.id !== id) return i;
+        const updated = { ...i, ...updates };
+        if (updates.status === 'resolved') {
+          updated.resolvedAt = new Date().toISOString();
+        }
+        return updated;
+      }),
+    }));
+  };
+
+  const deleteJobIssue = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      jobIssues: (prev.jobIssues || []).filter(i => i.id !== id),
+    }));
+  };
+
+  const addFileAttachment = (file: Omit<FileAttachment, 'id' | 'createdAt'>) => {
+    setData(prev => ({
+      ...prev,
+      fileAttachments: [...(prev.fileAttachments || []), { ...file, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+    }));
+  };
+
+  const updateFileAttachment = (id: string, updates: Partial<FileAttachment>) => {
+    setData(prev => ({
+      ...prev,
+      fileAttachments: (prev.fileAttachments || []).map(f => f.id === id ? { ...f, ...updates } : f),
+    }));
+  };
+
+  const deleteFileAttachment = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      fileAttachments: (prev.fileAttachments || []).filter(f => f.id !== id),
+    }));
   };
 
   const addJobTemplate = (template: Omit<JobTemplateType, 'id' | 'createdAt'>) => {
@@ -709,8 +866,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     data.changeOrders.filter(co => co.jobId === jobId && co.status === 'approved').reduce((sum, co) => sum + co.amount, 0);
 
   const getJobActualCost = (jobId: string) => {
-    const job = data.jobs.find(j => j.id === jobId);
-    return job?.actualCost || getJobLaborCost(jobId) + getJobExpenseTotal(jobId);
+    return getJobLaborCost(jobId) + getJobExpenseTotal(jobId);
   };
 
   const getJobProfit = (jobId: string) => {
@@ -773,30 +929,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const calculateEstimateTotals = (estimate: Partial<Estimate>) => {
     const allScopes = estimate.scopes || [];
+    const legacySections = estimate.sections || [];
     let allItems: EstimateLineItem[] = [];
     const scopeTotals: Record<string, number> = {};
+    const lineTotal = (item: EstimateLineItem) => (item.quantity || 0) * (item.unitPrice || 0);
+    const isCounted = (item: EstimateLineItem) => !item.isExcluded;
     
     allScopes.forEach(scope => {
-      const scopeItems = scope.sections?.flatMap(s => s.lineItems || []) || [];
+      const scopeItems = (scope.sections?.flatMap(s => s.lineItems || []) || []).filter(isCounted);
       allItems = [...allItems, ...scopeItems];
       
-      const scopeLabor = scopeItems.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0);
-      const scopeMaterial = scopeItems.filter(i => i.category === 'material').reduce((sum, i) => sum + i.total, 0);
-      const scopeEquipment = scopeItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.total, 0);
-      const scopeSub = scopeItems.filter(i => i.category === 'subcontractor').reduce((sum, i) => sum + i.total, 0);
-      scopeTotals[scope.id] = scopeLabor + scopeMaterial + scopeEquipment + scopeSub;
+      scopeTotals[scope.id] = scopeItems.reduce((sum, i) => sum + lineTotal(i), 0);
+    });
+
+    legacySections.forEach(section => {
+      allItems = [...allItems, ...(section.lineItems || []).filter(isCounted)];
     });
     
-    const laborTotal = allItems.filter(i => i.isLabor).reduce((sum, i) => sum + i.total, 0);
-    const materialTotal = allItems.filter(i => i.category === 'material').reduce((sum, i) => sum + i.total, 0);
-    const equipmentTotal = allItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.total, 0);
-    const subcontractorTotal = allItems.filter(i => i.category === 'subcontractor').reduce((sum, i) => sum + i.total, 0);
+    const laborTotal = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((sum, i) => sum + lineTotal(i), 0);
+    const materialTotal = allItems.filter(i => i.category === 'material').reduce((sum, i) => sum + lineTotal(i), 0);
+    const equipmentTotal = allItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + lineTotal(i), 0);
+    const subcontractorTotal = allItems.filter(i => i.category === 'subcontractor').reduce((sum, i) => sum + lineTotal(i), 0);
     
-    const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
+    const subtotal = allItems.reduce((sum, i) => sum + lineTotal(i), 0);
     const markupAmount = subtotal * ((estimate.markupPercent || 0) / 100);
     const total = subtotal + markupAmount;
     
-    const projectedLaborHours = allItems.filter(i => i.isLabor).reduce((sum, i) => sum + (i.hours || 0), 0);
+    const projectedLaborHours = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((sum, i) => sum + (i.hours || 0), 0);
     const projectedMaterialCost = materialTotal;
     const projectedLaborCost = laborTotal;
     
@@ -849,6 +1008,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const duplicateEstimate = (id: string) => {
     const estimate = data.estimates.find(e => e.id === id);
     if (!estimate) return '';
+
+    const duplicateSections = (sections: NonNullable<Estimate['sections']> = []) => sections.map(section => ({
+      ...section,
+      id: crypto.randomUUID(),
+      lineItems: section.lineItems?.map(item => ({ ...item, id: crypto.randomUUID() })) || [],
+    }));
     
     const newId = addEstimate({
       estimateNumber: `EST-${new Date().getFullYear()}-${String(data.estimates.length + 1).padStart(3, '0')}`,
@@ -857,11 +1022,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       address: estimate.address,
       type: estimate.type,
       status: 'draft',
-      sections: estimate.sections?.map(section => ({
-        ...section,
+      scopes: estimate.scopes?.map(scope => ({
+        ...scope,
         id: crypto.randomUUID(),
-        lineItems: section.lineItems?.map(item => ({ ...item, id: crypto.randomUUID() })),
+        sections: duplicateSections(scope.sections || []),
       })) || [],
+      sections: duplicateSections(estimate.sections || []),
       markupPercent: estimate.markupPercent,
       taxable: estimate.taxable,
       notes: estimate.notes,
@@ -993,8 +1159,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({ ...prev, projectTypeTemplates: prev.projectTypeTemplates.filter(t => t.id !== id) }));
   };
 
-  const getProjectTypeTemplate = (projectType: JobType) => 
+  const getProjectTypeTemplate = (projectType: JobType) =>
     data.projectTypeTemplates.find(t => t.projectType === projectType);
+
+  const addSupplier = (supplier: Omit<Supplier, 'id' | 'createdAt'>) => {
+    const id = crypto.randomUUID();
+    setData(prev => ({ ...prev, suppliers: [...(prev.suppliers || []), { ...supplier, id, createdAt: new Date().toISOString() }] }));
+    return id;
+  };
+
+  const updateSupplier = (id: string, updates: Partial<Supplier>) => {
+    setData(prev => ({ ...prev, suppliers: (prev.suppliers || []).map(s => s.id === id ? { ...s, ...updates } : s) }));
+  };
+
+  const deleteSupplier = (id: string) => {
+    setData(prev => ({ ...prev, suppliers: (prev.suppliers || []).filter(s => s.id !== id) }));
+  };
+
+  const addMaterialOrder = (order: Omit<MaterialOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const id = crypto.randomUUID();
+    setData(prev => ({ ...prev, materialOrders: [...(prev.materialOrders || []), { ...order, id, createdAt: new Date().toISOString() }] }));
+    return id;
+  };
+
+  const updateMaterialOrder = (id: string, updates: Partial<MaterialOrder>) => {
+    setData(prev => ({
+      ...prev,
+      materialOrders: (prev.materialOrders || []).map(o => o.id === id ? { ...o, ...updates, updatedAt: new Date().toISOString() } : o),
+    }));
+  };
+
+  const deleteMaterialOrder = (id: string) => {
+    setData(prev => ({ ...prev, materialOrders: (prev.materialOrders || []).filter(o => o.id !== id) }));
+  };
 
   return (
     <AppContext.Provider value={{
@@ -1094,6 +1291,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       changeOrders: data.changeOrders,
       jobTemplates: data.jobTemplates,
       alerts: data.alerts,
+      timeline: data.timeline || [],
+      jobLogs: data.jobLogs || [],
+      punchLists: data.punchLists || [],
+      jobIssues: data.jobIssues || [],
+      fileAttachments: data.fileAttachments || [],
+      addTimelineEntry,
+      updateTimelineEntry,
+      deleteTimelineEntry,
+      addJobLog,
+      updateJobLog,
+      deleteJobLog,
+      addPunchListItem,
+      updatePunchListItem,
+      deletePunchListItem,
+      addJobIssue,
+      updateJobIssue,
+      deleteJobIssue,
+      addFileAttachment,
+      updateFileAttachment,
+      deleteFileAttachment,
+      suppliers: data.suppliers || [],
+      materialOrders: data.materialOrders || [],
+      addSupplier,
+      updateSupplier,
+      deleteSupplier,
+      addMaterialOrder,
+      updateMaterialOrder,
+      deleteMaterialOrder,
     }}>
       {children}
     </AppContext.Provider>

@@ -182,7 +182,7 @@ export interface TemplateItem {
 
 // ============ ESTIMATE ENTITIES ============
 
-export type EstimateLineCategory = 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other';
+export type EstimateLineCategory = 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other' | 'allowance';
 
 export interface EstimateLineItem {
   id: string;
@@ -507,6 +507,57 @@ export interface FileAttachment {
   createdAt: string;
 }
 
+export type MaterialOrderStatus = 'draft' | 'sent' | 'confirmed' | 'partially_received' | 'received' | 'cancelled';
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  website?: string;
+  leadTimeDays?: number;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface MaterialOrderItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  category: EstimateLineCategory;
+  supplier?: string;
+  supplierId?: string;
+  orderedQuantity?: number;
+  receivedQuantity?: number;
+  lineTotal: number;
+}
+
+export interface MaterialOrder {
+  id: string;
+  estimateId?: string;
+  jobId?: string;
+  supplierId?: string;
+  supplierName?: string;
+  poNumber: string;
+  status: MaterialOrderStatus;
+  items: MaterialOrderItem[];
+  subtotal: number;
+  tax?: number;
+  total: number;
+  notes?: string;
+  sentDate?: string;
+  expectedDate?: string;
+  receivedDate?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 // SMTP settings for outbound emails
 export interface SmtpSettings {
   host: string;
@@ -584,6 +635,8 @@ export interface AppData {
   punchLists?: PunchListItem[];
   jobIssues?: JobIssue[];
   fileAttachments?: FileAttachment[];
+  suppliers?: Supplier[];
+  materialOrders?: MaterialOrder[];
 }
 
 // ============ CONSTANTS ============

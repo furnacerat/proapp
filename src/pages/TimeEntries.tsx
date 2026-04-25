@@ -83,14 +83,18 @@ export function TimeEntries() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Time Entries</h1>
+        <div>
+          <div className="page-eyebrow">Field Team</div>
+          <h1 className="page-title">Time Entries</h1>
+          <p className="page-subtitle">Log crew hours, track labor costs, and monitor time against jobs and budgets.</p>
+        </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <Plus size={18} /> Add Entry
         </button>
       </div>
-      
+
       <div className="page-content">
-        <div className="kpi-grid mb-4">
+        <div className="kpi-grid mb-6">
           <div className="kpi-card">
             <div className="kpi-label">Total Hours</div>
             <div className="kpi-value">{totalHours.toFixed(1)}</div>

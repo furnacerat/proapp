@@ -86,13 +86,39 @@ export function Workers() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Workers & Contractors</h1>
+        <div>
+          <div className="page-eyebrow">Field Team</div>
+          <h1 className="page-title">Workers &amp; Contractors</h1>
+          <p className="page-subtitle">Manage crew, subcontractors, rates, and payroll from one team roster.</p>
+        </div>
         <button className="btn btn-primary" onClick={() => openModal()}>
           <Plus size={18} /> Add Worker
         </button>
       </div>
-      
+
       <div className="page-content">
+        <div className="kpi-grid mb-6">
+          <div className="kpi-card">
+            <div className="kpi-label">Total Workers</div>
+            <div className="kpi-value kpi-primary">{workers.length}</div>
+            <div className="kpi-sub">{formatCurrency(workers.filter(w => w.status === 'active').reduce((s, w) => s + (w.hourlyRate || 0), 0))} blended rate</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Active</div>
+            <div className="kpi-value kpi-success">{workers.filter(w => w.status === 'active').length}</div>
+            <div className="kpi-sub">{workers.filter(w => w.status === 'active' && w.type === 'employee').length} employees</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Subcontractors</div>
+            <div className="kpi-value">{workers.filter(w => w.type === 'subcontractor' && w.status === 'active').length}</div>
+            <div className="kpi-sub">on your roster</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Avg Hourly Rate</div>
+            <div className="kpi-value">{formatCurrency(workers.reduce((s, w) => s + (w.hourlyRate || 0), 0) / (workers.length || 1))}</div>
+            <div className="kpi-sub">across all workers</div>
+          </div>
+        </div>
         <div className="filters">
           <div className="search-bar">
             <Search />
