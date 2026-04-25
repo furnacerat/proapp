@@ -346,10 +346,10 @@ export function AssembliesLibrary() {
             </div>
             <div className="flex gap-2 mb-2 text-xs font-medium text-muted">
               <div className="flex-1">Item</div>
-              <div className="w-12 text-center">Qty</div>
-              <div className="w-12 text-center">Unit</div>
-              <div className="w-20 text-right">Price</div>
-              <div className="w-28 text-center">Category</div>
+              <div className="w-10 text-center">Qty</div>
+              <div className="w-10 text-center">Unit</div>
+              <div className="w-16 text-right">Price</div>
+              <div className="w-32 text-center">Category</div>
               <div className="w-8"></div>
             </div>
             <div className="space-y-2">
@@ -363,7 +363,7 @@ export function AssembliesLibrary() {
                       placeholder="Item name"
                     />
                   </div>
-                  <div className="w-12">
+                  <div className="w-10">
                     <input
                       className="form-input text-center"
                       type="number"
@@ -372,7 +372,7 @@ export function AssembliesLibrary() {
                       placeholder="1"
                     />
                   </div>
-                  <div className="w-12">
+                  <div className="w-10">
                     <input
                       className="form-input text-center"
                       value={item.unit}
@@ -380,7 +380,7 @@ export function AssembliesLibrary() {
                       placeholder="ea"
                     />
                   </div>
-                  <div className="w-20">
+                  <div className="w-16">
                     <input
                       className="form-input text-right"
                       type="number"
@@ -389,7 +389,7 @@ export function AssembliesLibrary() {
                       placeholder="0.00"
                     />
                   </div>
-                  <div className="w-28">
+                  <div className="w-32">
                     <select
                       className="form-select"
                       value={item.category}
