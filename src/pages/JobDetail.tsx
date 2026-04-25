@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
@@ -12,7 +12,7 @@ import {
   ArrowLeft, MapPin, Trash2, Plus, Camera, FileText, Clock, Receipt, CheckSquare, DollarSign, 
   AlertTriangle, TrendingUp, Wrench, Edit, Copy, Upload, AlertCircle, Clipboard, Activity,
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
-  Flag, Paperclip, Eye, Calendar, Send, ChevronDown
+  Flag, Paperclip, Eye, Calendar, Send
 } from 'lucide-react';
 import BrandHeader from '../components/BrandHeader';
 
@@ -28,20 +28,6 @@ export function JobDetail() {
   
   const job = jobs.find(j => j.id === id);
   const [activeTab, setActiveTab] = useState('overview');
-  const [showTabMenu, setShowTabMenu] = useState(false);
-  const tabMenuRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (tabMenuRef.current && !tabMenuRef.current.contains(e.target as Node)) {
-        setShowTabMenu(false);
-      }
-    };
-    if (showTabMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showTabMenu]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string } | null>(null);
   const [printPreview, setPrintPreview] = useState<{ section: string; open: boolean }>({ section: '', open: false });
 
@@ -447,22 +433,18 @@ export function JobDetail() {
         )}
 
         <div className="tabs mb-4">
-          <div className="tab-dropdown" ref={tabMenuRef}>
-            <button type="button" className="tab-dropdown-btn" onClick={() => setShowTabMenu(!showTabMenu)}>
-              <span className="flex items-center gap-2">{tabs.find(t => t.id === activeTab)?.icon}{tabs.find(t => t.id === activeTab)?.label}</span>
-              <ChevronDown size={16} className="transition-transform" style={{ transform: showTabMenu ? 'rotate(180deg)' : 'rotate(0)' }} />
-            </button>
-            {showTabMenu && (
-              <div className="tab-dropdown-menu">
-                {tabs.map(tab => (
-                  <button key={tab.id} className={`tab-dropdown-item ${activeTab === tab.id ? 'active' : ''}`} onClick={() => { setActiveTab(tab.id); setShowTabMenu(false); }}>
-                    <span className="flex items-center gap-2">{tab.icon}{tab.label}</span>
-                    {tab.count !== null && <span className="ml-auto text-xs opacity-70">({tab.count})</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <select 
+            className="form-select" 
+            value={activeTab} 
+            onChange={(e) => setActiveTab(e.target.value)}
+            style={{ width: 'auto', minWidth: '180px' }}
+          >
+            {tabs.map(tab => (
+              <option key={tab.id} value={tab.id}>
+                {tab.label}{tab.count !== null ? ` (${tab.count})` : ''}
+              </option>
+            ))}
+          </select>
         </div>
 
         {activeTab === 'overview' && (
