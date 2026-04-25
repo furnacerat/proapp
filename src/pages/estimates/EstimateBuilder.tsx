@@ -1,1828 +1,551 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, formatDate } from '../../utils/formatters';
-import { ESTIMATE_STATUSES, JOB_TYPES, ESTIMATE_STATUSES as STATUSES } from '../../data/types';
-import type { EstimateSection, EstimateLineItem, EstimateStatus, JobType, EstimateLineCategory, Estimate, EstimateTaxable, EstimateScope, ProjectTypeTemplate, ProjectTypeTemplateItem, ProjectTypeTemplateSection } from '../../data/types';
+import { formatCurrency } from '../../utils/formatters';
+import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
+import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
-import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { Modal } from '../../components/common/Modal';
-import { 
-  Plus, Trash2, Save, Send, CheckCircle, ArrowLeft, Copy, FileText,
-  Printer,
-  Package, Clock, DollarSign, ChevronDown, ChevronUp, GripVertical,
-  AlertTriangle, Calculator, X, Eye, Archive, FolderOpen, CheckSquare,
-  MoreHorizontal, Edit3, RotateCcw, FileCheck, Briefcase, Search
+import {
+  Plus, Trash2, Save, Send, ArrowLeft, Copy, FileText, Printer,
+  Package, Clock, DollarSign, ChevronDown, ChevronUp,
+  Calculator, X, Eye, CheckSquare, Search, Zap, Briefcase,
+  Users, Wrench, Truck, Home, Building, Building2, LayoutGrid,
+  EyeOff, RotateCcw, CheckCircle, Edit3
 } from 'lucide-react';
-import { renderEmailHTML, renderEmailAll } from '../../utils/emailTemplates';
-import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
-import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
-import type { PrintEstimateData } from '../../data/printTypes';
+
+const PROJECT_TYPES = [
+  { value: 'kitchen', label: 'Kitchen', icon: Home, color: '#f97316' },
+  { value: 'bathroom', label: 'Bathroom', icon: Building, color: '#06b6d4' },
+  { value: 'roofing', label: 'Roofing', icon: Building2, color: '#8b5cf6' },
+  { value: 'remodel', label: 'Full Remodel', icon: LayoutGrid, color: '#10b981' },
+  { value: 'addition', label: 'Addition', icon: Plus, color: '#3b82f6' },
+  { value: 'custom', label: 'Custom', icon: Wrench, color: '#64748b' },
+];
+
+const CATEGORIES: { value: EstimateLineCategory; label: string; icon: any; color: string }[] = [
+  { value: 'labor', label: 'Labor', icon: Users, color: '#3b82f6' },
+  { value: 'material', label: 'Material', icon: Package, color: '#10b981' },
+  { value: 'equipment', label: 'Equipment', icon: Wrench, color: '#f97316' },
+  { value: 'subcontractor', label: 'Subcontractor', icon: Truck, color: '#8b5cf6' },
+  { value: 'allowance', label: 'Allowance', icon: DollarSign, color: '#eab308' },
+  { value: 'other', label: 'Other', icon: FileText, color: '#64748b' },
+];
 
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, addEstimate, updateEstimate, deleteEstimate, duplicateEstimate, archiveEstimate, convertEstimateToJob, getEstimateCustomer, sendEmail, addCustomer } = useApp();
+  const { branding, estimates, customers, materials, laborRates, assemblies, projectTypeTemplates, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob } = useApp();
   const { showToast } = useToast();
-  
+
   const isNew = id === 'new';
-  const estimateList = estimates || [];
-  const estimate = (isNew || !id) ? null : estimateList.find(e => e.id === id);
+  const estimate = (!isNew && id) ? estimates?.find(e => e.id === id) : null;
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
-  
-  const [showNewEstimateModal, setShowNewEstimateModal] = useState(isNew);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', company: '', email: '', phone: '', address: '', notes: '' });
-  
+
+  // Form state
   const [formData, setFormData] = useState({
-    name: estimate?.name || '',
+    name: estimate?.name || 'New Estimate',
     customerId: estimate?.customerId || '',
     address: estimate?.address || '',
     status: estimate?.status || 'draft',
-    type: estimate?.type || '',
+    type: estimate?.type || 'remodel',
     markupPercent: estimate?.markupPercent?.toString() || '20',
-    taxable: estimate?.taxable || 'none',
     notes: estimate?.notes || '',
     validUntil: estimate?.validUntil || '',
   });
 
-  const [showAddScope, setShowAddScope] = useState(false);
-  const [showAddSection, setShowAddSection] = useState(false);
-  const [showAddItem, setShowAddItem] = useState(false);
-  const [showAssemblyPicker, setShowAssemblyPicker] = useState(false);
-  const [showChecklist, setShowChecklist] = useState(false);
-  const [showProposal, setShowProposal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showConvertConfirm, setShowConvertConfirm] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailForm, setEmailForm] = useState({ email: '', subject: '', body: '' });
-  const [emailAllPreview, setEmailAllPreview] = useState<{ subject: string; html: string; text: string } | null>(null);
-  const [showEmailAllPreview, setShowEmailAllPreview] = useState(false);
-  const [emailHtmlPreview, setEmailHtmlPreview] = useState<{ subject: string; html: string } | null>(null);
-  const [emailHtmlOpen, setEmailHtmlOpen] = useState(false);
-  const [showPricePicker, setShowPricePicker] = useState(false);
-  const [pricePickerTab, setPricePickerTab] = useState<'materials' | 'labor'>('materials');
-  const [priceSearch, setPriceSearch] = useState('');
-
-  // ── Print preview state ────────────────────────────────────
-  const [estimatePrintData, setEstimatePrintData] = useState<PrintEstimateData | null>(null);
-
-  /** Opens the sanitized client-facing print preview — never exposes internal cost/markup/profit */
-  const handlePrint = () => {
-    if (!estimate) return;
-    const data = buildClientEstimatePrintData(estimate, customer, branding, undefined);
-    setEstimatePrintData(data);
-  };
-
-  const handleEmailWithFallback = (subject: string, body: string, existingEmail?: string) => {
-    if (existingEmail) {
-      window.location.href = `mailto:${existingEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    } else {
-      // Build a universal HTML/Plaintext email using branding
-      const brandingLocal = branding as any;
-      try {
-        const tmpl = renderEmailAll('estimate', brandingLocal, { estimate, customer, totals: { total: (typeof totals?.total === 'number' ? totals.total : 0) } });
-        setEmailForm({ email: customer?.email ?? '', subject: tmpl.subject, body: tmpl.text });
-        setEmailHtmlPreview({ subject: tmpl.subject, html: tmpl.html });
-        setEmailAllPreview({ subject: tmpl.subject, html: tmpl.html, text: tmpl.text });
-        setShowEmailModal(true);
-        setShowEmailAllPreview(true);
-      } catch {
-        setEmailHtmlPreview(null);
-      }
-    }
-  };
-
-  const handleSendEmail = async () => {
-    if (!emailForm.email) { showToast('Enter email address', 'error'); return; }
-    // Try SMTP-based delivery first; fall back to mailto if unavailable
-    const result = await sendEmail({ to: emailForm.email, subject: emailForm.subject, text: emailForm.body, html: emailHtmlPreview?.html });
-    if (!result) {
-      window.location.href = `mailto:${emailForm.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.body)}`;
-    }
-    setShowEmailModal(false);
-    setEmailForm({ email: '', subject: '', body: '' });
-  };
-
-  const [selectedTemplate, setSelectedTemplate] = useState<ProjectTypeTemplate | null>(null);
-  const [selectedTemplateItems, setSelectedTemplateItems] = useState<Record<string, boolean>>({});
-  const [checklistQuantities, setChecklistQuantities] = useState<Record<string, number>>({});
-  const [templatePickerStep, setTemplatePickerStep] = useState<'select' | 'items'>('select');
-  
+  // Scopes/Sections state
+  const [scopes, setScopes] = useState<EstimateScope[]>(estimate?.scopes || []);
+  const [legacySections, setLegacySections] = useState<EstimateSection[]>(estimate?.sections || []);
   const [activeScopeId, setActiveScopeId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<EstimateLineItem | null>(null);
-  const [editingScope, setEditingScope] = useState<EstimateScope | null>(null);
-  const [editingSection, setEditingSection] = useState<EstimateSection | null>(null);
-  
-  const [newSectionName, setNewSectionName] = useState('');
-  const [newScopeName, setNewScopeName] = useState('');
-  const [itemForm, setItemForm] = useState({
-    name: '', description: '', quantity: '1', unit: 'ea', unitPrice: '0',
-    category: 'material' as EstimateLineCategory, isLabor: false, hours: '0',
-    isOptional: false, isExcluded: false, isAllowance: false, notes: '',
-    materialCost: '0', laborCost: '0', markup: '0',
-  });
 
-  const allScopes = estimate?.scopes ?? [];
-  const legacySections = estimate?.sections ?? [];
-  const lineTotal = (item: Pick<EstimateLineItem, 'quantity' | 'unitPrice'>) => (item.quantity || 0) * (item.unitPrice || 0);
-  
-  const getScopeTotals = (scope: EstimateScope) => {
-    let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0, subtotal = 0;
-    scope.sections?.forEach(section => {
-      section.lineItems?.forEach(item => {
-        if (item.isExcluded) return;
-        const total = lineTotal(item);
-        itemsCount++;
-        if (item.isLabor || item.category === 'labor') {
-          laborTotal += total;
-          hours += item.hours || 0;
-        } else if (item.category === 'material') {
-          materialTotal += total;
-        } else if (item.category === 'equipment') {
-          equipmentTotal += total;
-        } else if (item.category === 'subcontractor') {
-          subcontractorTotal += total;
-        }
-        subtotal += total;
-      });
-    });
-    return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, hours, itemsCount };
-  };
-  
-  const totals = useMemo(() => {
-    if (!estimate) return { laborTotal: 0, materialTotal: 0, equipmentTotal: 0, subcontractorTotal: 0, subtotal: 0, markupAmount: 0, total: 0, hours: 0, itemsCount: 0 };
-    
-    let laborTotal = 0, materialTotal = 0, equipmentTotal = 0, subcontractorTotal = 0, hours = 0, itemsCount = 0;
-    
-    allScopes.forEach(scope => {
-      const scopeTotals = getScopeTotals(scope);
-      laborTotal += scopeTotals.laborTotal;
-      materialTotal += scopeTotals.materialTotal;
-      equipmentTotal += scopeTotals.equipmentTotal;
-      subcontractorTotal += scopeTotals.subcontractorTotal;
-      hours += scopeTotals.hours;
-      itemsCount += scopeTotals.itemsCount;
-    });
-    
-    legacySections.forEach(section => {
-      section.lineItems?.forEach(item => {
-        if (item.isExcluded) return;
-        const total = lineTotal(item);
-        itemsCount++;
-        if (item.isLabor || item.category === 'labor') {
-          laborTotal += total;
-          hours += item.hours || 0;
-        } else if (item.category === 'material') {
-          materialTotal += total;
-        } else if (item.category === 'equipment') {
-          equipmentTotal += total;
-        } else if (item.category === 'subcontractor') {
-          subcontractorTotal += total;
-        }
-      });
-    });
-    
-    const subtotal = [...allScopes.flatMap(scope => scope.sections?.flatMap(section => section.lineItems || []) || []), ...legacySections.flatMap(section => section.lineItems || [])]
-      .filter(item => !item.isExcluded)
-      .reduce((sum, item) => sum + lineTotal(item), 0);
-    const markupAmount = subtotal * (estimate.markupPercent / 100);
-    const total = subtotal + markupAmount;
-    
-    return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, markupAmount, total, hours, itemsCount };
-  }, [estimate, allScopes, legacySections]);
+  // UI state
+  const [clientView, setClientView] = useState(false);
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [showProjectTypePicker, setShowProjectTypePicker] = useState(!estimate?.type);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [showAssemblyPicker, setShowAssemblyPicker] = useState(false);
+  const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
+  const [newItemForm, setNewItemForm] = useState({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' as EstimateLineCategory });
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
 
-  useEffect(() => {
-    if (estimate && formData.markupPercent) {
-      const percent = parseFloat(formData.markupPercent) || 0;
-      if (percent !== estimate.markupPercent) {
-        updateEstimate(estimate.id, { markupPercent: percent });
-      }
-    }
-  }, [formData.markupPercent]);
-
-  useEffect(() => {
-    if (id && id !== 'new' && estimate) {
-      setFormData({
-        name: estimate.name,
-        customerId: estimate.customerId,
-        address: estimate.address || '',
-        status: estimate.status,
-        type: estimate.type || '',
-        markupPercent: estimate.markupPercent?.toString() || '20',
-        taxable: estimate.taxable || 'none',
-        notes: estimate.notes || '',
-        validUntil: estimate.validUntil || '',
-      });
-    }
-  }, [id]);
-
-  const handleCreateNewEstimate = async () => {
-    if (!formData.name || !formData.customerId) {
-      showToast('Name and customer are required', 'error');
-      return;
-    }
-    
-    const estList = estimates || [];
-    const estNumber = `EST-${new Date().getFullYear()}-${String(estList.length + 1).padStart(3, '0')}`;
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    const newId = await addEstimate({
-      estimateNumber: estNumber,
-      customerId: formData.customerId,
-      name: formData.name,
-      address: formData.address,
-      type: formData.type as JobType,
-      status: 'draft',
-      sections: [],
-      scopes: [],
-      markupPercent: parseFloat(formData.markupPercent) || 20,
-      taxable: formData.taxable as EstimateTaxable,
-      notes: formData.notes,
-      validUntil: formData.validUntil,
-    });
-    
-    showToast('Estimate created');
-    navigate('/estimates');
+  // Handler functions
+  const handleScopeNameUpdate = (scopeId: string, name: string) => {
+    setScopes(scopes.map(s => s.id === scopeId ? { ...s, name } : s));
   };
 
-  const handleSave = () => {
-    if (!formData.name || !formData.customerId) {
-      showToast('Name and customer are required', 'error');
-      return;
-    }
-    
-    updateEstimate(estimate!.id, {
-      name: formData.name,
-      customerId: formData.customerId,
-      address: formData.address,
-      type: formData.type as JobType,
-      status: formData.status as EstimateStatus,
-      markupPercent: parseFloat(formData.markupPercent) || 20,
-      taxable: formData.taxable as any,
-      notes: formData.notes,
-      validUntil: formData.validUntil,
-    });
-    
-    showToast('Estimate saved');
+  const handleSectionNameUpdate = (sectionId: string, name: string) => {
+    setScopes(scopes.map(s => ({
+      ...s,
+      sections: s.sections?.map(sec => sec.id === sectionId ? { ...sec, name } : sec)
+    })));
   };
 
-  const handleDeleteSection = (sectionId: string) => {
-    if (activeScopeId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return { ...scope, sections: scope.sections?.filter(s => s.id !== sectionId) || [] };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else {
-      updateEstimate(estimate!.id, {
-        sections: legacySections.filter(s => s.id !== sectionId),
-      });
-    }
+  const handleToggleScope = (scopeId: string) => {
+    setActiveScopeId(activeScopeId === scopeId ? null : scopeId);
   };
 
-  const handleAddScope = () => {
-    if (!selectedTemplate || !newScopeName.trim()) return;
-    
-    const templateSections: EstimateSection[] = selectedTemplate.sections?.map(ts => ({
-      id: crypto.randomUUID(),
-      name: ts.name,
-      description: ts.description,
-      lineItems: ts.items
-        .filter(item => selectedTemplateItems[item.id] !== false)
-        .map(item => ({
-          id: crypto.randomUUID(),
-          name: item.name,
-          description: item.description,
-          quantity: (checklistQuantities[item.id] || item.quantity),
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-          category: item.category as EstimateLineCategory,
-          isLabor: item.isLabor || false,
-          hours: item.isLabor ? (checklistQuantities[item.id] || item.quantity) : undefined,
-          total: (checklistQuantities[item.id] || item.quantity) * item.unitPrice,
-          isOptional: item.isOptional,
-          isAllowance: item.isAllowance,
-        })),
-      sortOrder: ts.sortOrder,
-    })) || [];
-    
-    const newScope: EstimateScope = {
-      id: crypto.randomUUID(),
-      name: newScopeName,
-      projectType: selectedTemplate.projectType,
-      sections: templateSections,
-      subtotal: 0,
-      isOptional: false,
-      sortOrder: allScopes.length,
-    };
-    
-    updateEstimate(estimate!.id, {
-      scopes: [...allScopes, newScope],
-    });
-    
-    setNewScopeName('');
-    setSelectedTemplate(null);
-    setSelectedTemplateItems({});
-    setChecklistQuantities({});
-    setTemplatePickerStep('select');
-    setShowAddScope(false);
-    setActiveScopeId(newScope.id);
-    showToast('Scope added');
+  const handleToggleSection = (sectionId: string) => {
+    setActiveSectionId(activeSectionId === sectionId ? null : sectionId);
   };
 
   const handleDeleteScope = (scopeId: string) => {
-    updateEstimate(estimate!.id, {
-      scopes: allScopes.filter(s => s.id !== scopeId),
-    });
-    if (activeScopeId === scopeId) {
-      setActiveScopeId(null);
-    }
-    showToast('Scope deleted');
+    setScopes(scopes.filter(s => s.id !== scopeId));
   };
 
-  const handleDuplicateScope = (scope: EstimateScope) => {
-    const newScope: EstimateScope = {
-      ...scope,
-      id: crypto.randomUUID(),
-      name: `${scope.name} (Copy)`,
-      sections: scope.sections?.map(s => ({
-        ...s,
-        id: crypto.randomUUID(),
-        lineItems: s.lineItems?.map(item => ({
-          ...item,
-          id: crypto.randomUUID(),
-        })) || [],
-      })) || [],
-      sortOrder: allScopes.length,
-    };
-    
-    updateEstimate(estimate!.id, {
-      scopes: [...allScopes, newScope],
-    });
-    showToast('Scope duplicated');
+  const handleAddSection = (scopeId: string) => {
+    const newSection: EstimateSection = { id: crypto.randomUUID(), name: 'New Section', lineItems: [] };
+    setScopes(scopes.map(s => s.id === scopeId ? { ...s, sections: [...(s.sections || []), newSection] } : s));
   };
 
-  const handleUpdateScopeName = (scopeId: string, newName: string) => {
-    if (!newName.trim()) return;
-    const updatedScopes = allScopes.map(s => s.id === scopeId ? { ...s, name: newName } : s);
-    updateEstimate(estimate!.id, { scopes: updatedScopes });
-    setEditingScope(null);
-  };
-
-  const handleAddSection = () => {
-    if (!newSectionName.trim()) return;
-    
-    const newSection: EstimateSection = {
-      id: crypto.randomUUID(),
-      name: newSectionName,
-      lineItems: [],
-      sortOrder: activeScopeId 
-        ? allScopes.find(s => s.id === activeScopeId)?.sections?.length || 0
-        : legacySections.length,
-    };
-    
-    if (activeScopeId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return { ...scope, sections: [...(scope.sections || []), newSection] };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else {
-      updateEstimate(estimate!.id, {
-        sections: [...legacySections, newSection],
-      });
-    }
-    
-    setNewSectionName('');
-    setShowAddSection(false);
-    setActiveSectionId(newSection.id);
-    showToast('Section added');
-  };
-
-  const handleUpdateSectionName = (sectionId: string, newName: string) => {
-    if (!newName.trim()) return;
-    if (activeScopeId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return {
-            ...scope,
-            sections: scope.sections?.map(s => s.id === sectionId ? { ...s, name: newName } : s) || [],
-          };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else {
-      const updatedSections = legacySections.map(s => s.id === sectionId ? { ...s, name: newName } : s);
-      updateEstimate(estimate!.id, { sections: updatedSections });
-    }
-    setEditingSection(null);
-  };
-
-  const handleAddItem = () => {
-    if (!itemForm.name.trim()) return;
-    
-    const qty = parseFloat(itemForm.quantity) || 1;
-    const price = parseFloat(itemForm.unitPrice) || 0;
-    const hours = parseFloat(itemForm.hours) || 0;
-    const isLabor = itemForm.isLabor || itemForm.category === 'labor';
-    
-    const newItem: EstimateLineItem = {
-      id: crypto.randomUUID(),
-      name: itemForm.name,
-      description: itemForm.description,
-      quantity: qty,
-      unit: itemForm.unit,
-      unitPrice: price,
-      category: itemForm.category,
-      isLabor,
-      hours: isLabor ? hours : undefined,
-      total: qty * price,
-      isOptional: itemForm.isOptional,
-      isExcluded: itemForm.isExcluded,
-      isAllowance: itemForm.isAllowance,
-      notes: itemForm.notes,
-    };
-    
-    if (activeScopeId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return {
-            ...scope,
-            sections: scope.sections?.map(s => {
-              if (s.id === activeSectionId) {
-                return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-              }
-              return s;
-            }) || [],
-          };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else {
-      const updatedSections = legacySections.map(s => {
-        if (s.id === activeSectionId) {
-          return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-        }
-        return s;
-      });
-      updateEstimate(estimate!.id, { sections: updatedSections });
-    }
-    
-    setItemForm({
-      name: '', description: '', quantity: '1', unit: 'ea', unitPrice: '0',
-      category: 'material', isLabor: false, hours: '0',
-      isOptional: false, isExcluded: false, isAllowance: false, notes: '',
-      materialCost: '0', laborCost: '0', markup: '0',
-    });
-    setShowAddItem(false);
-    showToast('Item added');
-  };
-
-  const handleUpdateItem = () => {
-    if (!editingItem) return;
-    
-    const qty = parseFloat(itemForm.quantity) || 1;
-    const price = parseFloat(itemForm.unitPrice) || 0;
-    const hours = parseFloat(itemForm.hours) || 0;
-    const isLabor = itemForm.isLabor || itemForm.category === 'labor';
-    
-    const updatedItem: EstimateLineItem = {
-      ...editingItem,
-      name: itemForm.name,
-      description: itemForm.description,
-      quantity: qty,
-      unit: itemForm.unit,
-      unitPrice: price,
-      category: itemForm.category,
-      isLabor,
-      hours: isLabor ? hours : undefined,
-      total: qty * price,
-      isOptional: itemForm.isOptional,
-      isExcluded: itemForm.isExcluded,
-      isAllowance: itemForm.isAllowance,
-      notes: itemForm.notes,
-    };
-    
-    if (activeScopeId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return {
-            ...scope,
-            sections: scope.sections?.map(s => {
-              if (s.id === activeSectionId) {
-                return {
-                  ...s,
-                  lineItems: s.lineItems?.map(item => item.id === editingItem.id ? updatedItem : item) || [],
-                };
-              }
-              return s;
-            }) || [],
-          };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else {
-      const updatedSections = legacySections.map(s => {
-        if (s.id === activeSectionId) {
-          return {
-            ...s,
-            lineItems: s.lineItems?.map(item => item.id === editingItem.id ? updatedItem : item) || [],
-          };
-        }
-        return s;
-      });
-      updateEstimate(estimate!.id, { sections: updatedSections });
-    }
-    
-    setEditingItem(null);
-    setShowAddItem(false);
-    showToast('Item updated');
-  };
-
-  const handleDeleteItem = (itemId: string) => {
-    if (!activeSectionId) return;
-    
-    if (activeScopeId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return {
-            ...scope,
-            sections: scope.sections?.map(s => {
-              if (s.id === activeSectionId) {
-                return { ...s, lineItems: s.lineItems?.filter(i => i.id !== itemId) || [] };
-              }
-              return s;
-            }) || [],
-          };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else {
-      const updatedSections = legacySections.map(s => {
-        if (s.id === activeSectionId) {
-          return { ...s, lineItems: s.lineItems?.filter(i => i.id !== itemId) || [] };
-        }
-        return s;
-      });
-      updateEstimate(estimate!.id, { sections: updatedSections });
-    }
-    showToast('Item deleted');
-  };
-
-  const handleInsertAssembly = (assembly: any) => {
-    const newItems: EstimateLineItem[] = assembly.items?.map((item: any) => ({
-      id: crypto.randomUUID(),
-      name: item.name,
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit || 'ea',
-      unitPrice: item.unitPrice,
-      category: item.category as EstimateLineCategory,
-      isLabor: item.category === 'labor',
-      hours: item.category === 'labor' ? item.quantity : undefined,
-      total: item.quantity * item.unitPrice,
-      isAllowance: item.category === 'allowance',
-      linkedMaterialId: item.linkedMaterialId,
-      linkedLaborRateId: item.linkedLaborRateId,
-    })) || [];
-    
-    if (activeScopeId && activeSectionId) {
-      const updatedScopes = allScopes.map(scope => {
-        if (scope.id === activeScopeId) {
-          return {
-            ...scope,
-            sections: scope.sections?.map(s => {
-              if (s.id === activeSectionId) {
-                return { ...s, lineItems: [...(s.lineItems || []), ...newItems] };
-              }
-              return s;
-            }) || [],
-          };
-        }
-        return scope;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    } else if (activeSectionId) {
-      const updatedSections = legacySections.map(s => {
-        if (s.id === activeSectionId) {
-          return { ...s, lineItems: [...(s.lineItems || []), ...newItems] };
-        }
-        return s;
-      });
-      updateEstimate(estimate!.id, { sections: updatedSections });
-    }
-    setShowAssemblyPicker(false);
-    showToast('Assembly inserted');
-  };
-
-  const handleChecklistSelectTemplate = (template: ProjectTypeTemplate) => {
-    setSelectedTemplate(template);
-    const defaults: Record<string, boolean> = {};
-    const quantities: Record<string, number> = {};
-    template.sections?.forEach(ts => {
-      ts.items?.forEach(item => {
-        defaults[item.id] = item.isDefaultChecked || false;
-        quantities[item.id] = item.quantity;
-      });
-    });
-    setSelectedTemplateItems(defaults);
-    setChecklistQuantities(quantities);
-    setTemplatePickerStep('items');
-    setShowChecklist(true);
-  };
-
-  const handleChecklistToggleItem = (itemId: string) => {
-    setSelectedTemplateItems(prev => ({
-      ...prev,
-      [itemId]: !prev[itemId],
-    }));
-  };
-
-  const handleChecklistQuantityChange = (itemId: string, qty: number) => {
-    setChecklistQuantities(prev => ({
-      ...prev,
-      [itemId]: qty,
-    }));
-  };
-
-  const handleAddChecklistItems = () => {
-    if (!selectedTemplate || !activeScopeId) return;
-    
-    const templateSections = selectedTemplate.sections || [];
-    const scope = allScopes.find(s => s.id === activeScopeId);
-    if (!scope) return;
-    
-    const existingSectionNames = new Set(scope.sections?.map(s => s.name));
-    const newSections: EstimateSection[] = [];
-    
-    templateSections.forEach(ts => {
-      const itemsToAdd = ts.items
-        .filter(item => selectedTemplateItems[item.id])
-        .map(item => ({
-          id: crypto.randomUUID(),
-          name: item.name,
-          description: item.description,
-          quantity: checklistQuantities[item.id] || item.quantity,
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-          category: item.category as EstimateLineCategory,
-          isLabor: item.isLabor || false,
-          hours: item.isLabor ? (checklistQuantities[item.id] || item.quantity) : undefined,
-          total: (checklistQuantities[item.id] || item.quantity) * item.unitPrice,
-          isOptional: item.isOptional,
-          isAllowance: item.isAllowance,
-        }));
-      
-      if (itemsToAdd.length > 0) {
-        if (existingSectionNames.has(ts.name)) {
-          const existingSection = scope.sections?.find(s => s.name === ts.name);
-          if (existingSection) {
-            const updatedScopes = allScopes.map(s => {
-              if (s.id === activeScopeId) {
-                return {
-                  ...s,
-                  sections: s.sections?.map(sec => 
-                    sec.name === ts.name 
-                      ? { ...sec, lineItems: [...(sec.lineItems || []), ...itemsToAdd] }
-                      : sec
-                  ) || [],
-                };
-              }
-              return s;
-            });
-            updateEstimate(estimate!.id, { scopes: updatedScopes });
-          }
-        } else {
-          newSections.push({
-            id: crypto.randomUUID(),
-            name: ts.name,
-            description: ts.description,
-            lineItems: itemsToAdd,
-            sortOrder: ts.sortOrder,
-          });
-        }
-      }
-    });
-    
-    if (newSections.length > 0) {
-      const updatedScopes = allScopes.map(s => {
-        if (s.id === activeScopeId) {
-          return { ...s, sections: [...(s.sections || []), ...newSections] };
-        }
-        return s;
-      });
-      updateEstimate(estimate!.id, { scopes: updatedScopes });
-    }
-    
-    setShowChecklist(false);
-    setSelectedTemplateItems({});
-    setChecklistQuantities({});
-    showToast('Items added');
-  };
-
-  const openItemEditor = (item?: EstimateLineItem, sectionId?: string) => {
-    if (item) {
-      setActiveSectionId(sectionId || activeSectionId);
-      setEditingItem(item);
-      setItemForm({
-        name: item.name,
-        description: item.description || '',
-        quantity: item.quantity.toString(),
-        unit: item.unit,
-        unitPrice: item.unitPrice.toString(),
-        category: item.category,
-        isLabor: item.isLabor,
-        hours: (item.hours || 0).toString(),
-        isOptional: item.isOptional || false,
-        isExcluded: item.isExcluded || false,
-        isAllowance: item.isAllowance || false,
-        notes: item.notes || '',
-        materialCost: '0',
-        laborCost: '0',
-        markup: '0',
-      });
-    } else {
-      setEditingItem(null);
-      setItemForm({
-        name: '', description: '', quantity: '1', unit: 'ea', unitPrice: '0',
-        category: 'material', isLabor: false, hours: '0',
-        isOptional: false, isExcluded: false, isAllowance: false, notes: '',
-        materialCost: '0', laborCost: '0', markup: '0',
-      });
-    }
+  const handleAddItemToSection = (sectionId: string) => {
+    setEditingItem({ sectionId });
+    setNewItemForm({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' });
     setShowAddItem(true);
   };
 
-  const getStatusBadge = (status: EstimateStatus) => {
-    const colors: Record<EstimateStatus, string> = {
-      draft: 'bg-gray-100 text-gray-700',
-      in_review: 'bg-yellow-100 text-yellow-700',
-      sent: 'bg-blue-100 text-blue-700',
-      viewed: 'bg-blue-100 text-blue-700',
-      approved: 'bg-green-100 text-green-700',
-      rejected: 'bg-red-100 text-red-700',
-      expired: 'bg-yellow-100 text-yellow-700',
-      archived: 'bg-gray-100 text-gray-500',
-      converted: 'bg-green-100 text-green-700',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-700';
+  const handleEditItem = (sectionId: string, item: EstimateLineItem) => {
+    setEditingItem({ item, sectionId });
+    setNewItemForm({ name: item.name, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice), category: item.category });
+    setShowAddItem(true);
   };
 
-  if (!estimate) {
-    return (
-      <div className="estimate-builder">
-        <div className="page-header">
-          <h1 className="page-title">New Estimate</h1>
-        </div>
-        <div className="page-content">
-          <div className="card" style={{ maxWidth: '600px' }}>
-            <div className="card-body">
-              <div className="form-group">
-                <label className="form-label">Estimate Name *</label>
-                <input className="form-input" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Smith Kitchen Remodel" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Customer *</label>
-                <div className="flex gap-2">
-                  <select className="form-select" value={formData.customerId} onChange={e => setFormData({ ...formData, customerId: e.target.value })} style={{ flex: 1 }}>
-                    <option value="">Select customer...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowNewCustomer(true)}>
-                    <Plus size={16} /> New
-                  </button>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Project Address</label>
-                <input className="form-input" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Project address" />
-              </div>
-              <div className="grid-2 gap-4">
-                <div className="form-group">
-                  <label className="form-label">Project Type</label>
-                  <select className="form-select" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as JobType })}>
-                    {JOB_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Markup %</label>
-                  <input className="form-input" type="number" value={formData.markupPercent} onChange={e => setFormData({ ...formData, markupPercent: e.target.value })} />
-                </div>
-              </div>
-              <div className="flex gap-2 mt-6">
-                <button className="btn btn-secondary" onClick={() => navigate('/estimates')}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleCreateNewEstimate}>Create Estimate</button>
-              </div>
-            </div>
-          </div>
-        </div>
+  const handleDeleteItem = (sectionId: string, itemId: string) => {
+    setScopes(scopes.map(s => ({
+      ...s,
+      sections: s.sections?.map(sec => sec.id === sectionId ? { ...sec, lineItems: sec.lineItems?.filter(item => item.id !== itemId) } : sec)
+    })));
+  };
 
-        <Modal isOpen={showNewCustomer} onClose={() => setShowNewCustomer(false)} title="New Customer">
-          <div className="form-group">
-            <label className="form-label">Name *</label>
-            <input className="form-input" value={newCustomerForm.name} onChange={e => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })} placeholder="Customer name" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Company</label>
-            <input className="form-input" value={newCustomerForm.company} onChange={e => setNewCustomerForm({ ...newCustomerForm, company: e.target.value })} placeholder="Company name" />
-          </div>
-          <div className="grid-2 gap-4">
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input className="form-input" type="email" value={newCustomerForm.email} onChange={e => setNewCustomerForm({ ...newCustomerForm, email: e.target.value })} placeholder="email@example.com" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phone</label>
-              <input className="form-input" value={newCustomerForm.phone} onChange={e => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })} placeholder="(555) 555-5555" />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Address</label>
-            <input className="form-input" value={newCustomerForm.address} onChange={e => setNewCustomerForm({ ...newCustomerForm, address: e.target.value })} placeholder="Customer address" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Notes</label>
-            <textarea className="form-textarea" value={newCustomerForm.notes} onChange={e => setNewCustomerForm({ ...newCustomerForm, notes: e.target.value })} placeholder="Notes" />
-          </div>
-          <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
-            <button className="btn btn-secondary" onClick={() => setShowNewCustomer(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={() => {
-              if (!newCustomerForm.name.trim()) {
-                showToast('Name is required', 'error');
-                return;
-              }
-              const newId = addCustomer(newCustomerForm);
-              setFormData({ ...formData, customerId: newId });
-              setNewCustomerForm({ name: '', company: '', email: '', phone: '', address: '', notes: '' });
-              setShowNewCustomer(false);
-              showToast('Customer created');
-            }}>Add Customer</button>
-          </div>
-        </Modal>
-      </div>
-    );
-  }
+  const handleAddItemFromFooter = (sectionId: string) => {
+    handleAddItemToSection(sectionId);
+  };
+
+  // Auto-save
+  const saveEstimate = useCallback(() => {
+    if (isNew) return;
+    const totals = calculateTotals;
+    updateEstimate(estimate!.id, {
+      ...formData,
+      markupPercent: parseFloat(formData.markupPercent) || 0,
+      scopes,
+      sections: legacySections,
+      ...totals,
+    });
+    setLastSaved(new Date());
+  }, [estimate, formData, scopes, legacySections, isNew]);
+
+  useEffect(() => {
+    if (!isNew && estimate) {
+      const timer = setTimeout(saveEstimate, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [formData, scopes, legacySections, saveEstimate, isNew, estimate]);
+
+  // Calculate totals
+  const calculateTotals = useMemo(() => {
+    const allItems: EstimateLineItem[] = [];
+    scopes.forEach(s => s.sections?.forEach(sec => sec.lineItems?.forEach(item => { if (!item.isExcluded) allItems.push(item); })));
+    legacySections.forEach(sec => sec.lineItems?.forEach(item => { if (!item.isExcluded) allItems.push(item); }));
+
+    const laborTotal = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((s, i) => s + (i.quantity || 0) * (i.unitPrice || 0), 0);
+    const materialTotal = allItems.filter(i => i.category === 'material' || i.category === 'allowance' || i.category === 'other').reduce((s, i) => s + (i.quantity || 0) * (i.unitPrice || 0), 0);
+    const equipmentTotal = allItems.filter(i => i.category === 'equipment').reduce((s, i) => s + (i.quantity || 0) * (i.unitPrice || 0), 0);
+    const subcontractorTotal = allItems.filter(i => i.category === 'subcontractor').reduce((s, i) => s + (i.quantity || 0) * (i.unitPrice || 0), 0);
+
+    const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
+    const markupAmount = subtotal * (parseFloat(formData.markupPercent) / 100);
+    const total = subtotal + markupAmount;
+    const laborHours = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((s, i) => s + (i.hours || 0), 0);
+
+    const internalCost = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
+    const profit = total - internalCost;
+    const profitPercent = total > 0 ? (profit / total) * 100 : 0;
+
+    return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, markupAmount, total, laborHours, internalCost, profit, profitPercent };
+  }, [scopes, legacySections, formData.markupPercent]);
+
+  // Add scope
+  const addScope = (name: string) => {
+    const newScope: EstimateScope = { id: crypto.randomUUID(), name, projectType: formData.type as any, sections: [], subtotal: 0, isOptional: false, sortOrder: scopes.length };
+    setScopes([...scopes, newScope]);
+    setActiveScopeId(newScope.id);
+  };
+
+  // Add item
+  const addItem = (sectionId: string, item: EstimateLineItem) => {
+    const newItem = { ...item, id: crypto.randomUUID(), total: (item.quantity || 0) * (item.unitPrice || 0) };
+    setScopes(scopes.map(s => ({
+      ...s,
+      sections: s.sections?.map(sec => sec.id === sectionId ? { ...sec, lineItems: [...(sec.lineItems || []), newItem] } : sec)
+    })));
+  };
+
+  // Update item
+  const updateItem = (sectionId: string, itemId: string, updates: Partial<EstimateLineItem>) => {
+    setScopes(scopes.map(s => ({
+      ...s,
+      sections: s.sections?.map(sec => ({
+        ...sec,
+        lineItems: sec.lineItems?.map(item => item.id === itemId ? { ...item, ...updates, total: ((updates.quantity ?? item.quantity) || 0) * ((updates.unitPrice ?? item.unitPrice) || 0) } : item)
+      }))
+    })));
+  };
+
+  // Create new estimate
+  const handleCreate = () => {
+    if (!formData.name || !formData.customerId) { showToast('Name and customer required', 'error'); return; }
+    const totals = calculateTotals;
+    const newId = addEstimate({
+      ...formData,
+      scopes,
+      sections: legacySections,
+      ...totals,
+    } as any);
+    navigate(`/estimates/${newId}`);
+    showToast('Estimate created');
+  };
+
+  const badge = (status: string) => {
+    const m: Record<string, string> = { draft: 'status-draft', sent: 'status-sent', viewed: 'status-sent', in_review: 'status-review', approved: 'status-approved', rejected: 'status-rejected', archived: 'status-draft', converted: 'status-approved' };
+    return m[status] || 'status-draft';
+  };
+
+  const selectedCustomer = customers?.find(c => c.id === formData.customerId);
+  const projectType = PROJECT_TYPES.find(p => p.value === formData.type);
 
   return (
-    <div className="estimate-builder">
-      {/* HEADER BAR */}
-      <div className="page-header sticky top-0 z-50">
-        <div>
-          <div className="page-eyebrow">Estimating</div>
-          <div className="flex items-center gap-3">
-            <h1 className="page-title">{estimate.name}</h1>
-            <span className={`badge ${getStatusBadge(estimate.status)}`}>{estimate.status.replace('_', ' ')}</span>
+    <div className="eb-root">
+      {/* Sticky Header */}
+      <div className="eb-header">
+        <div className="eb-header-left">
+          <Link to="/estimates" className="eb-backBtn"><ArrowLeft size={18} /></Link>
+          <div className="eb-header-info">
+            {isNew ? (
+              <input className="eb-nameInput" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Estimate name..." />
+            ) : (
+              <input className="eb-nameInput" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            )}
+            <div className="eb-header-meta">
+              {selectedCustomer ? (
+                <button className="eb-customerBtn" onClick={() => setShowCustomerPicker(true)}>
+                  <span>{selectedCustomer.name}</span>
+                  <ChevronDown size={12} />
+                </button>
+              ) : (
+                <button className="eb-customerBtn eb-customerBtnEmpty" onClick={() => setShowCustomerPicker(true)}>+ Add Customer</button>
+              )}
+              <span className={`badge ${badge(formData.status)}`}>{formData.status}</span>
+              {projectType && <span className="eb-typeTag" style={{color: projectType.color}}><projectType.icon size={12} />{projectType.label}</span>}
+            </div>
           </div>
-          <p className="page-subtitle">{estimate.estimateNumber} &nbsp;&bull;&nbsp; {customer?.name || 'No customer'} &nbsp;&bull;&nbsp; {estimate.address || 'No address'}</p>
         </div>
-        <div className="page-actions">
-          <button className="btn btn-secondary shrink-0" onClick={() => setShowProposal(true)}><Eye size={16} /> Preview</button>
-          <button className="btn btn-secondary shrink-0" onClick={handlePrint} title="Preview & Print — Client Only View"><Printer size={16} /> Preview &amp; Print</button>
-          <button className="btn btn-secondary shrink-0" onClick={() => {
-            const brandingSig = branding?.brandName ? `\n\n${branding.brandName}` + (branding.logoUrl ? `\n${branding.logoUrl}` : '') : '';
-            const bodyBase = `Hi ${customer?.name || 'Customer'},\n\nPlease find attached the estimate for ${estimate.name}.\n\nTotal: ${formatCurrency(totals.total)}\n\nValid until: ${estimate.validUntil || 'N/A'}\n\nLet me know if you have any questions.\n\nThanks,\nAllen's`;
-            handleEmailWithFallback(`Estimate: ${estimate.name}`, bodyBase + brandingSig, customer?.email);
-          }}><Send size={16} /> Email</button>
-          {estimate.status === 'draft' && (
-            <button className="btn btn-secondary shrink-0" onClick={() => updateEstimate(estimate.id, { status: 'sent' })}><Send size={16} /> Mark Sent</button>
+        <div className="eb-header-actions">
+          <button className={`eb-viewToggle ${clientView ? 'active' : ''}`} onClick={() => setClientView(!clientView)}>
+            <Eye size={16} /><span>{clientView ? 'Client' : 'Internal'}</span>
+          </button>
+          {!isNew && estimate?.status === 'approved' && !estimate.convertedToJobId && (
+            <button className="eb-actionBtn" onClick={() => setShowConvertModal(true)}><Briefcase size={16} /><span>Convert</span></button>
           )}
-          {estimate.status === 'approved' && !estimate.convertedToJobId && (
-            <button className="btn btn-success shrink-0" onClick={() => setShowConvertConfirm(true)}><Briefcase size={16} /> Convert to Job</button>
+          {!isNew && <button className="eb-actionBtn" onClick={saveEstimate}><Save size={16} /><span>Save</span></button>}
+          {isNew ? (
+            <button className="eb-actionBtn eb-actionBtnPrimary" onClick={handleCreate}><Plus size={16} /><span>Create</span></button>
+          ) : (
+            <>
+              <button className="eb-actionBtn"><Printer size={16} /></button>
+              <button className="eb-actionBtn"><Send size={16} /></button>
+            </>
           )}
-          <Link to={`/estimates/${estimate.id}/materials`} className="btn btn-secondary shrink-0"><Package size={16} /> Materials</Link>
-          {estimate.convertedToJobId && (
-            <Link to={`/jobs/${estimate.convertedToJobId}`} className="btn btn-secondary shrink-0"><FileCheck size={16} /> View Job</Link>
-          )}
-          <button className="btn btn-primary shrink-0" onClick={handleSave}><Save size={16} /> Save</button>
         </div>
       </div>
 
-      {/* KPI STRIP */}
-      <div className="page-content p-6 pt-4">
-        <div className="kpi-grid mb-6">
-          <div className="kpi-card">
-            <div className="kpi-label">Total</div>
-            <div className="kpi-value kpi-primary">{formatCurrency(totals.total)}</div>
-            <div className="kpi-sub">{totals.itemsCount} items &bull; {totals.hours}h labor</div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-label">Labor</div>
-            <div className="kpi-value">{formatCurrency(totals.laborTotal)}</div>
-            <div className="kpi-sub">{totals.hours}h projected</div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-label">Materials</div>
-            <div className="kpi-value">{formatCurrency(totals.materialTotal)}</div>
-            <div className="kpi-sub">materials &amp; equipment</div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-label">Markup ({estimate.markupPercent}%)</div>
-            <div className="kpi-value">{formatCurrency(totals.markupAmount)}</div>
-            <div className="kpi-sub">on {estimate.markupPercent}% of subtotal</div>
-          </div>
-        </div>
-        {allScopes.length === 0 && legacySections.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">📋</div>
-            <h2 className="text-2xl font-bold mb-2">Start Building Your Estimate</h2>
-            <p className="text-muted mb-6">Add your first project scope to begin</p>
-            <button className="btn btn-primary btn-lg" onClick={() => setShowAddScope(true)}>
-              <Plus size={20} /> Add Project Scope
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* SCOPE CARDS */}
-            {allScopes.map((scope, scopeIndex) => {
-              const scopeTotals = getScopeTotals(scope);
-              const isExpanded = activeScopeId === scope.id || activeScopeId === null;
-              
-              return (
-                <div key={scope.id} className="card">
-                  {/* SCOPE HEADER */}
-                  <div className="card-header" onClick={() => setActiveScopeId(activeScopeId === scope.id ? null : scope.id)}>
-                    <div className="flex items-center gap-4">
-                      {editingScope?.id === scope.id ? (
-                        <input
-                          className="form-input font-semibold text-lg"
-                          defaultValue={scope.name}
-                          autoFocus
-                          onBlur={e => handleUpdateScopeName(scope.id, e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleUpdateScopeName(scope.id, (e.target as HTMLInputElement).value)}
-                          onClick={e => e.stopPropagation()}
-                        />
-                      ) : (
-                        <h3 
-                          className="font-semibold text-lg flex items-center gap-2"
-                          onDoubleClick={e => { e.stopPropagation(); setEditingScope(scope); }}
-                        >
-                          {scope.name}
-                        </h3>
-                      )}
-                      <span className="badge badge-blue">{scope.sections?.length || 0} sections</span>
-                      <span className="badge badge-green text-lg py-1">{formatCurrency(scopeTotals.subtotal)}</span>
-                    </div>
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <button 
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => handleDuplicateScope(scope)}
-                        title="Duplicate scope"
-                      >
-                        <Copy size={14} />
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-danger"
-                        onClick={() => handleDeleteScope(scope.id)}
-                        title="Delete scope"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                      {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </div>
+      <div className="eb-body">
+        {/* LEFT: Builder Panel */}
+        <div className="eb-builder">
+          {/* Project Type Picker */}
+          {showProjectTypePicker && (
+            <div className="eb-section">
+              <div className="eb-sectionHeader"><h2>Select Project Type</h2></div>
+              <div className="eb-typeGrid">
+                {PROJECT_TYPES.map(pt => (
+                  <button key={pt.value} className={`eb-typeCard ${formData.type === pt.value ? 'selected' : ''}`}
+                    onClick={() => { setFormData({...formData, type: pt.value as JobType}); setShowProjectTypePicker(false); }}>
+                    <div className="eb-typeIcon" style={{background: `${pt.color}20`, color: pt.color}}><pt.icon size={24} /></div>
+                    <div className="eb-typeLabel">{pt.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Scopes & Sections */}
+          {scopes.length === 0 && !showProjectTypePicker ? (
+            <div className="eb-emptyScope">
+              <div className="eb-emptyScopeIcon"><Zap size={32} /></div>
+              <div className="eb-emptyScopeTitle">Start building your estimate</div>
+              <div className="eb-emptyScopeActions">
+                <button className="btn btn-primary btn-lg" onClick={() => addScope('Scope 1')}><Plus size={18} /><span>Add Scope</span></button>
+                {projectTypeTemplates?.[0] && <button className="btn btn-secondary btn-lg"><CheckSquare size={18} /><span>From Template</span></button>}
+              </div>
+            </div>
+          ) : (
+            scopes.map(scope => (
+              <div key={scope.id} className="eb-scope">
+                <div className="eb-scopeHeader" onClick={() => handleToggleScope(scope.id)}>
+                  <div className="eb-scopeTitle">
+                    <input className="eb-scopeNameInput" value={scope.name} onChange={e => handleScopeNameUpdate(scope.id, e.target.value)} />
+                    <span className="eb-scopeCount">{scope.sections?.length || 0} sections</span>
                   </div>
-
-                  {/* SCOPE CONTENT */}
-                  {isExpanded && (
-                    <div className="card-body p-0">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 border-b">
-                        <div className="flex gap-2">
-                          <button className="btn btn-sm btn-secondary" onClick={() => { setActiveScopeId(scope.id); handleChecklistSelectTemplate(projectTypeTemplates[0]); }}><CheckSquare size={14} /> Checklist</button>
-                        </div>
-                        <button className="btn btn-sm btn-primary" onClick={() => { setActiveScopeId(scope.id); setShowAddSection(true); }}><Plus size={14} /> Add Section</button>
-                      </div>
-                      <div className="p-4 space-y-4">
-                        {scope.sections?.map((section, sectionIndex) => {
-                          const sectionTotals = getScopeTotals({ ...scope, sections: [section] });
-                          const isSectionExpanded = activeSectionId === section.id;
-                          
-                          return (
-                            <div key={section.id} className="card">
-                              {/* SECTION HEADER */}
-                              <div className="card-header" onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(activeSectionId === section.id ? null : section.id); }}>
-                                <div className="flex items-center gap-3">
-                                  {editingSection?.id === section.id ? (
-                                    <input
-                                      className="form-input font-medium"
-                                      defaultValue={section.name}
-                                      autoFocus
-                                      onBlur={e => handleUpdateSectionName(section.id, e.target.value)}
-                                      onKeyDown={e => e.key === 'Enter' && handleUpdateSectionName(section.id, (e.target as HTMLInputElement).value)}
-                                      onClick={e => e.stopPropagation()}
-                                    />
-                                  ) : (
-                                    <h4 
-                                      className="font-medium flex items-center gap-2"
-                                      onDoubleClick={e => { e.stopPropagation(); setActiveScopeId(scope.id); setEditingSection(section); }}
-                                    >
-                                      {section.name}
-                                    </h4>
-                                  )}
-                                  <span className="badge badge-gray">{section.lineItems?.length || 0} items</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-medium text-slate-600">{formatCurrency(sectionTotals.subtotal)}</span>
-                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                    <button 
-                                      className="btn btn-sm btn-icon"
-                                      onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(section.id); openItemEditor(undefined, section.id); }}
-                                    >
-                                      <Plus size={14} />
-                                    </button>
-                                    <button 
-                                      className="btn btn-sm btn-icon"
-                                      onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(section.id); setShowAssemblyPicker(true); }}
-                                    >
-                                      <Package size={14} />
-                                    </button>
-                                    <button 
-                                      className="btn btn-sm btn-icon btn-danger"
-                                      onClick={() => { setActiveScopeId(scope.id); handleDeleteSection(section.id); }}
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-{isSectionExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* SECTION CONTENT */}
-                                {isSectionExpanded && (
-                                  <div className="card-body">
-                                  {!section.lineItems?.length ? (
-                                    <div className="text-center py-6 text-muted">
-                                      No items yet. Add items or assemblies.
-                                    </div>
-                                  ) : (
-                                    <table className="w-full">
-                                      <thead>
-                                        <tr className="text-xs text-muted border-b">
-                                          <th className="text-left py-2">Item</th>
-                                          <th className="text-right py-2 w-20">Qty</th>
-                                          <th className="text-left py-2 w-20">Unit</th>
-                                          <th className="text-right py-2 w-24">Unit Price</th>
-                                          <th className="text-right py-2 w-24">Total</th>
-                                          <th className="w-20"></th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {section.lineItems?.map(item => (
-                                          <tr key={item.id} className={`border-b hover:bg-slate-50 ${item.isExcluded ? 'opacity-50 line-through' : ''}`}>
-                                            <td className="py-2">
-                                              <div className="font-medium">{item.name}</div>
-                                              {item.description && (
-                                                <div className="text-xs text-muted">{item.description}</div>
-                                              )}
-                                              <div className="flex gap-1 mt-1">
-                                                {item.isOptional && <span className="badge badge-yellow text-xs">Optional</span>}
-                                                {item.isExcluded && <span className="badge badge-red text-xs">Excluded</span>}
-                                                {item.isAllowance && <span className="badge badge-blue text-xs">Allowance</span>}
-                                              </div>
-                                            </td>
-                                            <td className="text-right py-2">{item.quantity}</td>
-                                            <td className="text-left py-2">{item.unit}</td>
-                                            <td className="text-right py-2">{formatCurrency(item.unitPrice)}</td>
-                                            <td className="text-right py-2 font-medium">{formatCurrency(item.total)}</td>
-                                            <td className="py-2">
-                                              <div className="flex gap-1 justify-end">
-                                                <button 
-                                                  className="btn btn-sm btn-icon"
-                                                  onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(section.id); openItemEditor(item, section.id); }}
-                                                >
-                                                  <Edit3 size={14} />
-                                                </button>
-                                                <button 
-                                                  className="btn btn-sm btn-icon btn-danger"
-                                                  onClick={() => { setActiveScopeId(scope.id); setActiveSectionId(section.id); handleDeleteItem(item.id); }}
-                                                >
-                                                  <Trash2 size={14} />
-                                                </button>
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {(!scope.sections || scope.sections.length === 0) && (
-                          <div className="text-center py-6 border-2 border-dashed rounded-lg">
-                            <p className="text-muted mb-3">No sections yet</p>
-                            <button 
-                              className="btn btn-primary"
-                              onClick={() => { setActiveScopeId(scope.id); setShowAddSection(true); }}
-                            >
-                              <Plus size={16} /> Add Section
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <div className="eb-scopeActions">
+                    <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); handleAddSection(scope.id); }}><Plus size={14} /></button>
+                    <button className="eb-iconBtn eb-iconBtnDanger" onClick={(e) => { e.stopPropagation(); handleDeleteScope(scope.id); }}><Trash2 size={14} /></button>
+                    {activeScopeId === scope.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
                 </div>
-              );
-            })}
-
-            {/* LEGACY SECTIONS */}
-            {legacySections.length > 0 && (
-              <div className="mt-8">
-                <h3 className="font-medium text-muted mb-4">Legacy Sections</h3>
-                <div className="space-y-4">
-                  {legacySections.map((section) => (
-                    <div key={section.id} className="card">
-                      <div className="card-header" onClick={() => setActiveSectionId(activeSectionId === section.id ? null : section.id)}>
-                        <div className="flex items-center gap-3">
-                          <h4 className="font-medium">{section.name}</h4>
-                          <span className="badge badge-gray">{section.lineItems?.length || 0} items</span>
-                        </div>
-                        {activeSectionId === section.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                {activeScopeId === scope.id && (
+                  <div className="eb-scopeBody">
+                    {(scope.sections?.length || 0) === 0 ? (
+                      <div className="eb-noSections">
+                        <button className="btn btn-secondary" onClick={() => handleAddSection(scope.id)}><Plus size={14} /><span>Add Section</span></button>
                       </div>
-                      {activeSectionId === section.id && (
-                        <div className="card-body">
-                          <div className="flex justify-end mb-3 gap-2">
-                            <button className="btn btn-sm btn-secondary" onClick={() => setShowPricePicker(true)}>
-                              <Search size={14} /> From Price List
-                            </button>
-                            <button className="btn btn-sm btn-primary" onClick={() => openItemEditor(undefined, section.id)}>
-                              <Plus size={14} /> Add Item
-                            </button>
-                            <button className="btn btn-sm btn-danger" onClick={() => handleDeleteSection(section.id)}>
-                              <Trash2 size={14} /> Delete
-                            </button>
+                    ) : (
+                      scope.sections?.map(section => (
+                        <div key={section.id} className="eb-sectionCard">
+                          <div className="eb-sectionHeader" onClick={() => handleToggleSection(section.id)}>
+                            <input className="eb-sectionNameInput" value={section.name} onChange={e => handleSectionNameUpdate(section.id, e.target.value)} />
+                            <div className="eb-sectionActions">
+                              <button className="eb-iconBtn" onClick={(e) => { e.stopPropagation(); handleAddItemToSection(section.id); }}><Plus size={14} /></button>
+                              {activeSectionId === section.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </div>
                           </div>
-                          {section.lineItems?.length ? (
-                            <table className="w-full">
-                              <tbody>
-                                {section.lineItems?.map(item => (
-                                  <tr key={item.id} className="border-b">
-                                    <td className="py-2">{item.name}</td>
-                                    <td className="text-right">{item.quantity} {item.unit}</td>
-                                    <td className="text-right">{formatCurrency(item.total)}</td>
-                                    <td className="text-right">
-                                      <button className="btn btn-sm btn-icon" onClick={() => openItemEditor(item, section.id)}>
-                                        <Edit3 size={14} />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <div className="text-center py-4 text-muted">No items</div>
+                          {activeSectionId === section.id && (
+                            <div className="eb-sectionBody">
+                              {section.lineItems?.length === 0 ? (
+                                <div className="eb-noItems">No items yet</div>
+                              ) : (
+                                <table className="eb-itemsTable">
+                                  <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Price</th><th>Total</th><th></th></tr></thead>
+                                  <tbody>
+                                    {section.lineItems?.map(item => (
+                                      <tr key={item.id} className={item.isExcluded ? 'excluded' : ''}>
+                                        <td>
+                                          <div className="eb-itemName">{item.name}</div>
+                                          {item.description && <div className="eb-itemDesc">{item.description}</div>}
+                                        </td>
+                                        <td className="eb-qtyCell">{item.quantity}</td>
+                                        <td className="eb-unitCell">{item.unit}</td>
+                                        <td className="eb-priceCell">{formatCurrency(item.unitPrice)}</td>
+                                        <td className="eb-totalCell">{formatCurrency(item.total)}</td>
+                                        <td className="eb-actionsCell">
+                                          <button className="eb-iconBtn" onClick={() => handleEditItem(section.id, item)}><Edit3 size={12} /></button>
+                                          <button className="eb-iconBtn eb-iconBtnDanger" onClick={() => handleDeleteItem(section.id, item.id)}><Trash2 size={12} /></button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                              <div className="eb-sectionFooter">
+                                <button className="eb-addItemBtn" onClick={() => handleAddItemFromFooter(section.id)}><Plus size={14} />Add Item</button>
+                              </div>
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+
+          {/* Add Scope Button */}
+          {!showProjectTypePicker && (
+            <button className="eb-addScopeBtn" onClick={() => addScope(`Scope ${scopes.length + 1}`)}>
+              <Plus size={18} /><span>Add Another Scope</span>
+            </button>
+          )}
+        </div>
+
+        {/* RIGHT: Live Summary Panel */}
+        <div className={`eb-summary ${clientView ? 'eb-summaryClient' : ''}`}>
+          <div className="eb-summaryHeader">
+            <h3>Pricing Summary</h3>
+            {lastSaved && <span className="eb-savedTime">Saved {lastSaved.toLocaleTimeString()}</span>}
+          </div>
+
+          <div className="eb-summaryBody">
+            {/* Line Items */}
+            <div className="eb-summaryLines">
+              <div className="eb-summaryLine"><span>Labor</span><span>{formatCurrency(calculateTotals.laborTotal)}</span></div>
+              <div className="eb-summaryLine"><span>Materials</span><span>{formatCurrency(calculateTotals.materialTotal)}</span></div>
+              <div className="eb-summaryLine"><span>Equipment</span><span>{formatCurrency(calculateTotals.equipmentTotal)}</span></div>
+              <div className="eb-summaryLine"><span>Subcontractor</span><span>{formatCurrency(calculateTotals.subcontractorTotal)}</span></div>
+            </div>
+
+            <div className="eb-summaryDivider" />
+
+            {/* Subtotal */}
+            <div className="eb-summaryLine eb-summarySubtotal"><span>Subtotal</span><span>{formatCurrency(calculateTotals.subtotal)}</span></div>
+
+            {/* Markup */}
+            <div className="eb-summaryMarkup">
+              <div className="eb-summaryLine"><span>Markup ({formData.markupPercent}%)</span><span>{formatCurrency(calculateTotals.markupAmount)}</span></div>
+            </div>
+
+            <div className="eb-summaryDivider" />
+
+            {/* Total */}
+            <div className="eb-summaryTotal">
+              <span>Total</span>
+              <span>{formatCurrency(calculateTotals.total)}</span>
+            </div>
+
+            {/* Internal Profit View */}
+            {!clientView && (
+              <div className="eb-profitCard">
+                <div className="eb-profitTitle">Internal View</div>
+                <div className="eb-profitGrid">
+                  <div className="eb-profitItem">
+                    <span className="eb-profitLabel">Cost</span>
+                    <span className="eb-profitValue">{formatCurrency(calculateTotals.internalCost)}</span>
+                  </div>
+                  <div className="eb-profitItem">
+                    <span className="eb-profitLabel">Charge</span>
+                    <span className="eb-profitValue">{formatCurrency(calculateTotals.total)}</span>
+                  </div>
+                  <div className="eb-profitItem">
+                    <span className="eb-profitLabel">Profit</span>
+                    <span className="eb-profitValue eb-profitValueGreen">{formatCurrency(calculateTotals.profit)}</span>
+                  </div>
+                  <div className="eb-profitItem">
+                    <span className="eb-profitLabel">%</span>
+                    <span className="eb-profitValue eb-profitValueGreen">{calculateTotals.profitPercent.toFixed(1)}%</span>
+                  </div>
                 </div>
               </div>
             )}
           </div>
-        )}
-
-        {/* FOOTER */}
-        <div className="flex justify-between text-sm text-muted mt-8 pt-4 border-t">
-          <div>Created {formatDate(estimate.createdAt)}</div>
-          <div>Updated {formatDate(estimate.updatedAt)}</div>
         </div>
       </div>
 
-      {/* MODALS */}
-      <Modal isOpen={showAddScope} onClose={() => { setShowAddScope(false); setSelectedTemplate(null); setTemplatePickerStep('select'); }} title="Add Project Scope" size="lg">
-        {templatePickerStep === 'select' ? (
-          <>
-            <div className="form-group">
-              <label className="form-label">Scope Name *</label>
-              <input
-                className="form-input"
-                value={newScopeName}
-                onChange={e => setNewScopeName(e.target.value)}
-                placeholder="e.g., Kitchen, Master Bath, Flooring"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">How would you like to create this scope?</label>
-              <div className="space-y-2">
-                <button
-                  className="w-full text-left p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50"
-                  onClick={() => {
-                    if (!newScopeName.trim()) {
-                      showToast('Please enter a scope name', 'error');
-                      return;
-                    }
-                    const newScope: EstimateScope = {
-                      id: crypto.randomUUID(),
-                      name: newScopeName,
-                      projectType: 'remodel',
-                      sections: [],
-                      subtotal: 0,
-                      isOptional: false,
-                      sortOrder: allScopes.length,
-                    };
-                    updateEstimate(estimate!.id, {
-                      scopes: [...allScopes, newScope],
-                    });
-                    setNewScopeName('');
-                    setShowAddScope(false);
-                    setActiveScopeId(newScope.id);
-                    showToast('Scope created');
-                  }}
-                >
-                  <div className="font-medium">Create Empty Scope</div>
-                  <div className="text-sm text-muted">Start with a blank scope and add items manually</div>
-                </button>
-                <div className="text-center text-muted my-2">— or select a template —</div>
-                {projectTypeTemplates.length === 0 ? (
-                  <div className="text-center py-4 text-muted">No templates available.</div>
-                ) : (
-                  projectTypeTemplates.map(template => (
-                    <button
-                      key={template.id}
-                      className="w-full text-left p-4 border rounded-lg hover:bg-gray-50"
-                      onClick={() => {
-                        if (!newScopeName.trim()) {
-                          showToast('Please enter a scope name', 'error');
-                          return;
-                        }
-                        setSelectedTemplate(template);
-                        const defaults: Record<string, boolean> = {};
-                        const quantities: Record<string, number> = {};
-                        template.sections?.forEach(ts => {
-                          ts.items?.forEach(item => {
-                            defaults[item.id] = item.isDefaultChecked || false;
-                            quantities[item.id] = item.quantity;
-                          });
-                        });
-                        setSelectedTemplateItems(defaults);
-                        setChecklistQuantities(quantities);
-                        setTemplatePickerStep('items');
-                      }}
-                    >
-                      <div className="font-medium">{template.name}</div>
-                      <div className="text-sm text-muted">{template.description}</div>
-                      <div className="text-xs text-muted mt-1">{template.sections?.length} sections</div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 mb-4">
-              <button className="btn btn-sm btn-secondary" onClick={() => setTemplatePickerStep('select')}>
-                <ArrowLeft size={14} /> Back
-              </button>
-              <span className="font-medium">{selectedTemplate?.name}</span>
-            </div>
-            <div className="form-group mb-4">
-              <label className="form-label">Scope Name</label>
-              <input
-                className="form-input"
-                value={newScopeName}
-                onChange={e => setNewScopeName(e.target.value)}
-                placeholder="e.g., Kitchen, Master Bath, Flooring"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Select Items to Include</label>
-              <div className="text-sm text-muted mb-2">Check items to include. Default items are pre-selected.</div>
-              <div className="max-h-96 overflow-y-auto space-y-4">
-                {selectedTemplate?.sections?.map(section => (
-                  <div key={section.id} className="border rounded-lg p-3">
-                    <div className="font-medium mb-2">{section.name}</div>
-                    {section.description && <div className="text-sm text-muted mb-2">{section.description}</div>}
-                    <div className="space-y-2">
-                      {section.items?.map(item => (
-                        <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
-                          <input
-                            type="checkbox"
-                            checked={selectedTemplateItems[item.id] || false}
-                            onChange={() => handleChecklistToggleItem(item.id)}
-                          />
-                          <input
-                            type="number"
-                            className="form-input w-20"
-                            value={checklistQuantities[item.id] || item.quantity}
-                            onChange={e => handleChecklistQuantityChange(item.id, parseFloat(e.target.value) || 0)}
-                          />
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{item.name}</div>
-                            {item.description && <div className="text-xs text-muted">{item.description}</div>}
-                          </div>
-                          <div className="text-sm text-muted">
-                            {item.unit} × {formatCurrency(item.unitPrice)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
-              <button className="btn btn-secondary" onClick={() => { setShowAddScope(false); setSelectedTemplate(null); setTemplatePickerStep('select'); }}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAddScope} disabled={!newScopeName.trim()}>Add Scope</button>
-            </div>
-          </>
-        )}
-      </Modal>
-
-      <Modal isOpen={showAddSection} onClose={() => setShowAddSection(false)} title="Add Section">
-        <div className="form-group">
-          <label className="form-label">Section Name</label>
-          <input
-            className="form-input"
-            value={newSectionName}
-            onChange={e => setNewSectionName(e.target.value)}
-            placeholder="e.g., Demolition, Electrical, Plumbing"
-          />
-        </div>
-        <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
-          <button className="btn btn-secondary" onClick={() => setShowAddSection(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleAddSection}>Add Section</button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={showAddItem} onClose={() => { setShowAddItem(false); setEditingItem(null); }} title={editingItem ? 'Edit Line Item' : 'Add Line Item'} size="lg">
-        <div className="grid-2 gap-3">
-          <div className="form-group col-span-2">
+      {/* Add Item Modal */}
+      <Modal isOpen={showAddItem} onClose={() => setShowAddItem(false)} title={editingItem?.item ? 'Edit Item' : 'Add Item'} size="sm">
+        <div className="eb-itemForm">
+          <div className="form-group">
             <label className="form-label">Item Name</label>
-            <input
-              className="form-input"
-              value={itemForm.name}
-              onChange={e => setItemForm({...itemForm, name: e.target.value})}
-            />
+            <input className="form-input" value={newItemForm.name} onChange={e => setNewItemForm({...newItemForm, name: e.target.value})} placeholder="e.g., Cabinets, Demo, Installation" />
           </div>
-          <div className="form-group col-span-2">
-            <label className="form-label">Description</label>
-            <input
-              className="form-input"
-              value={itemForm.description}
-              onChange={e => setItemForm({...itemForm, description: e.target.value})}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Category</label>
-            <select
-              className="form-select"
-              value={itemForm.category}
-              onChange={e => setItemForm({...itemForm, category: e.target.value as EstimateLineCategory})}
-            >
-              <option value="material">Material</option>
-              <option value="labor">Labor</option>
-              <option value="equipment">Equipment</option>
-              <option value="subcontractor">Subcontractor</option>
-              <option value="allowance">Allowance</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Quantity</label>
-            <input
-              className="form-input"
-              type="number"
-              value={itemForm.quantity}
-              onChange={e => setItemForm({...itemForm, quantity: e.target.value})}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Unit</label>
-            <input
-              className="form-input"
-              value={itemForm.unit}
-              onChange={e => setItemForm({...itemForm, unit: e.target.value})}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Unit Price</label>
-            <input
-              className="form-input"
-              type="number"
-              value={itemForm.unitPrice}
-              onChange={e => setItemForm({...itemForm, unitPrice: e.target.value})}
-            />
-          </div>
-          {(itemForm.isLabor || itemForm.category === 'labor') && (
+          <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Hours</label>
-              <input
-                className="form-input"
-                type="number"
-                value={itemForm.hours}
-                onChange={e => setItemForm({...itemForm, hours: e.target.value})}
-              />
+              <label className="form-label">Quantity</label>
+              <input className="form-input" type="number" value={newItemForm.quantity} onChange={e => setNewItemForm({...newItemForm, quantity: e.target.value})} />
             </div>
-          )}
-          <div className="form-group col-span-2">
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={itemForm.isOptional}
-                  onChange={e => setItemForm({...itemForm, isOptional: e.target.checked})}
-                />
-                Optional
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={itemForm.isExcluded}
-                  onChange={e => setItemForm({...itemForm, isExcluded: e.target.checked})}
-                />
-                Excluded
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={itemForm.isAllowance}
-                  onChange={e => setItemForm({...itemForm, isAllowance: e.target.checked})}
-                />
-                Allowance
-              </label>
+            <div className="form-group">
+              <label className="form-label">Unit</label>
+              <select className="form-select" value={newItemForm.unit} onChange={e => setNewItemForm({...newItemForm, unit: e.target.value})}>
+                <option value="ea">ea</option>
+                <option value="hr">hr</option>
+                <option value="day">day</option>
+                <option value="sf">sf</option>
+                <option value="lf">lf</option>
+                <option value="sq">sq</option>
+                <option value="unit">unit</option>
+              </select>
             </div>
           </div>
-        </div>
-        <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
-          <button className="btn btn-secondary" onClick={() => { setShowAddItem(false); setEditingItem(null); }}>Cancel</button>
-          <button 
-            className="btn btn-primary" 
-            onClick={editingItem ? handleUpdateItem : handleAddItem}
-          >
-            {editingItem ? 'Update' : 'Add'} Item
-          </button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={showAssemblyPicker} onClose={() => setShowAssemblyPicker(false)} title="Insert Assembly" size="lg">
-        {assemblies.length === 0 ? (
-          <div className="text-center py-8 text-muted">No assemblies available. Create assemblies in the library.</div>
-        ) : (
-          <div className="max-h-[70vh] overflow-y-auto">
-            {Object.entries(
-              assemblies.reduce((acc, a) => {
-                const cat = a.category || 'Other';
-                if (!acc[cat]) acc[cat] = [];
-                acc[cat].push(a);
-                return acc;
-              }, {} as Record<string, typeof assemblies>)
-            ).sort(([a], [b]) => a.localeCompare(b)).map(([category, categoryAssemblies]) => (
-              <div key={category} className="mb-6">
-                <h3 className="font-medium text-sm text-muted uppercase mb-2 px-1">{category}</h3>
-                <div className="space-y-1">
-                  {categoryAssemblies.map((assembly: any) => (
-                    <button
-                      key={assembly.id}
-                      className="w-full text-left p-2 border rounded hover:bg-gray-50 flex items-center justify-between"
-                      onClick={() => handleInsertAssembly(assembly)}
-                    >
-                      <div>
-                        <div className="font-medium">{assembly.name}</div>
-                        {assembly.description && <div className="text-xs text-muted">{assembly.description}</div>}
-                      </div>
-                      <div className="text-right text-sm">
-                        <div className="text-muted">{assembly.items?.length || 0} items</div>
-                        <div className="font-medium">${((assembly.items || []).reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0)).toFixed(2)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
-
-      <Modal isOpen={showChecklist} onClose={() => setShowChecklist(false)} title="Smart Checklist" size="lg">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="font-medium">{selectedTemplate?.name}</span>
-          <span className="badge badge-blue">{activeScopeId ? allScopes.find(s => s.id === activeScopeId)?.name : ''}</span>
-        </div>
-        <div className="max-h-[60vh] overflow-y-auto space-y-4">
-          {selectedTemplate?.sections?.map(section => (
-            <div key={section.id} className="border rounded-lg p-3">
-              <div className="font-medium mb-2">{section.name}</div>
-              <div className="space-y-2">
-                {section.items?.map(item => (
-                  <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedTemplateItems[item.id] || false}
-                      onChange={() => handleChecklistToggleItem(item.id)}
-                    />
-                    <input
-                      type="number"
-                      className="form-input w-20"
-                      value={checklistQuantities[item.id] || item.quantity}
-                      onChange={e => handleChecklistQuantityChange(item.id, parseFloat(e.target.value) || 0)}
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{item.name}</div>
-                      {item.description && <div className="text-xs text-muted">{item.description}</div>}
-                    </div>
-                    <div className="text-sm text-muted">
-                      {item.unit} × {formatCurrency(item.unitPrice)}
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Unit Price</label>
+              <input className="form-input" type="number" value={newItemForm.unitPrice} onChange={e => setNewItemForm({...newItemForm, unitPrice: e.target.value})} />
             </div>
-          ))}
-        </div>
-        <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
-          <button className="btn btn-secondary" onClick={() => setShowChecklist(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleAddChecklistItems}>Add Selected Items</button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={showProposal} onClose={() => setShowProposal(false)} title="Proposal Preview" size="lg">
-        <div className="proposal-preview p-8 bg-white">
-          <div className="text-center border-b pb-4 mb-6">
-            <h2 className="text-2xl font-bold">{estimate.name}</h2>
-            <p className="text-muted">{estimate.estimateNumber}</p>
-          </div>
-          
-          <div className="mb-6">
-            <h3 className="font-bold mb-2">Customer</h3>
-            <p>{customer?.name}</p>
-            {customer?.address && <p className="text-sm text-muted">{customer.address}</p>}
-          </div>
-          
-          <div className="mb-6">
-            <h3 className="font-bold mb-2">Scope of Work</h3>
-            {allScopes.map(scope => (
-              <div key={scope.id} className="mb-4">
-                <h4 className="font-medium">{scope.name}</h4>
-                <table className="w-full text-sm">
-                  <tbody>
-                    {scope.sections?.flatMap(section => section.lineItems || []).map(item => (
-                      <tr key={item.id} className={item.isExcluded ? 'line-through text-muted' : ''}>
-                        <td>{item.name}</td>
-                        <td className="text-right">{formatCurrency(item.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-          
-          <div className="border-t pt-4">
-            <div className="flex justify-between mb-2">
-              <span>Subtotal</span>
-              <span>{formatCurrency(totals.subtotal)}</span>
-            </div>
-            <div className="flex justify-between mb-2">
-              <span>Markup ({estimate.markupPercent}%)</span>
-              <span>{formatCurrency(totals.markupAmount)}</span>
-            </div>
-            <div className="flex justify-between text-xl font-bold">
-              <span>Total</span>
-              <span>{formatCurrency(totals.total)}</span>
+            <div className="form-group">
+              <label className="form-label">Category</label>
+              <select className="form-select" value={newItemForm.category} onChange={e => setNewItemForm({...newItemForm, category: e.target.value as EstimateLineCategory})}>
+                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
             </div>
           </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={showEmailModal} onClose={() => setShowEmailModal(false)} title="Send Email">
-        <div className="form-group">
-          <label className="form-label">To *</label>
-          <input className="form-input" type="email" value={emailForm.email} onChange={e => setEmailForm({...emailForm, email: e.target.value})} placeholder="customer@email.com" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Subject</label>
-          <input className="form-input" value={emailForm.subject} onChange={e => setEmailForm({...emailForm, subject: e.target.value})} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Message</label>
-          <textarea className="form-textarea" value={emailForm.body} onChange={e => setEmailForm({...emailForm, body: e.target.value})} />
+          <div className="eb-itemFormTotal">
+            <span>Line Total:</span>
+            <span>{formatCurrency(parseFloat(newItemForm.quantity) * parseFloat(newItemForm.unitPrice))}</span>
+          </div>
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
-          <button className="btn btn-secondary" onClick={() => setShowEmailModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSendEmail}>Open Email</button>
+          <button className="btn btn-secondary" onClick={() => setShowAddItem(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => {
+            const item: EstimateLineItem = { id: editingItem?.item?.id || '', name: newItemForm.name, quantity: parseFloat(newItemForm.quantity), unit: newItemForm.unit, unitPrice: parseFloat(newItemForm.unitPrice), category: newItemForm.category, total: parseFloat(newItemForm.quantity) * parseFloat(newItemForm.unitPrice), isLabor: newItemForm.category === 'labor' };
+            if (editingItem?.item) { updateItem(editingItem.sectionId, editingItem.item.id, item); }
+            else { addItem(editingItem?.sectionId || '', item); }
+            setShowAddItem(false);
+          }}>{editingItem?.item ? 'Update' : 'Add Item'}</button>
         </div>
       </Modal>
 
-      <Modal isOpen={showEmailAllPreview} onClose={() => { setShowEmailAllPreview(false); }} title="Email Preview" size="lg">
-        {emailAllPreview && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="branding-preview" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderBottom: '1px solid #ddd' }}>
-              {branding.brandName && <strong>{branding.brandName}</strong>}
-              {branding.logoUrl || branding.logoDataUrl ? (
-                <img src={branding.logoUrl || branding.logoDataUrl} alt="logo" style={{ height: 20 }} />
-              ) : null}
-            </div>
-            <div><strong>Subject:</strong> {emailAllPreview.subject}</div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <iframe title="Email HTML" srcDoc={emailAllPreview.html} style={{ width: '100%', height: 300, border: '1px solid #ddd', borderRadius: 6 }} />
-            </div>
-            <div>
-              <strong>Plaintext</strong>
-              <textarea className="form-textarea" value={emailAllPreview.text} readOnly style={{ width: '100%', height: 120 }} />
-            </div>
-            <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
-              <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailAllPreview.html)}>Copy HTML</button>
-              <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(emailAllPreview.text)}>Copy Text</button>
-              <button className="btn btn-primary" onClick={() => { window.location.href = `mailto:${emailForm.email || ''}?subject=${encodeURIComponent(emailAllPreview.subject)}&body=${encodeURIComponent(emailAllPreview.text)}`; }}>Open Email</button>
-            </div>
-          </div>
-        )}
+      {/* Customer Picker Modal */}
+      <Modal isOpen={showCustomerPicker} onClose={() => setShowCustomerPicker(false)} title="Select Customer" size="sm">
+        <div className="eb-customerList">
+          {customers?.map(c => (
+            <button key={c.id} className={`eb-customerOption ${formData.customerId === c.id ? 'selected' : ''}`} onClick={() => { setFormData({...formData, customerId: c.id}); setShowCustomerPicker(false); }}>
+              <div className="eb-customerOptionName">{c.name}</div>
+              <div className="eb-customerOptionEmail">{c.email}</div>
+            </button>
+          ))}
+          {customers?.length === 0 && <div className="text-center text-muted py-4">No customers yet</div>}
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
+          <Link to="/customers" className="btn btn-secondary" onClick={() => setShowCustomerPicker(false)}>Manage Customers</Link>
+        </div>
       </Modal>
 
-      <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => { deleteEstimate(estimate!.id); navigate('/estimates'); }}
-        title="Delete Estimate?"
-        message="This action cannot be undone."
-        confirmLabel="Delete"
-        danger
-      />
-
-      <ConfirmDialog
-        isOpen={showConvertConfirm}
-        onClose={() => setShowConvertConfirm(false)}
-        onConfirm={() => {
-          const jobId = convertEstimateToJob(estimate!.id);
-          if (jobId) {
-            showToast('Estimate converted to job!', 'success');
-            navigate(`/jobs/${jobId}`);
-          }
-        }}
-        title="Convert to Job?"
-        message="This will create a new job from this estimate."
-        confirmLabel="Convert"
-      />
-
-      {/* ── Print Preview Overlay (portal into #print-root, never prints app UI) ── */}
-      {estimatePrintData && (
-        <PrintTemplateModal
-          isOpen={!!estimatePrintData}
-          onClose={() => setEstimatePrintData(null)}
-          title={`Estimate ${estimatePrintData.estimateNumber}`}
-          data={estimatePrintData}
-        />
-      )}
-
-      <Modal isOpen={showPricePicker} onClose={() => { setShowPricePicker(false); setPriceSearch(''); }} title="Select from Price Book" size="lg">
-        <div className="mb-4">
-          <div className="flex gap-2 mb-3">
-            <button className={`btn btn-sm ${pricePickerTab === 'materials' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPricePickerTab('materials')}>
-              Materials ({materials?.length || 0})
-            </button>
-            <button className={`btn btn-sm ${pricePickerTab === 'labor' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPricePickerTab('labor')}>
-              Labor ({laborRates?.length || 0})
-            </button>
+      {/* Convert to Job Modal */}
+      <Modal isOpen={showConvertModal} onClose={() => setShowConvertModal(false)} title="Convert to Job" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Configure job before converting this estimate.</p>
+          <div className="grid-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Start Date</label>
+              <input className="form-input" type="date" value={convertOptions.startDate} onChange={e => setConvertOptions({...convertOptions, startDate: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Due Date (Optional)</label>
+              <input className="form-input" type="date" value={convertOptions.dueDate} onChange={e => setConvertOptions({...convertOptions, dueDate: e.target.value})} />
+            </div>
           </div>
-          <input
-            className="form-input"
-            placeholder={`Search ${pricePickerTab}...`}
-            value={priceSearch}
-            onChange={e => setPriceSearch(e.target.value)}
-          />
+          <div className="space-y-2">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={convertOptions.copyPricing} onChange={e => setConvertOptions({...convertOptions, copyPricing: e.target.checked})} />
+              <span>Copy pricing (Contract: {formatCurrency(calculateTotals.total)})</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={convertOptions.copyLineItems} onChange={e => setConvertOptions({...convertOptions, copyLineItems: e.target.checked})} />
+              <span>Copy line items</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={convertOptions.copyNotes} onChange={e => setConvertOptions({...convertOptions, copyNotes: e.target.checked})} />
+              <span>Copy notes</span>
+            </label>
+          </div>
         </div>
-        <div className="max-h-[50vh] overflow-y-auto">
-          {pricePickerTab === 'materials' ? (
-            <div className="space-y-1">
-              {materials
-                ?.filter(m => m.isActive !== false && m.name.toLowerCase().includes(priceSearch.toLowerCase()))
-                .map(m => (
-                  <button
-                    key={m.id}
-                    className="w-full flex items-center justify-between p-2 border rounded hover:bg-gray-50 text-left"
-                    onClick={() => {
-                      const newItem: EstimateLineItem = {
-                        id: crypto.randomUUID(),
-                        name: m.name,
-                        description: m.description || '',
-                        quantity: 1,
-                        unit: m.unit,
-                        unitPrice: m.unitPrice,
-                        category: 'material' as EstimateLineCategory,
-                        isLabor: false,
-                        total: m.unitPrice,
-                        linkedMaterialId: m.id,
-                      };
-                      if (activeScopeId && activeSectionId) {
-                        const updatedScopes = allScopes.map(scope => {
-                          if (scope.id === activeScopeId) {
-                            return {
-                              ...scope,
-                              sections: scope.sections?.map(s => {
-                                if (s.id === activeSectionId) {
-                                  return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-                                }
-                                return s;
-                              }) || [],
-                            };
-                          }
-                          return scope;
-                        });
-                        updateEstimate(estimate!.id, { scopes: updatedScopes });
-                      } else if (activeSectionId) {
-                        const updatedSections = legacySections.map(s => {
-                          if (s.id === activeSectionId) {
-                            return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-                          }
-                          return s;
-                        });
-                        updateEstimate(estimate!.id, { sections: updatedSections });
-                      }
-                      setShowPricePicker(false);
-                      setPriceSearch('');
-                      showToast('Item added');
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium">{m.name}</div>
-                      <div className="text-xs text-muted">{m.category} • {m.supplier || 'No supplier'}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium">{formatCurrency(m.unitPrice)}</div>
-                      <div className="text-xs text-muted">/{m.unit}</div>
-                    </div>
-                  </button>
-                ))}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {laborRates
-                ?.filter(r => r.isActive !== false && r.name.toLowerCase().includes(priceSearch.toLowerCase()))
-                .map(r => (
-                  <button
-                    key={r.id}
-                    className="w-full flex items-center justify-between p-2 border rounded hover:bg-gray-50 text-left"
-                    onClick={() => {
-                      const newItem: EstimateLineItem = {
-                        id: crypto.randomUUID(),
-                        name: r.name,
-                        description: r.trade,
-                        quantity: 1,
-                        unit: 'hr',
-                        unitPrice: r.hourlyRate,
-                        category: 'labor' as EstimateLineCategory,
-                        isLabor: true,
-                        hours: 1,
-                        total: r.hourlyRate,
-                        linkedLaborRateId: r.id,
-                      };
-                      if (activeScopeId && activeSectionId) {
-                        const updatedScopes = allScopes.map(scope => {
-                          if (scope.id === activeScopeId) {
-                            return {
-                              ...scope,
-                              sections: scope.sections?.map(s => {
-                                if (s.id === activeSectionId) {
-                                  return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-                                }
-                                return s;
-                              }) || [],
-                            };
-                          }
-                          return scope;
-                        });
-                        updateEstimate(estimate!.id, { scopes: updatedScopes });
-                      } else if (activeSectionId) {
-                        const updatedSections = legacySections.map(s => {
-                          if (s.id === activeSectionId) {
-                            return { ...s, lineItems: [...(s.lineItems || []), newItem] };
-                          }
-                          return s;
-                        });
-                        updateEstimate(estimate!.id, { sections: updatedSections });
-                      }
-                      setShowPricePicker(false);
-                      setPriceSearch('');
-                      showToast('Item added');
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium">{r.name}</div>
-                      <div className="text-xs text-muted">{r.trade}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium">{formatCurrency(r.hourlyRate)}</div>
-                      <div className="text-xs text-muted">/hr</div>
-                    </div>
-                  </button>
-                ))}
-            </div>
-          )}
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
+          <button className="btn btn-secondary" onClick={() => setShowConvertModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => {
+            if (estimate) {
+              const jobId = convertEstimateToJob(estimate.id, {
+                startDate: convertOptions.startDate || undefined,
+                dueDate: convertOptions.dueDate || undefined,
+                copyLineItems: convertOptions.copyLineItems,
+                copyPricing: convertOptions.copyPricing,
+                copyNotes: convertOptions.copyNotes,
+              });
+              showToast('Converted to job');
+              setShowConvertModal(false);
+              navigate(`/jobs/${jobId}`);
+            }
+          }}>Convert to Job</button>
         </div>
       </Modal>
     </div>

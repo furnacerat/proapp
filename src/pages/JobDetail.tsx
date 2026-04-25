@@ -62,6 +62,8 @@ export function JobDetail() {
   ];
   
   const [showModal, setShowModal] = useState<string | null>(null);
+  const [showGenerateInvoice, setShowGenerateInvoice] = useState(false);
+  const [generateInvoiceOptions, setGenerateInvoiceOptions] = useState({ amount: '', type: 'deposit', adjustFinalPrice: false });
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
   const [receiptForm, setReceiptForm] = useState({ url: '', vendor: '', amount: '', notes: '' });
@@ -338,7 +340,17 @@ export function JobDetail() {
             <div className="job-customer mt-2">{job.customer} {job.customerPhone && <span className="text-muted"> • {job.customerPhone}</span>}</div>
           </div>
           <div className="flex flex-col gap-2 items-end">
-            <span className={`badge badge-lg ${getStatusColor(job.status)}`}>{job.status.replace('_', ' ')}</span>
+            <select className={`form-select badge-lg ${getStatusColor(job.status)}`} value={job.status} onChange={(e) => updateJob(job.id, { status: e.target.value as any })}>
+              <option value="lead">Lead</option>
+              <option value="estimate_sent">Estimate Sent</option>
+              <option value="approved">Approved</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="active">Active</option>
+              <option value="awaiting_materials">Awaiting Materials</option>
+              <option value="awaiting_payment">Awaiting Payment</option>
+              <option value="completed">Completed</option>
+              <option value="closed">Closed</option>
+            </select>
             <span className="text-sm text-muted">{job.type.replace('_', ' ')}</span>
           </div>
         </div>
@@ -429,10 +441,14 @@ export function JobDetail() {
             <div className="card">
               <div className="card-header"><h3 className="card-title">Quick Actions</h3></div>
               <div className="card-body space-y-2">
-                <button className="btn btn-primary w-full" onClick={() => setShowModal('time')}>+ Add Time Entry</button>
+                <button className="btn btn-primary w-full" onClick={() => duplicateJob(job.id)}><Copy size={16} /> Duplicate Job</button>
+                <button className="btn btn-primary w-full" onClick={() => {
+                  setGenerateInvoiceOptions({ amount: String(job.contractAmount - balance), type: 'deposit', adjustFinalPrice: false });
+                  setShowGenerateInvoice(true);
+                }}><FileText size={16} /> Generate Invoice</button>
+                <button className="btn btn-secondary w-full" onClick={() => setShowModal('time')}>+ Add Time Entry</button>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('expense')}>+ Add Expense</button>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('task')}>+ Add Task</button>
-                <button className="btn btn-secondary w-full" onClick={() => setShowModal('invoice')}>+ Create Invoice</button>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('changeorder')}>+ Change Order</button>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('photo')}>+ Add Photo</button>
               </div>
@@ -1037,22 +1053,24 @@ export function JobDetail() {
         </div>
       </Modal>
 
-      <Modal isOpen={showModal === 'invoice'} onClose={() => setShowModal(null)} title="Create Invoice">
-        <div className="form-row form-row-2">
-          <div className="form-group">
-            <label className="form-label">Invoice #</label>
-            <input className="form-input" value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm({...invoiceForm, invoiceNumber: e.target.value})} placeholder="Auto" />
+<Modal isOpen={showModal === 'invoice'} onClose={() => setShowModal(null)} title="Create Invoice">
+        {!jobInvoices.length && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">Generate an invoice from your job data, or create a custom invoice.</p>
           </div>
-          <div className="form-group">
-            <label className="form-label">Amount *</label>
-            <input className="form-input" type="number" value={invoiceForm.amount} onChange={e => setInvoiceForm({...invoiceForm, amount: e.target.value})} />
-          </div>
+        )}
+        <div className="form-group">
+          <label className="form-label">Invoice Amount *</label>
+          <input className="form-input" type="number" value={invoiceForm.amount} onChange={e => setInvoiceForm({...invoiceForm, amount: e.target.value})} placeholder="0.00" />
         </div>
         <div className="form-row form-row-2">
           <div className="form-group">
             <label className="form-label">Type</label>
             <select className="form-select" value={invoiceForm.type} onChange={e => setInvoiceForm({...invoiceForm, type: e.target.value})}>
-              {INVOICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              <option value="deposit">Deposit</option>
+              <option value="progress">Progress Payment</option>
+              <option value="final">Final Payment</option>
+              <option value="change_order">Change Order</option>
             </select>
           </div>
           <div className="form-group">
@@ -1336,6 +1354,42 @@ export function JobDetail() {
               setShowModal(null);
             }
           }}>Add Photo</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showGenerateInvoice} onClose={() => setShowGenerateInvoice(false)} title="Generate Invoice" size="sm">
+        <div className="space-y-4">
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="text-sm text-muted">Job: {job.name}</div>
+            <div className="text-sm text-muted">Contract: {formatCurrency(job.contractAmount)}</div>
+            <div className="text-sm text-muted">Balance: {formatCurrency(balance)}</div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Invoice Amount</label>
+            <input className="form-input" type="number" value={generateInvoiceOptions.amount} onChange={e => setGenerateInvoiceOptions({...generateInvoiceOptions, amount: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Type</label>
+            <select className="form-select" value={generateInvoiceOptions.type} onChange={e => setGenerateInvoiceOptions({...generateInvoiceOptions, type: e.target.value})}>
+              <option value="deposit">Deposit</option>
+              <option value="progress">Progress Payment</option>
+              <option value="final">Final Payment</option>
+              <option value="change_order">Change Order</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={generateInvoiceOptions.adjustFinalPrice} onChange={e => setGenerateInvoiceOptions({...generateInvoiceOptions, adjustFinalPrice: e.target.checked})} />
+            <span>Adjust final price</span>
+          </label>
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
+          <button className="btn btn-secondary" onClick={() => setShowGenerateInvoice(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => {
+            const invNum = `INV-${String(invoices.length + 1).padStart(3, '0')}`;
+            addInvoice({ jobId: job.id, invoiceNumber: invNum, amount: parseFloat(generateInvoiceOptions.amount) || job.contractAmount, type: generateInvoiceOptions.type as any, dueDate: new Date().toISOString().split('T')[0], status: 'draft', notes: '' });
+            showToast('Invoice generated');
+            setShowGenerateInvoice(false);
+          }}>Generate Invoice</button>
         </div>
       </Modal>
     </div>

@@ -592,6 +592,8 @@ export interface BrandingSettings {
   paymentTerms?: string;
   // Tax rate
   defaultTaxRate?: number;
+  // Smart Features (default ON for new users)
+  smartFeaturesEnabled?: boolean;
 }
 
 export interface Alert {

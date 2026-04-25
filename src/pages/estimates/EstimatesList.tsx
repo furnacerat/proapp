@@ -24,6 +24,8 @@ export function EstimatesList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [showActions, setShowActions] = useState<string | null>(null);
+  const [convertId, setConvertId] = useState<string | null>(null);
+  const [convertOptions, setConvertOptions] = useState({ startDate: '', dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
 
   const filteredEstimates = useMemo(() => {
     const estList = estimates || [];
@@ -259,8 +261,8 @@ export function EstimatesList() {
                                   <button
                                     className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm w-full text-left font-medium text-green-700"
                                     onClick={() => {
-                                      convertEstimateToJob(estimate.id);
-                                      setShowActions(null);
+                                      setConvertId(estimate.id);
+                                      setConvertOptions({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
                                     }}
                                   >
                                     <FileText size={14} /> Convert to Job
@@ -347,6 +349,52 @@ export function EstimatesList() {
         confirmLabel="Delete"
         danger
       />
+
+      <Modal isOpen={!!convertId} onClose={() => setConvertId(null)} title="Convert to Job" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-muted">Configure job settings before converting this estimate.</p>
+          <div className="grid-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Start Date</label>
+              <input className="form-input" type="date" value={convertOptions.startDate} onChange={e => setConvertOptions({...convertOptions, startDate: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Due Date (Optional)</label>
+              <input className="form-input" type="date" value={convertOptions.dueDate} onChange={e => setConvertOptions({...convertOptions, dueDate: e.target.value})} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={convertOptions.copyPricing} onChange={e => setConvertOptions({...convertOptions, copyPricing: e.target.checked})} />
+              <span>Copy pricing (Contract Amount)</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={convertOptions.copyLineItems} onChange={e => setConvertOptions({...convertOptions, copyLineItems: e.target.checked})} />
+              <span>Copy line items</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={convertOptions.copyNotes} onChange={e => setConvertOptions({...convertOptions, copyNotes: e.target.checked})} />
+              <span>Copy notes</span>
+            </label>
+          </div>
+        </div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
+          <button className="btn btn-secondary" onClick={() => setConvertId(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => {
+            if (convertId) {
+              convertEstimateToJob(convertId, {
+                startDate: convertOptions.startDate || undefined,
+                dueDate: convertOptions.dueDate || undefined,
+                copyLineItems: convertOptions.copyLineItems,
+                copyPricing: convertOptions.copyPricing,
+                copyNotes: convertOptions.copyNotes,
+              });
+              showToast('Converted to job');
+              setConvertId(null);
+            }
+          }}>Convert</button>
+        </div>
+      </Modal>
     </div>
   );
 }

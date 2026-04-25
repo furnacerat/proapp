@@ -20,7 +20,7 @@ interface AppContextType {
   deleteEstimate: (id: string) => void;
   duplicateEstimate: (id: string) => string;
   archiveEstimate: (id: string) => void;
-  convertEstimateToJob: (estimateId: string) => string;
+  convertEstimateToJob: (estimateId: string, options?: { startDate?: string; dueDate?: string; copyLineItems?: boolean; copyPricing?: boolean; copyNotes?: boolean }) => string;
   
   addLaborRate: (rate: Omit<LaborRate, 'id'>) => string;
   updateLaborRate: (id: string, updates: Partial<LaborRate>) => void;
@@ -1044,11 +1044,12 @@ const approveChangeOrder = (id: string) => {
     setData(prev => ({ ...prev, estimates: prev.estimates.filter(e => e.id !== id) }));
   };
 
-  const convertEstimateToJob = (estimateId: string) => {
+  const convertEstimateToJob = (estimateId: string, options?: { startDate?: string; dueDate?: string; copyLineItems?: boolean; copyPricing?: boolean; copyNotes?: boolean }) => {
     const estimate = data.estimates.find(e => e.id === estimateId);
     if (!estimate) return '';
     
     const customer = data.customers.find(c => c.id === estimate.customerId);
+    const opt = options || {};
     const jobId = addJob({
       name: estimate.name,
       customerId: estimate.customerId,
@@ -1057,15 +1058,16 @@ const approveChangeOrder = (id: string) => {
       customerEmail: customer?.email || '',
       address: estimate.address,
       type: estimate.type,
-      contractAmount: estimate.total,
-      estimatedCost: estimate.subtotal,
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: '',
-      status: 'approved',
+      contractAmount: opt.copyPricing !== false ? estimate.total : 0,
+      estimatedCost: opt.copyPricing !== false ? estimate.subtotal : 0,
+      startDate: opt.startDate || new Date().toISOString().split('T')[0],
+      dueDate: opt.dueDate || '',
+      status: 'active',
       estimateId: estimate.id,
+      notes: opt.copyNotes ? estimate.notes : '',
     });
     
-    updateEstimate(estimateId, { status: 'approved', convertedToJobId: jobId });
+    updateEstimate(estimateId, { status: 'converted', convertedToJobId: jobId });
     return jobId;
   };
 
