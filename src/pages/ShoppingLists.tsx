@@ -32,6 +32,7 @@ export function ShoppingLists() {
   const [params] = useSearchParams();
   const {
     jobs,
+    suppliers,
     materials,
     estimates,
     shoppingLists,
@@ -58,8 +59,8 @@ export function ShoppingLists() {
   const [showNewList, setShowNewList] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
-  const [listForm, setListForm] = useState({ jobId: requestedJobId, title: '', store: '', notes: '' });
-  const [itemForm, setItemForm] = useState<{ name: string; quantity: string; unit: string; category: ShoppingListItemCategory; estimatedCost: string; urgent: boolean; notes: string; linkedPriceBookItemId: string; allowanceId: string; allowanceHandling: AllowanceHandling }>({ name: '', quantity: '1', unit: 'ea', category: 'material', estimatedCost: '', urgent: false, notes: '', linkedPriceBookItemId: '', allowanceId: '', allowanceHandling: 'track_only' });
+  const [listForm, setListForm] = useState({ jobId: requestedJobId, title: '', supplierId: '', store: '', notes: '' });
+  const [itemForm, setItemForm] = useState<{ name: string; quantity: string; unit: string; category: ShoppingListItemCategory; estimatedCost: string; urgent: boolean; notes: string; supplierId: string; linkedPriceBookItemId: string; allowanceId: string; allowanceHandling: AllowanceHandling }>({ name: '', quantity: '1', unit: 'ea', category: 'material', estimatedCost: '', urgent: false, notes: '', supplierId: '', linkedPriceBookItemId: '', allowanceId: '', allowanceHandling: 'track_only' });
   const [receiptForm, setReceiptForm] = useState({ vendor: '', date: new Date().toISOString().split('T')[0], total: '', tax: '', imageUrl: '', notes: '' });
 
   const selectedList = useMemo(() => shoppingLists.find(list => list.id === selectedId) || shoppingLists[0] || null, [shoppingLists, selectedId]);
@@ -75,6 +76,7 @@ export function ShoppingLists() {
         item.title.toLowerCase().includes(q) ||
         item.jobName.toLowerCase().includes(q) ||
         item.store?.toLowerCase().includes(q) ||
+        item.supplierName?.toLowerCase().includes(q) ||
         item.items.some(row => row.name.toLowerCase().includes(q))
       );
     }
@@ -96,6 +98,7 @@ export function ShoppingLists() {
 
   const selectedReceipt = selectedList ? receipts.find(receipt => receipt.shoppingListId === selectedList.id) : undefined;
   const selectedJob = selectedList ? jobs.find(job => job.id === selectedList.jobId) : undefined;
+  const selectedSupplier = selectedList?.supplierId ? suppliers.find(supplier => supplier.id === selectedList.supplierId) : undefined;
   const jobAllowances = selectedList ? allowances.filter(allowance => allowance.jobId === selectedList.jobId) : [];
   const selectedEstimate = selectedJob?.estimateId ? estimates.find(estimate => estimate.id === selectedJob.estimateId) : undefined;
   const selectedEstimatedTotal = selectedList?.items.reduce((sum, item) => sum + (item.estimatedCost || 0), 0) || 0;
@@ -104,6 +107,7 @@ export function ShoppingLists() {
 
   const createList = () => {
     const job = jobs.find(item => item.id === listForm.jobId);
+    const supplier = suppliers.find(item => item.id === listForm.supplierId);
     if (!job || !listForm.title.trim()) {
       showToast('Select a job and title', 'error');
       return;
@@ -113,13 +117,15 @@ export function ShoppingLists() {
       jobName: job.name,
       title: listForm.title.trim(),
       status: 'open',
-      store: listForm.store.trim() || undefined,
+      supplierId: supplier?.id,
+      supplierName: supplier?.name,
+      store: listForm.store.trim() || supplier?.name || undefined,
       notes: listForm.notes.trim() || undefined,
       items: [],
     });
     setSelectedId(id);
     setShowNewList(false);
-    setListForm({ jobId: requestedJobId, title: '', store: '', notes: '' });
+    setListForm({ jobId: requestedJobId, title: '', supplierId: '', store: '', notes: '' });
     showToast('Shopping list created');
   };
 
@@ -130,6 +136,7 @@ export function ShoppingLists() {
       return;
     }
     const material = materials.find(item => item.id === itemForm.linkedPriceBookItemId);
+    const supplier = suppliers.find(item => item.id === itemForm.supplierId) || (target.supplierId ? suppliers.find(item => item.id === target.supplierId) : undefined);
     addShoppingListItem(target.id, {
       name: itemForm.name.trim(),
       category: itemForm.category,
@@ -139,6 +146,8 @@ export function ShoppingLists() {
       purchased: false,
       urgent: itemForm.urgent,
       notes: itemForm.notes.trim() || undefined,
+      supplierId: supplier?.id,
+      supplierName: supplier?.name,
       linkedPriceBookItemId: material?.id,
       addOnStatus: 'included_expense',
       allowanceId: itemForm.allowanceId || undefined,
@@ -147,7 +156,7 @@ export function ShoppingLists() {
     if (itemForm.allowanceId) {
       addAllowanceSelection(itemForm.allowanceId, {
         itemName: itemForm.name.trim(),
-        vendor: target.store,
+        vendor: supplier?.name || target.supplierName || target.store,
         quantity: parseFloat(itemForm.quantity) || 1,
         unitCost: itemForm.estimatedCost ? parseFloat(itemForm.estimatedCost) : material?.unitPrice,
         total: itemForm.estimatedCost ? parseFloat(itemForm.estimatedCost) : material?.unitPrice || 0,
@@ -156,7 +165,7 @@ export function ShoppingLists() {
         status: 'planned',
       }, itemForm.allowanceHandling === 'contractor_paid_reimbursable');
     }
-    setItemForm({ name: '', quantity: '1', unit: 'ea', category: 'material', estimatedCost: '', urgent: false, notes: '', linkedPriceBookItemId: '', allowanceId: '', allowanceHandling: 'track_only' });
+    setItemForm({ name: '', quantity: '1', unit: 'ea', category: 'material', estimatedCost: '', urgent: false, notes: '', supplierId: target.supplierId || '', linkedPriceBookItemId: '', allowanceId: '', allowanceHandling: 'track_only' });
     setShowQuickAdd(false);
     showToast('Item added');
   };
@@ -165,15 +174,19 @@ export function ShoppingLists() {
     if (!selectedList || !selectedEstimate) return;
     const lineItems = (selectedEstimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || []));
     lineItems.filter(item => ['material', 'equipment', 'other', 'allowance'].includes(item.category)).slice(0, 8).forEach(item => {
+      const material = item.linkedMaterialId ? materials.find(row => row.id === item.linkedMaterialId) : undefined;
+      const supplier = suppliers.find(row => row.name === material?.supplier) || selectedSupplier;
       addShoppingListItem(selectedList.id, {
         name: item.name,
         category: item.category === 'equipment' ? 'rental' : item.category === 'other' || item.category === 'allowance' ? 'supply' : 'material',
-        quantity: item.quantity,
+        quantity: item.quantity || 0,
         unit: item.unit,
         estimatedCost: item.unitCost ?? item.unitPrice,
         purchased: false,
         urgent: false,
         notes: 'Added from original estimate material scope',
+        supplierId: supplier?.id,
+        supplierName: supplier?.name,
         linkedEstimateLineItemId: item.id,
       });
     });
@@ -261,7 +274,7 @@ export function ShoppingLists() {
                   <div className="shopping-card-grid">
                     <span>{list.items.length} items</span><span>{purchased} purchased</span><span>{formatCurrency(total)}</span><span>{urgent} urgent</span>
                   </div>
-                  {list.store && <small>{list.store}</small>}
+                  {(list.supplierName || list.store) && <small>{list.supplierName || list.store}</small>}
                 </button>
               );
             })}
@@ -271,7 +284,7 @@ export function ShoppingLists() {
             {selectedList && (
               <>
                 <div className="shopping-detail-head">
-                  <div><h2>{selectedList.title}</h2><p>{selectedList.jobName} {selectedList.store ? `- ${selectedList.store}` : ''}</p></div>
+                  <div><h2>{selectedList.title}</h2><p>{selectedList.jobName} {selectedSupplier?.name || selectedList.supplierName || selectedList.store ? `- ${selectedSupplier?.name || selectedList.supplierName || selectedList.store}` : ''}</p></div>
                   <span className={`shopping-status ${selectedList.status}`}>{statusLabels[selectedList.status]}</span>
                 </div>
                 <div className="shopping-detail-actions">
@@ -294,7 +307,7 @@ export function ShoppingLists() {
                         {rows.map(item => (
                           <div className={`shopping-item ${item.purchased ? 'done' : ''}`} key={item.id}>
                             <input type="checkbox" checked={item.purchased} onChange={event => updateShoppingListItem(selectedList.id, item.id, { purchased: event.target.checked })} />
-                            <div><strong>{item.name}</strong><span>{item.quantity} {item.unit} {item.notes ? `- ${item.notes}` : ''}</span></div>
+                            <div><strong>{item.name}</strong><span>{item.quantity} {item.unit} {item.supplierName ? `- ${item.supplierName}` : ''} {item.notes ? `- ${item.notes}` : ''}</span></div>
                             {item.urgent && <b>Urgent</b>}
                             <input className="shopping-cost-input" type="number" value={item.actualCost ?? ''} placeholder={String(item.estimatedCost || '')} onChange={event => updateShoppingListItem(selectedList.id, item.id, { actualCost: event.target.value ? parseFloat(event.target.value) : undefined })} />
                             <select value={item.addOnStatus || 'included_expense'} onChange={event => updateShoppingListItem(selectedList.id, item.id, { addOnStatus: event.target.value as any })}>
@@ -324,12 +337,14 @@ export function ShoppingLists() {
       <Modal isOpen={showNewList} onClose={() => setShowNewList(false)} title="New Shopping List" size="md">
         <div className="form-group"><label className="form-label">Job</label><select className="form-select" value={listForm.jobId} onChange={event => setListForm({ ...listForm, jobId: event.target.value })}><option value="">Select job...</option>{jobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Title</label><input className="form-input" value={listForm.title} onChange={event => setListForm({ ...listForm, title: event.target.value })} placeholder="Friday hardware run" /></div>
-        <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Store</label><input className="form-input" value={listForm.store} onChange={event => setListForm({ ...listForm, store: event.target.value })} /></div><div className="form-group"><label className="form-label">Notes</label><input className="form-input" value={listForm.notes} onChange={event => setListForm({ ...listForm, notes: event.target.value })} /></div></div>
+        <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Supplier</label><select className="form-select" value={listForm.supplierId} onChange={event => { const supplier = suppliers.find(item => item.id === event.target.value); setListForm({ ...listForm, supplierId: event.target.value, store: supplier?.name || listForm.store }); }}><option value="">Manual / no supplier</option>{suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></div><div className="form-group"><label className="form-label">Store</label><input className="form-input" value={listForm.store} onChange={event => setListForm({ ...listForm, store: event.target.value, supplierId: '' })} /></div></div>
+        <div className="form-group"><label className="form-label">Notes</label><input className="form-input" value={listForm.notes} onChange={event => setListForm({ ...listForm, notes: event.target.value })} /></div>
         <div className="modal-footer" style={{ padding: 0, borderTop: 'none', marginTop: 16 }}><button className="shopping-secondary" onClick={() => setShowNewList(false)}>Cancel</button><button className="shopping-primary" onClick={createList}>Create List</button></div>
       </Modal>
 
       <Modal isOpen={showQuickAdd} onClose={() => setShowQuickAdd(false)} title="Quick Add Item" size="lg">
         <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Item</label><input className="form-input" value={itemForm.name} onChange={event => setItemForm({ ...itemForm, name: event.target.value })} /></div><div className="form-group"><label className="form-label">Price Book Link</label><select className="form-select" value={itemForm.linkedPriceBookItemId} onChange={event => { const material = materials.find(item => item.id === event.target.value); setItemForm({ ...itemForm, linkedPriceBookItemId: event.target.value, name: material?.name || itemForm.name, unit: material?.unit || itemForm.unit, estimatedCost: material ? String(material.unitPrice) : itemForm.estimatedCost }); }}><option value="">Manual</option>{materials.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div></div>
+        <div className="form-group"><label className="form-label">Supplier</label><select className="form-select" value={itemForm.supplierId || selectedList?.supplierId || ''} onChange={event => setItemForm({ ...itemForm, supplierId: event.target.value })}><option value="">Use list supplier / manual</option>{suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></div>
         <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Qty</label><input className="form-input" type="number" value={itemForm.quantity} onChange={event => setItemForm({ ...itemForm, quantity: event.target.value })} /></div><div className="form-group"><label className="form-label">Unit</label><input className="form-input" value={itemForm.unit} onChange={event => setItemForm({ ...itemForm, unit: event.target.value })} /></div><div className="form-group"><label className="form-label">Category</label><select className="form-select" value={itemForm.category} onChange={event => setItemForm({ ...itemForm, category: event.target.value as ShoppingListItemCategory })}>{categories.map(category => <option key={category} value={category}>{category}</option>)}</select></div></div>
         <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Estimated Cost</label><input className="form-input" type="number" value={itemForm.estimatedCost} onChange={event => setItemForm({ ...itemForm, estimatedCost: event.target.value })} /></div><label className="shopping-toggle"><input type="checkbox" checked={itemForm.urgent} onChange={event => setItemForm({ ...itemForm, urgent: event.target.checked })} /> Urgent</label></div>
         <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Link Allowance</label><select className="form-select" value={itemForm.allowanceId} onChange={event => setItemForm({ ...itemForm, allowanceId: event.target.value })}><option value="">No allowance</option>{jobAllowances.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div><div className="form-group"><label className="form-label">Allowance Handling</label><select className="form-select" value={itemForm.allowanceHandling} onChange={event => setItemForm({ ...itemForm, allowanceHandling: event.target.value as any })}><option value="track_only">Track only against allowance</option><option value="contractor_paid_reimbursable">Contractor paid - reimbursable</option><option value="client_paid_direct">Client paid direct</option></select></div></div>

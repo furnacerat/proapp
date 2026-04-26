@@ -287,15 +287,15 @@ export function MaterialOrders() {
         id: crypto.randomUUID(),
         name: item.name,
         description: item.description,
-        quantity: item.quantity,
+        quantity: item.quantity || 0,
         unit: item.unit,
         unitPrice,
         category: item.category,
         supplier: linkedMaterial?.supplier,
         supplierId: supplier?.id,
-        orderedQuantity: item.quantity,
+        orderedQuantity: item.quantity || 0,
         receivedQuantity: 0,
-        lineTotal: item.quantity * unitPrice,
+        lineTotal: (item.quantity || 0) * unitPrice,
         costTreatment: 'contractor_cost',
       };
     });
@@ -579,6 +579,7 @@ export function MaterialOrders() {
                   <div className="order-delivery-card">
                     <div className="order-detail-section-title">Delivery Info</div>
                     <div className="order-delivery-grid">
+                      <span>Supplier</span><strong>{selectedSupplier ? `${selectedSupplier.name}${selectedSupplier.location ? ` - ${selectedSupplier.location}` : ''}` : selectedOrder.supplierName || 'Not assigned'}</strong>
                       <span>Sent</span><strong>{selectedOrder.sentDate ? formatDate(selectedOrder.sentDate) : 'Not sent'}</strong>
                       <span>Received</span><strong>{selectedOrder.receivedDate ? formatDate(selectedOrder.receivedDate) : 'Not received'}</strong>
                       <span>Notes</span><strong>{selectedOrder.notes || 'No notes'}</strong>

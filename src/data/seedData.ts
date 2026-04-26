@@ -136,6 +136,13 @@ export const initialData: AppData = {
     { id: uuidv4(), name: 'Copper Wire 12/2', category: 'Electrical', unit: 'ft', unitPrice: 0.85, supplier: 'ElectricPro', isActive: true },
     { id: uuidv4(), name: 'Light Switch', category: 'Electrical', unit: 'ea', unitPrice: 2.25, supplier: 'ElectricPro', isActive: true },
   ],
+  suppliers: [
+    { id: uuidv4(), name: 'BuildPro Supply', category: 'Lumber', categories: ['Lumber', 'Drywall', 'Sheathing', 'General'], location: 'Springfield, IL', contactName: 'Contractor Desk', phone: '(555) 410-1100', email: 'orders@buildpro.example', address: '1200 Contractor Way, Springfield, IL', notes: 'Primary source for framing, drywall, and job-site material orders.', isPreferred: true, isDefault: true, isActive: true, createdAt: now },
+    { id: uuidv4(), name: 'Hardware Plus', category: 'Hardware', categories: ['Hardware', 'Fasteners', 'Cabinet Hardware'], location: 'Springfield, IL', phone: '(555) 410-2200', notes: 'Good for quick hardware runs and replacement parts.', isPreferred: true, isActive: true, createdAt: now },
+    { id: uuidv4(), name: 'ElectricPro', category: 'Electrical', categories: ['Electrical', 'Lighting'], location: 'Springfield, IL', phone: '(555) 410-3300', notes: 'Use for wire, boxes, switches, and lighting supplies.', isPreferred: false, isActive: true, createdAt: now },
+    { id: uuidv4(), name: 'PlumbSupply', category: 'Plumbing', categories: ['Plumbing', 'Fixtures'], location: 'Springfield, IL', phone: '(555) 410-4400', notes: 'Plumbing rough-in and fixture connection supplies.', isPreferred: false, isActive: true, createdAt: now },
+    { id: uuidv4(), name: 'FloorCo', category: 'Flooring', categories: ['Flooring', 'Transitions', 'Underlayment'], location: 'Springfield, IL', phone: '(555) 410-5500', notes: 'Flooring materials, transitions, and underlayment.', isPreferred: false, isActive: true, createdAt: now },
+  ],
   assemblies: [
     // ============ DEMOLITION ============
     { id: uuidv4(), name: 'Room Demolition', description: 'Remove all finish materials from one room', category: 'Demolition', unit: 'room', laborHours: 4, items: [

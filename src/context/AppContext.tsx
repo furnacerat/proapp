@@ -1195,12 +1195,18 @@ const approveChangeOrder = (id: string) => {
 
   const addSupplier = (supplier: Omit<Supplier, 'id' | 'createdAt'>) => {
     const id = crypto.randomUUID();
-    setData(prev => ({ ...prev, suppliers: [...(prev.suppliers || []), { ...supplier, id, createdAt: new Date().toISOString() }] }));
+    setData(prev => {
+      const existing = supplier.isDefault ? (prev.suppliers || []).map(item => ({ ...item, isDefault: false })) : (prev.suppliers || []);
+      return { ...prev, suppliers: [...existing, { ...supplier, id, createdAt: new Date().toISOString() }] };
+    });
     return id;
   };
 
   const updateSupplier = (id: string, updates: Partial<Supplier>) => {
-    setData(prev => ({ ...prev, suppliers: (prev.suppliers || []).map(s => s.id === id ? { ...s, ...updates } : s) }));
+    setData(prev => ({ ...prev, suppliers: (prev.suppliers || []).map(s => {
+      if (updates.isDefault && s.id !== id) return { ...s, isDefault: false };
+      return s.id === id ? { ...s, ...updates } : s;
+    }) }));
   };
 
   const deleteSupplier = (id: string) => {

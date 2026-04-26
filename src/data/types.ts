@@ -567,6 +567,9 @@ export type MaterialOrderStatus = 'draft' | 'sent' | 'confirmed' | 'partially_re
 export interface Supplier {
   id: string;
   name: string;
+  category?: string;
+  categories?: string[];
+  location?: string;
   contactName?: string;
   phone?: string;
   email?: string;
@@ -574,6 +577,8 @@ export interface Supplier {
   website?: string;
   leadTimeDays?: number;
   notes?: string;
+  isPreferred?: boolean;
+  isDefault?: boolean;
   isActive: boolean;
   createdAt: string;
 }
@@ -664,6 +669,8 @@ export interface ShoppingListItem {
   purchased: boolean;
   urgent: boolean;
   notes?: string;
+  supplierId?: string;
+  supplierName?: string;
   linkedPriceBookItemId?: string;
   linkedEstimateLineItemId?: string;
   addOnStatus?: ShoppingListAddOnStatus;
@@ -679,6 +686,8 @@ export interface ShoppingList {
   status: ShoppingListStatus;
   createdAt: string;
   completedAt?: string;
+  supplierId?: string;
+  supplierName?: string;
   store?: string;
   notes?: string;
   items: ShoppingListItem[];
