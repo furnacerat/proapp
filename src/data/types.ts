@@ -167,6 +167,7 @@ export interface Template {
   laborAssumptions?: string;
   materialAssumptions?: string;
   markupPercent: number;
+  assemblyIds?: string[];
   items?: TemplateItem[];
   createdAt: string;
 }
@@ -186,12 +187,19 @@ export type EstimateLineCategory = 'labor' | 'material' | 'equipment' | 'subcont
 
 export interface EstimateLineItem {
   id: string;
+  sourceType?: 'manual' | 'priceBook' | 'assembly' | 'template';
+  sourceId?: string;
   name: string;
   description?: string;
   quantity: number;
   unit: string;
+  unitCost?: number;
   unitPrice: number;
+  markupPercent?: number;
+  costTotal?: number;
+  priceTotal?: number;
   category: EstimateLineCategory;
+  type?: 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other';
   isLabor: boolean;
   hours?: number;
   laborRateId?: string;
@@ -199,6 +207,15 @@ export interface EstimateLineItem {
   equipmentCost?: number;
   subcontractorCost?: number;
   total: number;
+  taxable?: boolean;
+  clientVisible?: boolean;
+  internalNotes?: string;
+  priceBookSnapshot?: {
+    unitCost?: number;
+    unitPrice?: number;
+    name?: string;
+    updatedAt?: string;
+  };
   isOptional?: boolean;
   isExcluded?: boolean;
   isAllowance?: boolean;
