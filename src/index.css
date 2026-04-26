@@ -10928,3 +10928,140 @@ body {
     justify-content: flex-start;
   }
 }
+
+/* Expenses readability refinements */
+.expenses-command-page,
+.expenses-command-page .page-title,
+.expenses-command-page h1,
+.expenses-command-page h2,
+.expenses-command-page h3,
+.expenses-command-page strong,
+.expenses-command-page b {
+  color: #f8fafc;
+}
+
+.expenses-command-page .page-subtitle,
+.expenses-command-page p,
+.expenses-command-page span,
+.expenses-command-page small {
+  color: #b9d4ef;
+}
+
+.expenses-command-page .page-eyebrow {
+  color: #fb923c;
+}
+
+.expense-financial-card,
+.expense-job-snapshot,
+.expense-snapshot-panel,
+.expense-breakdown-card,
+.expense-quick-add,
+.expense-table-card {
+  background: rgba(10, 22, 39, 0.96);
+  border-color: rgba(125, 157, 196, 0.24);
+}
+
+.expense-financial-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 48px rgba(0, 0, 0, 0.26);
+}
+
+.expense-financial-card span,
+.expense-section-heading p,
+.expense-quick-add p {
+  color: #b8d2ee;
+}
+
+.expense-financial-card strong {
+  color: #f8fbff;
+  font-weight: 950;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.26);
+}
+
+.expense-financial-card small {
+  color: #a9c6e6;
+}
+
+.expense-financial-card.good strong,
+.expense-snapshot-stats .good b,
+.expense-job-snapshot .good,
+.expense-job-snapshot .good b {
+  color: #a7f3d0;
+}
+
+.expense-financial-card.danger strong,
+.expense-snapshot-stats .danger b,
+.expense-job-snapshot .danger,
+.expense-job-snapshot .danger b {
+  color: #fecdd3;
+}
+
+.expense-alert-card {
+  background: rgba(113, 63, 18, 0.32);
+  border-color: rgba(251, 191, 36, 0.46);
+}
+
+.expense-alert-card span,
+.expense-alert-card strong {
+  color: #fef3c7;
+}
+
+.expense-job-snapshot {
+  background: rgba(13, 27, 49, 0.96);
+  border-color: rgba(125, 157, 196, 0.22);
+}
+
+.expense-job-snapshot:hover {
+  background: rgba(24, 45, 73, 0.98);
+}
+
+.expense-job-snapshot strong {
+  color: #f8fafc;
+  font-weight: 850;
+}
+
+.expense-job-snapshot span,
+.expense-snapshot-stats span {
+  color: #b9d4ef;
+}
+
+.expense-snapshot-stats b {
+  color: #eef6ff;
+}
+
+.expense-source-pills span,
+.expense-category-pill,
+.expense-group-card {
+  background: rgba(15, 31, 52, 0.94);
+  border-color: rgba(125, 157, 196, 0.22);
+}
+
+.expense-category-pill span,
+.expense-source-pills span,
+.expense-group-header span,
+.expense-empty-inline {
+  color: #b9d4ef;
+}
+
+.expense-category-pill strong,
+.expense-group-header h3 {
+  color: #f8fafc;
+}
+
+.expense-table td {
+  background: rgba(15, 31, 52, 0.92);
+  color: #d8e6f5;
+}
+
+.expense-table tbody tr:hover td {
+  background: rgba(24, 45, 73, 0.98);
+}
+
+.expense-source-stack span,
+.expense-notes-cell > span {
+  color: #eef6ff;
+}
+
+.expense-source-stack small,
+.expense-notes-cell small {
+  color: #abc5e2;
+}
