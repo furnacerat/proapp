@@ -512,6 +512,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateTimeEntry = (id: string, updates: Partial<TimeEntry>) => {
+    const currentEntry = data.timeEntries.find(t => t.id === id);
+    const affectedJobIds = Array.from(new Set([currentEntry?.jobId, updates.jobId].filter(Boolean) as string[]));
     setData(prev => {
       const entry = prev.timeEntries.find(t => t.id === id);
       if (!entry) return prev;
@@ -531,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       };
     });
-    if (updates.jobId) recalcJobCosts(updates.jobId);
+    affectedJobIds.forEach(jobId => recalcJobCosts(jobId));
   };
 
   const deleteTimeEntry = (id: string) => {
