@@ -10369,3 +10369,123 @@ body {
     max-width: none;
   }
 }
+
+/* Time Entries readability refinements */
+.time-command-page .page-title,
+.time-command-page h1,
+.time-command-page h2,
+.time-command-page h3 {
+  color: #f8fafc;
+}
+
+.time-command-page .page-subtitle,
+.time-command-page p {
+  color: #b6c7dc;
+}
+
+.time-command-page .page-eyebrow {
+  color: #fb923c;
+}
+
+.time-kpi-card {
+  background: rgba(12, 24, 43, 0.94);
+  border-color: rgba(125, 157, 196, 0.26);
+}
+
+.time-kpi-card span {
+  color: #b9d7ff;
+  font-weight: 750;
+}
+
+.time-kpi-card strong {
+  color: #f8fbff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+}
+
+.time-kpi-card small,
+.time-quick-add p {
+  color: #a9c2de;
+}
+
+.time-quick-add,
+.time-table-card,
+.time-group-card {
+  background: rgba(10, 22, 39, 0.94);
+  border-color: rgba(125, 157, 196, 0.22);
+}
+
+.time-quick-add h2 {
+  color: #f8fafc;
+}
+
+.time-table {
+  border-spacing: 0 16px;
+}
+
+.time-table th {
+  padding: 10px 16px;
+  color: #abc2dd;
+}
+
+.time-table td {
+  padding: 18px 16px;
+  background: rgba(15, 31, 52, 0.92);
+  color: #d8e6f5;
+  border-top-color: rgba(148, 163, 184, 0.2);
+  border-bottom-color: rgba(148, 163, 184, 0.2);
+}
+
+.time-table td:first-child {
+  border-left-color: rgba(148, 163, 184, 0.2);
+}
+
+.time-table td:last-child {
+  border-right-color: rgba(148, 163, 184, 0.2);
+}
+
+.time-table tbody tr:hover {
+  transform: none;
+}
+
+.time-table tbody tr:hover td {
+  background: rgba(24, 45, 73, 0.98);
+  border-color: rgba(96, 165, 250, 0.38);
+}
+
+.time-table tr.is-overtime td {
+  background: rgba(91, 26, 35, 0.54);
+  border-color: rgba(251, 113, 133, 0.36);
+}
+
+.time-table tr.is-overtime:hover td {
+  background: rgba(112, 33, 44, 0.68);
+}
+
+.time-notes-cell > span,
+.time-row-detail {
+  color: #bdd2e9;
+}
+
+.time-row-detail {
+  margin-top: 9px;
+}
+
+.time-inline-pair {
+  gap: 10px;
+}
+
+.time-row-actions {
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .time-table tr {
+    margin-bottom: 18px;
+  }
+
+  .time-table td,
+  .time-table td:first-child,
+  .time-table td:last-child {
+    padding: 16px;
+  }
+}
