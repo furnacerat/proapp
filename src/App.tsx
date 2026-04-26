@@ -8,6 +8,7 @@ import { JobDetail } from './pages/JobDetail';
 import { Workers } from './pages/Workers';
 import { TimeEntries } from './pages/TimeEntries';
 import { Expenses } from './pages/Expenses';
+import { ShoppingLists } from './pages/ShoppingLists';
 import { Tasks } from './pages/Tasks';
 import { Invoices } from './pages/Invoices';
 import { Calendar } from './pages/Calendar';
@@ -48,6 +49,7 @@ function App() {
               <Route path="/workers" element={<Workers />} />
               <Route path="/time-entries" element={<TimeEntries />} />
               <Route path="/expenses" element={<Expenses />} />
+              <Route path="/shopping-lists" element={<ShoppingLists />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/customers" element={<Customers />} />

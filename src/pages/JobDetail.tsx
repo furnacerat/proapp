@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
 import { getJobInsights } from '../utils/insights';
 import { JOB_STATUSES, EXPENSE_CATEGORIES, INVOICE_TYPES, CHANGE_ORDER_STATUSES, PHOTO_CATEGORIES, TASK_STATUSES, PRIORITIES, PunchListStatus, IssueStatus, IssueSeverity } from '../data/types';
-import type { JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment } from '../data/types';
+import type { JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, AllowanceCategory, AllowanceSelectionStatus } from '../data/types';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
@@ -12,7 +12,7 @@ import {
   ArrowLeft, MapPin, Trash2, Plus, Camera, FileText, Clock, Receipt, CheckSquare, DollarSign, 
   AlertTriangle, TrendingUp, Wrench, Edit, Copy, Upload, AlertCircle, Clipboard, Activity,
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
-  Flag, Paperclip, Eye, Calendar, Send
+  Flag, Paperclip, Eye, Calendar, Send, ShoppingCart
 } from 'lucide-react';
 import BrandHeader from '../components/BrandHeader';
 
@@ -30,6 +30,7 @@ export function JobDetail() {
     addPunchListItem, updatePunchListItem, deletePunchListItem,
     addJobIssue, updateJobIssue, deleteJobIssue,
     addFileAttachment, updateFileAttachment, deleteFileAttachment,
+    allowances, addAllowance, deleteAllowance, addAllowanceSelection, updateAllowanceSelection, createAllowanceOverageChangeOrder,
   } = useApp();
   const { showToast } = useToast();
   
@@ -46,6 +47,8 @@ export function JobDetail() {
   const [noteForm, setNoteForm] = useState('');
   const [photoForm, setPhotoForm] = useState({ url: '', description: '', category: 'progress' as string });
   const [changeOrderForm, setChangeOrderForm] = useState({ description: '', amount: '', status: 'pending' as const });
+  const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true });
+  const [selectionForm, setSelectionForm] = useState({ allowanceId: '', itemName: '', vendor: '', quantity: '1', unitCost: '', total: '', date: new Date().toISOString().split('T')[0], receiptAttachment: '', notes: '', status: 'selected' as AllowanceSelectionStatus, reimbursable: false });
   
   // Field operations forms
   const [timelineForm, setTimelineForm] = useState({ type: 'note' as const, title: '', description: '' });
@@ -142,6 +145,7 @@ export function JobDetail() {
   const jobPunchList = useMemo(() => (punchLists || []).filter(p => p.jobId === id), [punchLists, id]);
   const jobIssueEntries = useMemo(() => (jobIssues || []).filter(i => i.jobId === id), [jobIssues, id]);
   const jobAttachments = useMemo(() => (fileAttachments || []).filter(f => f.jobId === id), [fileAttachments, id]);
+  const jobAllowances = useMemo(() => (allowances || []).filter(a => a.jobId === id), [allowances, id]);
 
   const profit = useMemo(() => getJobProfit(id!), [id, job, getJobProfit]);
   const balance = useMemo(() => getJobBalance(id!), [id, jobInvoices, payments]);
@@ -269,6 +273,32 @@ export function JobDetail() {
     setChangeOrderForm({ description: '', amount: '', status: 'pending' });
   };
 
+  const handleAddAllowance = () => {
+    if (!allowanceForm.name || !allowanceForm.amount) { showToast('Allowance name and amount required', 'error'); return; }
+    addAllowance({ jobId: job.id, name: allowanceForm.name, category: allowanceForm.category, allowanceAmount: parseFloat(allowanceForm.amount), clientResponsible: allowanceForm.clientResponsible, affectsContractorCost: false, notes: allowanceForm.notes });
+    setAllowanceForm({ name: '', category: 'materials', amount: '', notes: '', clientResponsible: true });
+    setShowModal(null);
+    showToast('Allowance added outside contractor cost math');
+  };
+
+  const handleAddAllowanceSelection = () => {
+    if (!selectionForm.allowanceId || !selectionForm.itemName || !selectionForm.total) { showToast('Selection and total required', 'error'); return; }
+    addAllowanceSelection(selectionForm.allowanceId, {
+      itemName: selectionForm.itemName,
+      vendor: selectionForm.vendor || undefined,
+      quantity: parseFloat(selectionForm.quantity) || undefined,
+      unitCost: selectionForm.unitCost ? parseFloat(selectionForm.unitCost) : undefined,
+      total: parseFloat(selectionForm.total) || 0,
+      date: selectionForm.date,
+      receiptAttachment: selectionForm.receiptAttachment || undefined,
+      notes: selectionForm.notes,
+      status: selectionForm.status,
+    }, selectionForm.reimbursable);
+    setSelectionForm({ allowanceId: '', itemName: '', vendor: '', quantity: '1', unitCost: '', total: '', date: new Date().toISOString().split('T')[0], receiptAttachment: '', notes: '', status: 'selected', reimbursable: false });
+    setShowModal(null);
+    showToast(selectionForm.reimbursable ? 'Selection tracked and reimbursable expense added' : 'Selection tracked against allowance');
+  };
+
   const handleDelete = () => {
     if (!deleteConfirm) return;
     switch (deleteConfirm.type) {
@@ -310,6 +340,7 @@ export function JobDetail() {
     { id: 'workers', label: 'Team', icon: <Users size={14} />, count: jobTimeEntries.length > 0 ? [...new Set(jobTimeEntries.map(t => t.workerId))].length : 0 },
     { id: 'time', label: 'Time', icon: <Clock size={14} />, count: jobTimeEntries.length },
     { id: 'expenses', label: 'Expenses', icon: <Receipt size={14} />, count: jobExpenses.length },
+    { id: 'allowances', label: 'Allowances', icon: <DollarSign size={14} />, count: jobAllowances.length },
     { id: 'tasks', label: 'Tasks', icon: <CheckSquare size={14} />, count: jobTasks.length },
     { id: 'invoices', label: 'Invoices', icon: <FileText size={14} />, count: jobInvoices.length },
     { id: 'changeorders', label: 'Changes', icon: <Edit size={14} />, count: jobChangeOrders.length },
@@ -323,6 +354,9 @@ export function JobDetail() {
       <div className="page-header">
         <Link to="/jobs" className="btn btn-secondary"><ArrowLeft size={18} /> Back</Link>
         <div className="page-actions">
+          <Link className="btn btn-secondary" to={`/shopping-lists?jobId=${job.id}`}>
+            <ShoppingCart size={18} /> View Job Shopping Lists
+          </Link>
           <button className="btn btn-secondary" onClick={() => duplicateJob(job.id)} title="Duplicate Job">
             <Copy size={18} /> Duplicate
           </button>
@@ -446,6 +480,8 @@ export function JobDetail() {
                   setGenerateInvoiceOptions({ amount: String(job.contractAmount - balance), type: 'deposit', adjustFinalPrice: false });
                   setShowGenerateInvoice(true);
                 }}><FileText size={16} /> Generate Invoice</button>
+                <Link className="btn btn-secondary w-full" to={`/shopping-lists?jobId=${job.id}`}><ShoppingCart size={16} /> Create Shopping List</Link>
+                <Link className="btn btn-secondary w-full" to={`/shopping-lists?jobId=${job.id}`}><Plus size={16} /> Add to Shopping List</Link>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('time')}>+ Add Time Entry</button>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('expense')}>+ Add Expense</button>
                 <button className="btn btn-secondary w-full" onClick={() => setShowModal('task')}>+ Add Task</button>
@@ -481,6 +517,50 @@ export function JobDetail() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'allowances' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Client Allowances ({jobAllowances.length})</h3>
+              <div className="flex gap-2">
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowModal('allowanceSelection')}>+ Add Selection</button>
+                <button className="btn btn-sm btn-primary" onClick={() => setShowModal('allowance')}>+ Add Allowance</button>
+              </div>
+            </div>
+            <div className="card-body">
+              <div className="allowance-card-grid">
+                {jobAllowances.length === 0 ? <div className="text-muted">No allowances yet. Add client-funded budgets without changing contractor profit math.</div> : jobAllowances.map(allowance => {
+                  const percent = allowance.allowanceAmount > 0 ? Math.min(100, (allowance.usedAmount / allowance.allowanceAmount) * 100) : 0;
+                  return (
+                    <div className="allowance-card" key={allowance.id}>
+                      <div>
+                        <strong>{allowance.name}</strong>
+                        <span>{allowance.category} - {allowance.clientResponsible ? 'Client Allowance' : 'Contractor Managed'}</span>
+                      </div>
+                      <b>{formatCurrency(allowance.allowanceAmount)}</b>
+                      <small>Used {formatCurrency(allowance.usedAmount)} - Remaining {formatCurrency(allowance.remainingAmount)}</small>
+                      <div className="allowance-progress"><span style={{ width: `${percent}%` }} /></div>
+                      <em>{allowance.affectsContractorCost ? 'Reimbursable contractor cost only when selected' : 'Does not affect contractor cost, profit, or margin.'}</em>
+                      {allowance.status !== 'under' && <div className={`allowance-status ${allowance.status}`}>{allowance.status === 'over_limit' ? `Over by ${formatCurrency(Math.abs(allowance.remainingAmount))}` : '80% used'}</div>}
+                      {allowance.remainingAmount < 0 && <button className="btn btn-sm btn-primary" onClick={() => createAllowanceOverageChangeOrder(allowance.id)}>Create Change Order for Overage</button>}
+                      <div className="allowance-selections">
+                        {allowance.selections.map(selection => (
+                          <div key={selection.id}>
+                            <span>{selection.itemName} - {formatCurrency(selection.total)}</span>
+                            <select className="form-select" value={selection.status} onChange={e => updateAllowanceSelection(allowance.id, selection.id, { status: e.target.value as AllowanceSelectionStatus })}>
+                              <option value="planned">Planned</option><option value="selected">Selected</option><option value="purchased">Purchased</option><option value="installed">Installed</option>
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="btn btn-sm btn-danger" onClick={() => deleteAllowance(allowance.id)}>Delete</button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -991,6 +1071,27 @@ export function JobDetail() {
           <button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleAddTimeEntry}>Add Entry</button>
         </div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'allowance'} onClose={() => setShowModal(null)} title="Add Allowance">
+        <div className="form-row form-row-2">
+          <div className="form-group"><label className="form-label">Name *</label><input className="form-input" value={allowanceForm.name} onChange={e => setAllowanceForm({ ...allowanceForm, name: e.target.value })} /></div>
+          <div className="form-group"><label className="form-label">Category</label><select className="form-select" value={allowanceForm.category} onChange={e => setAllowanceForm({ ...allowanceForm, category: e.target.value as AllowanceCategory })}>{['materials','fixtures','cabinets','flooring','lighting','plumbing','appliances','other'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+        </div>
+        <div className="form-group"><label className="form-label">Allowance Amount *</label><input className="form-input" type="number" value={allowanceForm.amount} onChange={e => setAllowanceForm({ ...allowanceForm, amount: e.target.value })} /></div>
+        <label className="shopping-toggle"><input type="checkbox" checked={allowanceForm.clientResponsible} onChange={e => setAllowanceForm({ ...allowanceForm, clientResponsible: e.target.checked })} /> Client responsible / does not affect contractor cost</label>
+        <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={allowanceForm.notes} onChange={e => setAllowanceForm({ ...allowanceForm, notes: e.target.value })} /></div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}><button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddAllowance}>Add Allowance</button></div>
+      </Modal>
+
+      <Modal isOpen={showModal === 'allowanceSelection'} onClose={() => setShowModal(null)} title="Add Allowance Selection">
+        <div className="form-group"><label className="form-label">Allowance *</label><select className="form-select" value={selectionForm.allowanceId} onChange={e => setSelectionForm({ ...selectionForm, allowanceId: e.target.value })}><option value="">Select allowance</option>{jobAllowances.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Item *</label><input className="form-input" value={selectionForm.itemName} onChange={e => setSelectionForm({ ...selectionForm, itemName: e.target.value })} /></div><div className="form-group"><label className="form-label">Vendor</label><input className="form-input" value={selectionForm.vendor} onChange={e => setSelectionForm({ ...selectionForm, vendor: e.target.value })} /></div></div>
+        <div className="form-row form-row-3"><div className="form-group"><label className="form-label">Qty</label><input className="form-input" type="number" value={selectionForm.quantity} onChange={e => setSelectionForm({ ...selectionForm, quantity: e.target.value })} /></div><div className="form-group"><label className="form-label">Unit Cost</label><input className="form-input" type="number" value={selectionForm.unitCost} onChange={e => setSelectionForm({ ...selectionForm, unitCost: e.target.value })} /></div><div className="form-group"><label className="form-label">Total *</label><input className="form-input" type="number" value={selectionForm.total} onChange={e => setSelectionForm({ ...selectionForm, total: e.target.value })} /></div></div>
+        <div className="form-row form-row-2"><div className="form-group"><label className="form-label">Date</label><input className="form-input" type="date" value={selectionForm.date} onChange={e => setSelectionForm({ ...selectionForm, date: e.target.value })} /></div><div className="form-group"><label className="form-label">Receipt</label><input className="form-input" value={selectionForm.receiptAttachment} onChange={e => setSelectionForm({ ...selectionForm, receiptAttachment: e.target.value })} /></div></div>
+        <label className="shopping-toggle"><input type="checkbox" checked={selectionForm.reimbursable} onChange={e => setSelectionForm({ ...selectionForm, reimbursable: e.target.checked })} /> Contractor paid - add as reimbursable expense</label>
+        <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={selectionForm.notes} onChange={e => setSelectionForm({ ...selectionForm, notes: e.target.value })} /></div>
+        <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}><button className="btn btn-secondary" onClick={() => setShowModal(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddAllowanceSelection}>Add Selection</button></div>
       </Modal>
 
       <Modal isOpen={showModal === 'expense'} onClose={() => setShowModal(null)} title="Add Expense">

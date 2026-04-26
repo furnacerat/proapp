@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
-import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate, Template } from '../../data/types';
+import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate, Template, Allowance, AllowanceCategory } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
 import { getEstimateSuggestions } from '../../utils/insights';
@@ -36,6 +36,124 @@ const CATEGORIES: { value: EstimateLineCategory; label: string; icon: any; color
   { value: 'other', label: 'Other', icon: FileText, color: '#64748b' },
 ];
 
+type GuidedQuestionType = 'yesNo' | 'multipleChoice' | 'numeric' | 'dropdown';
+type GuidedAnswerValue = boolean | string | number;
+type GuidedAnswers = Record<string, GuidedAnswerValue>;
+
+interface GuidedQuestion {
+  id: string;
+  title: string;
+  helper?: string;
+  type: GuidedQuestionType;
+  unit?: string;
+  options?: { label: string; value: string }[];
+  showIf?: (answers: GuidedAnswers) => boolean;
+}
+
+interface GuidedGeneratedScope {
+  sections: EstimateSection[];
+  warnings: string[];
+  suggestions: string[];
+}
+
+const isAffirmative = (value: GuidedAnswerValue | undefined) => value === true || value === 'yes';
+const answerNumber = (value: GuidedAnswerValue | undefined, fallback = 0) => {
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value || ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const GUIDED_QUESTION_SETS: Record<string, GuidedQuestion[]> = {
+  kitchen: [
+    { id: 'cabinets', title: 'Are cabinets included?', helper: 'Include boxes, trim, hardware, and install labor.', type: 'yesNo' },
+    { id: 'cabinetLf', title: 'How many linear feet of cabinets?', type: 'numeric', unit: 'lf', showIf: answers => isAffirmative(answers.cabinets) },
+    { id: 'countertops', title: 'What countertop scope is included?', type: 'dropdown', options: [
+      { label: 'None', value: 'none' },
+      { label: 'Quartz', value: 'quartz' },
+      { label: 'Granite', value: 'granite' },
+      { label: 'Laminate', value: 'laminate' },
+      { label: 'Butcher block', value: 'butcher-block' },
+    ] },
+    { id: 'countertopSf', title: 'Countertop square footage', type: 'numeric', unit: 'sq ft', showIf: answers => !!answers.countertops && answers.countertops !== 'none' },
+    { id: 'flooring', title: 'Is flooring part of this estimate?', type: 'yesNo' },
+    { id: 'flooringType', title: 'Flooring type', type: 'multipleChoice', options: [
+      { label: 'Tile', value: 'tile' },
+      { label: 'LVP', value: 'lvp' },
+      { label: 'Hardwood', value: 'hardwood' },
+    ], showIf: answers => isAffirmative(answers.flooring) },
+    { id: 'flooringSf', title: 'Flooring area', type: 'numeric', unit: 'sq ft', showIf: answers => isAffirmative(answers.flooring) },
+    { id: 'backsplash', title: 'Add backsplash?', type: 'yesNo' },
+    { id: 'backsplashSf', title: 'Backsplash area', type: 'numeric', unit: 'sq ft', showIf: answers => isAffirmative(answers.backsplash) },
+    { id: 'plumbing', title: 'Move or reconnect plumbing fixtures?', type: 'yesNo' },
+    { id: 'electricalLevel', title: 'Electrical scope', type: 'dropdown', options: [
+      { label: 'None', value: 'none' },
+      { label: 'Basic device swaps', value: 'basic' },
+      { label: 'Recessed/under-cabinet lighting', value: 'lighting' },
+      { label: 'Dedicated circuits and lighting', value: 'circuits' },
+    ] },
+  ],
+  bathroom: [
+    { id: 'bathroomSf', title: 'Bathroom floor area', type: 'numeric', unit: 'sq ft' },
+    { id: 'showerType', title: 'Shower or tub scope', type: 'multipleChoice', options: [
+      { label: 'Vanity only', value: 'vanity-only' },
+      { label: 'Tub/shower insert', value: 'insert' },
+      { label: 'Walk-in shower', value: 'walk-in' },
+      { label: 'Custom tile shower', value: 'tile-shower' },
+    ] },
+    { id: 'tileWalls', title: 'Tile shower walls?', type: 'yesNo', showIf: answers => ['walk-in', 'tile-shower'].includes(String(answers.showerType || '')) },
+    { id: 'tileWallSf', title: 'Tile wall area', type: 'numeric', unit: 'sq ft', showIf: answers => isAffirmative(answers.tileWalls) },
+    { id: 'flooring', title: 'Replace bathroom flooring?', type: 'yesNo' },
+    { id: 'vanityWidth', title: 'Vanity size', type: 'dropdown', options: [
+      { label: '24 inch', value: '24' },
+      { label: '36 inch', value: '36' },
+      { label: '48 inch', value: '48' },
+      { label: '60 inch double vanity', value: '60' },
+    ] },
+    { id: 'fixtureCount', title: 'How many plumbing fixtures?', helper: 'Sink, toilet, tub, shower valve, and similar fixtures.', type: 'numeric', unit: 'fixtures' },
+    { id: 'ventilation', title: 'Add or replace bath fan?', type: 'yesNo' },
+  ],
+  roofing: [
+    { id: 'roofArea', title: 'Roof area', helper: 'Enter roof square footage including waste factor if known.', type: 'numeric', unit: 'sq ft' },
+    { id: 'roofMaterial', title: 'Roofing material', type: 'multipleChoice', options: [
+      { label: 'Architectural shingles', value: 'architectural-shingle' },
+      { label: 'Metal roofing', value: 'metal' },
+      { label: 'Flat membrane', value: 'membrane' },
+    ] },
+    { id: 'tearOff', title: 'Remove existing roof?', type: 'yesNo' },
+    { id: 'deckingRepair', title: 'Include decking repair allowance?', type: 'yesNo' },
+    { id: 'deckingSheets', title: 'Estimated decking sheets', type: 'numeric', unit: 'sheets', showIf: answers => isAffirmative(answers.deckingRepair) },
+    { id: 'gutters', title: 'Replace gutters?', type: 'yesNo' },
+    { id: 'gutterLf', title: 'Gutter length', type: 'numeric', unit: 'lf', showIf: answers => isAffirmative(answers.gutters) },
+    { id: 'roofPitch', title: 'Roof pitch/access', type: 'dropdown', options: [
+      { label: 'Standard access', value: 'standard' },
+      { label: 'Steep pitch', value: 'steep' },
+      { label: 'Difficult access', value: 'difficult' },
+    ] },
+  ],
+  default: [
+    { id: 'projectArea', title: 'Approximate project area', type: 'numeric', unit: 'sq ft' },
+    { id: 'demo', title: 'Does this include demolition?', type: 'yesNo' },
+    { id: 'flooring', title: 'Is flooring included?', type: 'yesNo' },
+    { id: 'flooringType', title: 'Flooring type', type: 'multipleChoice', options: [
+      { label: 'Tile', value: 'tile' },
+      { label: 'LVP', value: 'lvp' },
+      { label: 'Hardwood', value: 'hardwood' },
+    ], showIf: answers => isAffirmative(answers.flooring) },
+    { id: 'flooringSf', title: 'Flooring area', type: 'numeric', unit: 'sq ft', showIf: answers => isAffirmative(answers.flooring) },
+    { id: 'paint', title: 'Include interior paint?', type: 'yesNo' },
+    { id: 'paintRooms', title: 'Rooms to paint', type: 'numeric', unit: 'rooms', showIf: answers => isAffirmative(answers.paint) },
+    { id: 'plumbing', title: 'Any plumbing work?', type: 'yesNo' },
+    { id: 'electricalLevel', title: 'Electrical scope', type: 'dropdown', options: [
+      { label: 'None', value: 'none' },
+      { label: 'Minor devices/fixtures', value: 'basic' },
+      { label: 'New circuits or layout changes', value: 'circuits' },
+    ] },
+  ],
+};
+
+const getGuidedQuestions = (projectTypeValue: string): GuidedQuestion[] => {
+  return GUIDED_QUESTION_SETS[projectTypeValue] || GUIDED_QUESTION_SETS.default;
+};
+
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -61,6 +179,7 @@ export function EstimateBuilder() {
   // Scopes/Sections state
   const [scopes, setScopes] = useState<EstimateScope[]>(estimate?.scopes || []);
   const [legacySections, setLegacySections] = useState<EstimateSection[]>(estimate?.sections || []);
+  const [estimateAllowances, setEstimateAllowances] = useState<Allowance[]>(estimate?.clientAllowances || []);
   const [activeScopeId, setActiveScopeId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
@@ -79,6 +198,10 @@ export function EstimateBuilder() {
   const [priceSearch, setPriceSearch] = useState('');
   const [pricePickerTab, setPricePickerTab] = useState<'materials' | 'labor' | 'equipment' | 'subcontractors'>('materials');
   const [priceTarget, setPriceTarget] = useState<{ scopeId?: string; sectionId?: string } | null>(null);
+  const [showGuidedBuilder, setShowGuidedBuilder] = useState(false);
+  const [guidedStep, setGuidedStep] = useState(0);
+  const [guidedAnswers, setGuidedAnswers] = useState<GuidedAnswers>({});
+  const [guidedDismissed, setGuidedDismissed] = useState(false);
   const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
   const [newItemForm, setNewItemForm] = useState({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' as EstimateLineCategory });
@@ -87,6 +210,7 @@ export function EstimateBuilder() {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [quickCustomer, setQuickCustomer] = useState({ name: '', email: '', phone: '', address: '' });
   const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
+  const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
 
   const defaultMarkup = parseFloat(formData.markupPercent) || 0;
 
@@ -293,6 +417,7 @@ export function EstimateBuilder() {
       markupPercent: parseFloat(formData.markupPercent) || 0,
       scopes,
       sections: legacySections,
+      clientAllowances: estimateAllowances,
       taxable: estimate?.taxable || 'none',
       createdAt: estimate?.createdAt || now,
       updatedAt: estimate?.updatedAt || now,
@@ -303,7 +428,7 @@ export function EstimateBuilder() {
       marginAmount: totals.profit,
       ...totals,
     } as Estimate;
-  }, [estimate, formData, scopes, legacySections]);
+  }, [estimate, formData, scopes, legacySections, estimateAllowances]);
 
   const saveEstimate = useCallback((notify = false) => {
     if (isNew || !estimate) return false;
@@ -427,6 +552,300 @@ export function EstimateBuilder() {
         total: (item.quantity || 0) * unitCost,
       }, 'assembly');
     });
+  };
+
+  const findMaterialByTerms = (terms: string[]) => {
+    const normalizedTerms = terms.map(term => term.toLowerCase());
+    return materials?.find(material => {
+      const haystack = `${material.name} ${material.category || ''} ${material.description || ''}`.toLowerCase();
+      return normalizedTerms.some(term => haystack.includes(term));
+    });
+  };
+
+  const findLaborRateByTerms = (terms: string[]) => {
+    const normalizedTerms = terms.map(term => term.toLowerCase());
+    return laborRates?.find(rate => {
+      const haystack = `${rate.name} ${rate.trade || ''}`.toLowerCase();
+      return normalizedTerms.some(term => haystack.includes(term));
+    });
+  };
+
+  const findAssemblyByTerms = (terms: string[]) => {
+    const normalizedTerms = terms.map(term => term.toLowerCase());
+    return assemblies?.find(assembly => {
+      const haystack = `${assembly.name} ${assembly.category || ''} ${assembly.description || ''}`.toLowerCase();
+      return normalizedTerms.every(term => haystack.includes(term));
+    });
+  };
+
+  const makeGuidedPriceItem = (
+    name: string,
+    quantity: number,
+    unit: string,
+    fallbackUnitCost: number,
+    category: EstimateLineCategory,
+    terms: string[],
+    description?: string
+  ): EstimateLineItem => {
+    const material = category !== 'labor' ? findMaterialByTerms(terms) : undefined;
+    const rate = category === 'labor' ? findLaborRateByTerms(terms) : undefined;
+    const unitCost = rate?.hourlyRate ?? material?.unitPrice ?? fallbackUnitCost;
+    return normalizeLineItem({
+      id: crypto.randomUUID(),
+      sourceType: material || rate ? 'priceBook' : 'manual',
+      sourceId: material?.id || rate?.id,
+      name: material?.name || rate?.name || name,
+      description: description || material?.description || material?.supplier || rate?.trade,
+      quantity,
+      unit: rate ? 'hr' : (material?.unit || unit),
+      unitCost,
+      unitPrice: unitCost,
+      category,
+      type: category === 'allowance' ? 'other' : category as EstimateLineItem['type'],
+      isLabor: category === 'labor',
+      hours: category === 'labor' ? quantity : undefined,
+      linkedMaterialId: material?.id,
+      linkedLaborRateId: rate?.id,
+      priceBookSnapshot: material || rate ? { unitCost, unitPrice: unitCost, name: material?.name || rate?.name || name } : undefined,
+      internalNotes: 'Added by Smart Scope Builder',
+      notes: 'Generated from guided estimate answers',
+      total: quantity * unitCost,
+    }, material || rate ? 'priceBook' : 'manual');
+  };
+
+  const makeGuidedAssemblyItems = (terms: string[], multiplier: number) => {
+    const assembly = findAssemblyByTerms(terms);
+    if (!assembly) return [];
+    return assemblyToLineItems(assembly).map(item => normalizeLineItem({
+      ...item,
+      id: crypto.randomUUID(),
+      quantity: Number(((item.quantity || 1) * multiplier).toFixed(2)),
+      hours: item.isLabor || item.category === 'labor' ? Number(((item.hours || item.quantity || 1) * multiplier).toFixed(2)) : item.hours,
+      internalNotes: `Added by Smart Scope Builder using assembly ${assembly.name}`,
+      notes: `Guided assembly: ${assembly.name}`,
+    }, 'assembly'));
+  };
+
+  const buildGuidedScope = (): GuidedGeneratedScope => {
+    const sections: EstimateSection[] = [];
+    const warnings: string[] = [];
+    const suggestions: string[] = [];
+    const project = String(formData.type || 'default');
+    const addSection = (name: string, lineItems: EstimateLineItem[], description?: string) => {
+      if (lineItems.length === 0) return;
+      sections.push({ id: crypto.randomUUID(), name, description, lineItems });
+    };
+
+    if (project === 'kitchen') {
+      if (isAffirmative(guidedAnswers.cabinets)) {
+        const lf = answerNumber(guidedAnswers.cabinetLf, 12);
+        addSection('Cabinets', [
+          makeGuidedPriceItem('Cabinet package', lf, 'lf', 425, 'material', ['cabinet'], 'Cabinet allowance generated from linear footage'),
+          makeGuidedPriceItem('Cabinet install labor', Number((lf * 1.1).toFixed(2)), 'hr', 55, 'labor', ['carp', 'cabinet'], 'Install cabinets, fillers, trim, and hardware'),
+        ]);
+        suggestions.push('Verify cabinet crown, fillers, toe kick, and hardware counts before sending.');
+      }
+
+      if (guidedAnswers.countertops && guidedAnswers.countertops !== 'none') {
+        const sf = answerNumber(guidedAnswers.countertopSf, 45);
+        addSection('Countertops', [
+          makeGuidedPriceItem(`${String(guidedAnswers.countertops)} countertop allowance`, sf, 'sq ft', guidedAnswers.countertops === 'laminate' ? 42 : 95, 'material', ['counter', String(guidedAnswers.countertops)], 'Countertop material and fabrication allowance'),
+          makeGuidedPriceItem('Countertop templating and install', Number((sf * 0.08).toFixed(2)), 'hr', 65, 'labor', ['install', 'finish'], 'Field template, set, and secure countertops'),
+        ]);
+        if (!isAffirmative(guidedAnswers.plumbing)) warnings.push('Countertops usually require sink/faucet disconnect and reconnect. Consider adding plumbing.');
+      }
+
+      if (isAffirmative(guidedAnswers.flooring)) {
+        const sf = answerNumber(guidedAnswers.flooringSf, 200);
+        const flooringType = String(guidedAnswers.flooringType || 'tile');
+        const assemblyItems = makeGuidedAssemblyItems([flooringType === 'tile' ? 'tile' : flooringType, 'floor'], sf);
+        addSection('Flooring', assemblyItems.length > 0 ? assemblyItems : [
+          makeGuidedPriceItem(`${flooringType.toUpperCase()} flooring`, Number((sf * 1.08).toFixed(2)), 'sq ft', flooringType === 'tile' ? 5.25 : flooringType === 'hardwood' ? 8 : 4.5, 'material', [flooringType, 'floor'], 'Includes waste factor'),
+          makeGuidedPriceItem(`${flooringType.toUpperCase()} installation labor`, Number((sf * (flooringType === 'tile' ? 0.1 : 0.05)).toFixed(2)), 'hr', 55, 'labor', ['floor'], 'Install flooring and related finish transitions'),
+        ]);
+        suggestions.push('Confirm floor prep, transitions, and underlayment before final approval.');
+      }
+
+      if (isAffirmative(guidedAnswers.backsplash)) {
+        const sf = answerNumber(guidedAnswers.backsplashSf, 35);
+        addSection('Backsplash', [
+          makeGuidedPriceItem('Backsplash tile', Number((sf * 1.1).toFixed(2)), 'sq ft', 7, 'material', ['tile'], 'Tile material with waste'),
+          makeGuidedPriceItem('Backsplash setting materials', sf, 'sq ft', 2.25, 'material', ['mortar', 'grout'], 'Thinset, grout, trim, and spacers'),
+          makeGuidedPriceItem('Backsplash install labor', Number((sf * 0.16).toFixed(2)), 'hr', 58, 'labor', ['tile'], 'Set and grout backsplash tile'),
+        ]);
+      }
+
+      if (isAffirmative(guidedAnswers.plumbing)) {
+        addSection('Plumbing', [
+          ...makeGuidedAssemblyItems(['faucet', 'kitchen'], 1),
+          makeGuidedPriceItem('Kitchen plumbing allowance', 1, 'ls', 650, 'subcontractor', ['plumb'], 'Disconnect, reconnect, and minor rough-in adjustment allowance'),
+        ]);
+      }
+
+      if (guidedAnswers.electricalLevel && guidedAnswers.electricalLevel !== 'none') {
+        const level = String(guidedAnswers.electricalLevel);
+        addSection('Electrical', [
+          makeGuidedPriceItem('Kitchen electrical allowance', 1, 'ls', level === 'basic' ? 450 : level === 'lighting' ? 1250 : 2200, 'subcontractor', ['electric'], 'Electrical scope generated from guided answers'),
+        ]);
+      }
+    } else if (project === 'bathroom') {
+      const bathroomSf = answerNumber(guidedAnswers.bathroomSf, 60);
+      if (isAffirmative(guidedAnswers.flooring)) {
+        const floorAssembly = makeGuidedAssemblyItems(['tile', 'floor'], bathroomSf);
+        addSection('Bathroom Floor', floorAssembly.length > 0 ? floorAssembly : [
+          makeGuidedPriceItem('Bathroom floor tile', Number((bathroomSf * 1.1).toFixed(2)), 'sq ft', 5, 'material', ['tile'], 'Bathroom tile with waste'),
+          makeGuidedPriceItem('Bathroom tile install labor', Number((bathroomSf * 0.12).toFixed(2)), 'hr', 58, 'labor', ['tile'], 'Install bathroom floor tile'),
+        ]);
+      }
+
+      const showerType = String(guidedAnswers.showerType || 'insert');
+      if (showerType !== 'vanity-only') {
+        const showerItems = showerType === 'tile-shower' || showerType === 'walk-in'
+          ? [
+              makeGuidedPriceItem('Shower waterproofing system', answerNumber(guidedAnswers.tileWallSf, 120), 'sq ft', 2.5, 'material', ['waterproof'], 'Waterproofing membrane and accessories'),
+              makeGuidedPriceItem('Shower wall tile', Number((answerNumber(guidedAnswers.tileWallSf, 120) * 1.1).toFixed(2)), 'sq ft', 6, 'material', ['tile'], 'Tile material with waste'),
+              makeGuidedPriceItem('Shower tile install labor', Number((answerNumber(guidedAnswers.tileWallSf, 120) * 0.16).toFixed(2)), 'hr', 62, 'labor', ['tile'], 'Set shower wall tile and grout'),
+            ]
+          : [
+              makeGuidedPriceItem('Tub/shower insert', 1, 'ea', 975, 'material', ['tub', 'shower'], 'Prefab tub/shower kit allowance'),
+              makeGuidedPriceItem('Tub/shower install labor', 6, 'hr', 58, 'labor', ['plumb'], 'Install tub/shower kit'),
+            ];
+        addSection('Shower and Tub', showerItems);
+        if (showerType === 'tile-shower' || showerType === 'walk-in') suggestions.push('Confirm niche, bench, curb, glass, and waterproofing details.');
+      }
+
+      addSection('Vanity and Fixtures', [
+        ...makeGuidedAssemblyItems(['vanity'], 1),
+        makeGuidedPriceItem(`${String(guidedAnswers.vanityWidth || '36')} inch vanity allowance`, 1, 'ea', Number(guidedAnswers.vanityWidth || 36) >= 60 ? 1250 : 650, 'material', ['vanity'], 'Vanity cabinet and top allowance'),
+        makeGuidedPriceItem('Plumbing fixture set', answerNumber(guidedAnswers.fixtureCount, 3), 'ea', 225, 'material', ['faucet', 'toilet'], 'Fixture allowance based on fixture count'),
+        makeGuidedPriceItem('Plumbing labor', answerNumber(guidedAnswers.fixtureCount, 3) * 1.25, 'hr', 68, 'labor', ['plumb'], 'Set and reconnect bathroom fixtures'),
+      ]);
+
+      if (isAffirmative(guidedAnswers.ventilation)) {
+        addSection('Ventilation', [
+          makeGuidedPriceItem('Bath fan', 1, 'ea', 175, 'material', ['fan'], 'Fan allowance'),
+          makeGuidedPriceItem('Bath fan install labor', 2.5, 'hr', 62, 'labor', ['electric'], 'Install or replace bath fan'),
+        ]);
+      } else {
+        warnings.push('Bathrooms typically need working ventilation. Confirm fan scope with the customer.');
+      }
+    } else if (project === 'roofing') {
+      const roofArea = answerNumber(guidedAnswers.roofArea, 1800);
+      const material = String(guidedAnswers.roofMaterial || 'architectural-shingle');
+      addSection('Roof System', [
+        makeGuidedPriceItem(`${material.replace('-', ' ')} roofing`, Number((roofArea * 1.08).toFixed(2)), 'sq ft', material === 'metal' ? 9.5 : material === 'membrane' ? 7.25 : 3.85, 'material', ['roof', material], 'Roof material with waste'),
+        makeGuidedPriceItem('Roofing install labor', Number((roofArea * (material === 'metal' ? 0.075 : 0.06)).toFixed(2)), 'hr', 58, 'labor', ['roof'], 'Install selected roof system'),
+      ]);
+
+      if (isAffirmative(guidedAnswers.tearOff)) {
+        const tearOff = makeGuidedAssemblyItems(['roofing', 'tear'], roofArea);
+        addSection('Tear-off and Disposal', tearOff.length > 0 ? tearOff : [
+          makeGuidedPriceItem('Roof tear-off labor', Number((roofArea * 0.04).toFixed(2)), 'hr', 48, 'labor', ['demo', 'roof'], 'Remove existing roofing'),
+          makeGuidedPriceItem('Roofing debris disposal', 1, 'ls', 850, 'other', ['dump'], 'Dumpster and disposal allowance'),
+        ]);
+      } else {
+        warnings.push('No tear-off selected. Confirm existing layers and code requirements.');
+      }
+
+      if (isAffirmative(guidedAnswers.deckingRepair)) {
+        const sheets = answerNumber(guidedAnswers.deckingSheets, 5);
+        addSection('Decking Repair', [
+          makeGuidedPriceItem('Roof decking sheets', sheets, 'sheet', 42, 'material', ['plywood', 'osb'], 'Decking repair allowance'),
+          makeGuidedPriceItem('Decking repair labor', sheets * 0.75, 'hr', 55, 'labor', ['roof', 'carp'], 'Replace damaged decking'),
+        ]);
+      }
+
+      if (isAffirmative(guidedAnswers.gutters)) {
+        const lf = answerNumber(guidedAnswers.gutterLf, 160);
+        addSection('Gutters', [
+          makeGuidedPriceItem('Gutter system', lf, 'lf', 9.5, 'material', ['gutter'], 'Gutters and accessories'),
+          makeGuidedPriceItem('Gutter install labor', Number((lf * 0.04).toFixed(2)), 'hr', 55, 'labor', ['gutter'], 'Install gutters and downspouts'),
+        ]);
+      }
+
+      if (['steep', 'difficult'].includes(String(guidedAnswers.roofPitch || ''))) {
+        addSection('Access and Safety', [
+          makeGuidedPriceItem('Steep roof/access allowance', 1, 'ls', guidedAnswers.roofPitch === 'steep' ? 950 : 1350, 'equipment', ['safety', 'lift'], 'Safety, staging, and access premium'),
+        ]);
+      }
+    } else {
+      const area = answerNumber(guidedAnswers.projectArea, 250);
+      if (isAffirmative(guidedAnswers.demo)) {
+        addSection('Demolition', [
+          ...makeGuidedAssemblyItems(['room', 'demolition'], Math.max(1, Math.ceil(area / 150))),
+          makeGuidedPriceItem('Demo and haul allowance', 1, 'ls', Math.max(650, area * 3.25), 'other', ['demo'], 'Demolition and disposal allowance'),
+        ]);
+      }
+      if (isAffirmative(guidedAnswers.flooring)) {
+        const sf = answerNumber(guidedAnswers.flooringSf, area);
+        const flooringType = String(guidedAnswers.flooringType || 'lvp');
+        const floorAssembly = makeGuidedAssemblyItems([flooringType === 'tile' ? 'tile' : flooringType, 'floor'], sf);
+        addSection('Flooring', floorAssembly.length > 0 ? floorAssembly : [
+          makeGuidedPriceItem(`${flooringType.toUpperCase()} flooring`, Number((sf * 1.08).toFixed(2)), 'sq ft', flooringType === 'hardwood' ? 8 : flooringType === 'tile' ? 5 : 4.5, 'material', [flooringType, 'floor'], 'Flooring material allowance'),
+          makeGuidedPriceItem('Floor install labor', Number((sf * 0.06).toFixed(2)), 'hr', 55, 'labor', ['floor'], 'Flooring installation labor'),
+        ]);
+      }
+      if (isAffirmative(guidedAnswers.paint)) {
+        const rooms = answerNumber(guidedAnswers.paintRooms, 2);
+        addSection('Paint', [
+          makeGuidedPriceItem('Paint materials', rooms, 'room', 145, 'material', ['paint'], 'Paint, primer, sundries'),
+          makeGuidedPriceItem('Interior paint labor', rooms * 6, 'hr', 48, 'labor', ['paint'], 'Prep and paint rooms'),
+        ]);
+      }
+      if (isAffirmative(guidedAnswers.plumbing)) addSection('Plumbing', [makeGuidedPriceItem('Plumbing allowance', 1, 'ls', 850, 'subcontractor', ['plumb'], 'Plumbing rough-in or fixture allowance')]);
+      if (guidedAnswers.electricalLevel && guidedAnswers.electricalLevel !== 'none') addSection('Electrical', [makeGuidedPriceItem('Electrical allowance', 1, 'ls', guidedAnswers.electricalLevel === 'basic' ? 550 : 1600, 'subcontractor', ['electric'], 'Electrical allowance')]);
+      suggestions.push('Review permits, protection, cleanup, and customer exclusions before sending.');
+    }
+
+    const hasLabor = sections.some(section => section.lineItems.some(item => item.category === 'labor' || item.isLabor));
+    const hasMaterials = sections.some(section => section.lineItems.some(item => item.category === 'material'));
+    if (!hasLabor) warnings.push('No labor was generated. Add labor before sending the estimate.');
+    if (!hasMaterials) warnings.push('No material items were generated. Confirm material allowances or price book items.');
+    if (sections.length === 0) warnings.push('No scope was generated yet. Answer more guided questions or add items manually.');
+
+    return { sections, warnings, suggestions };
+  };
+
+  const handleGuidedAnswer = (questionId: string, value: GuidedAnswerValue) => {
+    setGuidedAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
+
+  const handleGenerateGuidedEstimate = () => {
+    const generated = buildGuidedScope();
+    if (generated.sections.length === 0) {
+      showToast('Answer a few scope questions before generating', 'warning');
+      return;
+    }
+
+    const guidedScopeId = crypto.randomUUID();
+    const firstSectionId = generated.sections[0]?.id || null;
+    const label = projectType?.label || 'Project';
+    const subtotal = generated.sections.reduce((sum, section) => sum + section.lineItems.reduce((sectionSum, item) => sectionSum + getItemCostTotal(item), 0), 0);
+    const guidedScope: EstimateScope = {
+      id: guidedScopeId,
+      name: `${label} Guided Scope`,
+      projectType: formData.type as JobType,
+      sections: generated.sections,
+      subtotal,
+      isOptional: false,
+      sortOrder: scopes.length,
+    };
+
+    setScopes([...scopes, guidedScope]);
+    setActiveScopeId(guidedScopeId);
+    setActiveSectionId(firstSectionId);
+    setShowGuidedBuilder(false);
+    setGuidedDismissed(true);
+    setFormData(prev => ({
+      ...prev,
+      name: prev.name === 'New Estimate' ? `${label} Guided Estimate` : prev.name,
+      notes: [
+        prev.notes,
+        generated.warnings.length ? `Guided scope warnings: ${generated.warnings.join('; ')}` : '',
+        generated.suggestions.length ? `Guided scope suggestions: ${generated.suggestions.join('; ')}` : '',
+      ].filter(Boolean).join('\n'),
+    }));
+    showToast('Guided estimate scope generated');
   };
 
   const handleSelectAssembly = (assembly: Assembly) => {
@@ -632,6 +1051,7 @@ export function EstimateBuilder() {
       markupPercent: parseFloat(formData.markupPercent) || 0,
       scopes,
       sections: legacySections,
+      clientAllowances: estimateAllowances,
       taxable: 'none',
       ...totals,
     } as any);
@@ -699,6 +1119,10 @@ export function EstimateBuilder() {
 
   const selectedCustomer = customers?.find(c => c.id === formData.customerId);
   const projectType = PROJECT_TYPES.find(p => p.value === formData.type);
+  const guidedQuestions = useMemo(() => getGuidedQuestions(String(formData.type || 'default')), [formData.type]);
+  const visibleGuidedQuestions = useMemo(() => guidedQuestions.filter(question => !question.showIf || question.showIf(guidedAnswers)), [guidedQuestions, guidedAnswers]);
+  const currentGuidedQuestion = visibleGuidedQuestions[Math.min(guidedStep, Math.max(visibleGuidedQuestions.length - 1, 0))];
+  const guidedProgress = visibleGuidedQuestions.length > 0 ? ((Math.min(guidedStep, visibleGuidedQuestions.length - 1) + 1) / visibleGuidedQuestions.length) * 100 : 0;
   const smartEnabled = branding.smartFeaturesEnabled !== false;
   const estimateSuggestions = useMemo(() => smartEnabled
     ? getEstimateSuggestions(formData.type as JobType, materials || [], laborRates || [], projectTypeTemplates || [], jobs || [], expenses || [], timeEntries || [])
@@ -863,6 +1287,38 @@ export function EstimateBuilder() {
     showToast('Saved line items as new assembly');
   };
 
+  const addEstimateAllowance = () => {
+    if (!allowanceForm.name.trim() || !allowanceForm.amount) {
+      showToast('Allowance name and amount required', 'error');
+      return;
+    }
+    const amount = parseFloat(allowanceForm.amount) || 0;
+    const allowance: Allowance = {
+      id: crypto.randomUUID(),
+      jobId: '',
+      estimateId: estimate?.id,
+      name: allowanceForm.name.trim(),
+      category: allowanceForm.category,
+      allowanceAmount: amount,
+      usedAmount: 0,
+      remainingAmount: amount,
+      status: 'under',
+      clientResponsible: allowanceForm.clientResponsible,
+      affectsContractorCost: false,
+      includeInClientProposal: allowanceForm.includeInClientProposal,
+      notes: allowanceForm.notes,
+      selections: [],
+    };
+    setEstimateAllowances([...estimateAllowances, allowance]);
+    setAllowanceForm({ name: '', category: 'materials', amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
+    showToast('Allowance added outside contractor cost math');
+  };
+
+  const guidedPreview = showGuidedBuilder ? buildGuidedScope() : null;
+  const hasGuidedAnswer = currentGuidedQuestion
+    ? guidedAnswers[currentGuidedQuestion.id] !== undefined && guidedAnswers[currentGuidedQuestion.id] !== ''
+    : false;
+
   return (
     <div className="eb-root">
       {/* Sticky Header */}
@@ -926,13 +1382,123 @@ export function EstimateBuilder() {
             <div className="eb-typeGrid">
               {PROJECT_TYPES.map(pt => (
                 <button key={pt.value} className={`eb-typeCard ${formData.type === pt.value ? 'selected' : ''}`}
-                  onClick={() => { setFormData({...formData, type: pt.value as JobType}); setShowProjectTypePicker(false); }}>
+                  onClick={() => {
+                    setFormData({...formData, type: pt.value as JobType});
+                    setShowProjectTypePicker(false);
+                    setGuidedStep(0);
+                    setGuidedAnswers({});
+                    setGuidedDismissed(false);
+                    setShowGuidedBuilder(false);
+                  }}>
                   <div className="eb-typeIcon" style={{background: `${pt.color}20`, color: pt.color}}><pt.icon size={24} /></div>
                   <div className="eb-typeLabel">{pt.label}</div>
                 </button>
               ))}
             </div>
           </div>
+
+          {projectType && !showGuidedBuilder && !guidedDismissed && (
+            <div className="eb-section eb-guidedPrompt">
+              <div className="eb-guidedPromptCopy">
+                <div className="eb-guidedIcon"><Zap size={20} /></div>
+                <div>
+                  <p className="eb-sectionEyebrow">Smart Scope Builder</p>
+                  <h2>Build a guided {projectType.label.toLowerCase()} estimate in under 2 minutes</h2>
+                  <p>Answer structured questions and the builder will add assemblies, price book items, quantities, labor hours, warnings, and related-work suggestions.</p>
+                </div>
+              </div>
+              <div className="eb-guidedPromptActions">
+                <button className="eb-actionBtn eb-actionBtnPrimary" onClick={() => { setShowGuidedBuilder(true); setGuidedStep(0); }}>
+                  <Zap size={16} /><span>Start Guided Estimate</span>
+                </button>
+                <button className="eb-actionBtn" onClick={() => setGuidedDismissed(true)}>Build Manually</button>
+              </div>
+            </div>
+          )}
+
+          {showGuidedBuilder && currentGuidedQuestion && (
+            <div className="eb-section eb-guidedBuilder">
+              <div className="eb-sectionHeader">
+                <div>
+                  <p className="eb-sectionEyebrow">Guided Estimate System</p>
+                  <h2>{projectType?.label || 'Project'} Scope Questions</h2>
+                </div>
+                <span className="eb-sectionPill">Step {Math.min(guidedStep + 1, visibleGuidedQuestions.length)} of {visibleGuidedQuestions.length}</span>
+              </div>
+
+              <div className="eb-guidedProgress">
+                <div style={{ width: `${guidedProgress}%` }} />
+              </div>
+
+              <div className="eb-guidedQuestionCard">
+                <div>
+                  <h3>{currentGuidedQuestion.title}</h3>
+                  {currentGuidedQuestion.helper && <p>{currentGuidedQuestion.helper}</p>}
+                </div>
+
+                {currentGuidedQuestion.type === 'yesNo' && (
+                  <div className="eb-guidedChoices two">
+                    <button className={guidedAnswers[currentGuidedQuestion.id] === true ? 'selected' : ''} onClick={() => handleGuidedAnswer(currentGuidedQuestion.id, true)}>Yes</button>
+                    <button className={guidedAnswers[currentGuidedQuestion.id] === false ? 'selected' : ''} onClick={() => handleGuidedAnswer(currentGuidedQuestion.id, false)}>No</button>
+                  </div>
+                )}
+
+                {currentGuidedQuestion.type === 'multipleChoice' && (
+                  <div className="eb-guidedChoices">
+                    {currentGuidedQuestion.options?.map(option => (
+                      <button key={option.value} className={guidedAnswers[currentGuidedQuestion.id] === option.value ? 'selected' : ''} onClick={() => handleGuidedAnswer(currentGuidedQuestion.id, option.value)}>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentGuidedQuestion.type === 'numeric' && (
+                  <div className="eb-guidedNumber">
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="0"
+                      value={String(guidedAnswers[currentGuidedQuestion.id] ?? '')}
+                      onChange={event => handleGuidedAnswer(currentGuidedQuestion.id, event.target.value)}
+                      placeholder="Enter quantity"
+                    />
+                    {currentGuidedQuestion.unit && <span>{currentGuidedQuestion.unit}</span>}
+                  </div>
+                )}
+
+                {currentGuidedQuestion.type === 'dropdown' && (
+                  <select className="form-select" value={String(guidedAnswers[currentGuidedQuestion.id] ?? '')} onChange={event => handleGuidedAnswer(currentGuidedQuestion.id, event.target.value)}>
+                    <option value="">Select one...</option>
+                    {currentGuidedQuestion.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                )}
+              </div>
+
+              {guidedPreview && (guidedPreview.warnings.length > 0 || guidedPreview.suggestions.length > 0) && (
+                <div className="eb-guidedSignals">
+                  {guidedPreview.warnings.map(warning => (
+                    <div className="eb-guidedSignal warning" key={warning}><AlertTriangle size={15} />{warning}</div>
+                  ))}
+                  {guidedPreview.suggestions.map(suggestion => (
+                    <div className="eb-guidedSignal suggestion" key={suggestion}><CheckCircle size={15} />{suggestion}</div>
+                  ))}
+                </div>
+              )}
+
+              <div className="eb-guidedFooter">
+                <button className="eb-actionBtn" onClick={() => setShowGuidedBuilder(false)}>Switch to Manual</button>
+                <div>
+                  <button className="eb-actionBtn" disabled={guidedStep === 0} onClick={() => setGuidedStep(Math.max(0, guidedStep - 1))}>Back</button>
+                  {guidedStep < visibleGuidedQuestions.length - 1 ? (
+                    <button className="eb-actionBtn eb-actionBtnPrimary" disabled={!hasGuidedAnswer} onClick={() => setGuidedStep(Math.min(visibleGuidedQuestions.length - 1, guidedStep + 1))}>Next</button>
+                  ) : (
+                    <button className="eb-actionBtn eb-actionBtnPrimary" disabled={!hasGuidedAnswer} onClick={handleGenerateGuidedEstimate}>Generate Estimate</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {smartEnabled && estimateSuggestions.length > 0 && (
             <div className="eb-section eb-smartAssist">
@@ -999,6 +1565,40 @@ export function EstimateBuilder() {
             <div className="form-group">
               <label className="form-label">Internal Notes</label>
               <textarea className="form-textarea" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Scope assumptions, exclusions, or reminders" />
+            </div>
+          </div>
+
+          <div className="eb-section allowance-panel">
+            <div className="eb-sectionHeader">
+              <div>
+                <p className="eb-sectionEyebrow">Client Allowances</p>
+                <h2>Allowance Tracking</h2>
+              </div>
+              <span className="eb-sectionPill">Excluded from contractor cost</span>
+            </div>
+            <div className="allowance-form-grid">
+              <input className="form-input" value={allowanceForm.name} onChange={e => setAllowanceForm({ ...allowanceForm, name: e.target.value })} placeholder="Allowance name" />
+              <select className="form-select" value={allowanceForm.category} onChange={e => setAllowanceForm({ ...allowanceForm, category: e.target.value as AllowanceCategory })}>
+                {['materials', 'fixtures', 'cabinets', 'flooring', 'lighting', 'plumbing', 'appliances', 'other'].map(category => <option key={category} value={category}>{category}</option>)}
+              </select>
+              <input className="form-input" type="number" value={allowanceForm.amount} onChange={e => setAllowanceForm({ ...allowanceForm, amount: e.target.value })} placeholder="Amount" />
+              <button className="eb-actionBtn eb-actionBtnPrimary" onClick={addEstimateAllowance}>Add Allowance</button>
+            </div>
+            <div className="allowance-toggle-row">
+              <label><input type="checkbox" checked={allowanceForm.clientResponsible} onChange={e => setAllowanceForm({ ...allowanceForm, clientResponsible: e.target.checked })} /> Client responsible</label>
+              <label><input type="checkbox" checked={allowanceForm.includeInClientProposal} onChange={e => setAllowanceForm({ ...allowanceForm, includeInClientProposal: e.target.checked })} /> Show in client proposal</label>
+            </div>
+            <textarea className="form-textarea" value={allowanceForm.notes} onChange={e => setAllowanceForm({ ...allowanceForm, notes: e.target.value })} placeholder="Allowance description or client selection notes" />
+            <div className="allowance-card-grid">
+              {estimateAllowances.filter(item => !clientView || item.includeInClientProposal !== false).map(allowance => (
+                <div className="allowance-card" key={allowance.id}>
+                  <div><strong>{allowance.name}</strong><span>{allowance.category} allowance</span></div>
+                  <b>{formatCurrency(allowance.allowanceAmount)}</b>
+                  {!clientView && <small>Used {formatCurrency(allowance.usedAmount)} - Remaining {formatCurrency(allowance.remainingAmount)}</small>}
+                  {!clientView && <em>Client Allowance - does not affect contractor cost, subtotal, profit, or margin.</em>}
+                  {!clientView && <button className="eb-iconBtn" onClick={() => setEstimateAllowances(estimateAllowances.filter(item => item.id !== allowance.id))}><Trash2 size={14} /></button>}
+                </div>
+              ))}
             </div>
           </div>
 

@@ -95,6 +95,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <Clock size={20} />
             <span>Time Entries</span>
           </NavLink>
+          <NavLink to="/shopping-lists" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+            <ShoppingCart size={20} />
+            <span>Shopping Lists</span>
+          </NavLink>
         </div>
         <div className="nav-section">
           <div className="nav-section-title">Finance</div>

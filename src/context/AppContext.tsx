@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 
 interface AppContextType {
@@ -115,6 +115,20 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
   updateMaterialOrder: (id: string, updates: Partial<MaterialOrder>) => void;
   deleteMaterialOrder: (id: string) => void;
 
+  addShoppingList: (list: Omit<ShoppingList, 'id' | 'createdAt'>) => string;
+  updateShoppingList: (id: string, updates: Partial<ShoppingList>) => void;
+  deleteShoppingList: (id: string) => void;
+  addShoppingListItem: (listId: string, item: Omit<ShoppingListItem, 'id'>) => void;
+  updateShoppingListItem: (listId: string, itemId: string, updates: Partial<ShoppingListItem>) => void;
+  deleteShoppingListItem: (listId: string, itemId: string) => void;
+  addShoppingReceipt: (receipt: Omit<Receipt, 'id'>) => string;
+  addAllowance: (allowance: Omit<Allowance, 'id' | 'usedAmount' | 'remainingAmount' | 'status' | 'selections'> & { selections?: AllowanceSelection[] }) => string;
+  updateAllowance: (id: string, updates: Partial<Allowance>) => void;
+  deleteAllowance: (id: string) => void;
+  addAllowanceSelection: (allowanceId: string, selection: Omit<AllowanceSelection, 'id' | 'allowanceId'>, reimbursable?: boolean) => void;
+  updateAllowanceSelection: (allowanceId: string, selectionId: string, updates: Partial<AllowanceSelection>) => void;
+  createAllowanceOverageChangeOrder: (allowanceId: string) => void;
+
   markAlertRead: (id: string) => void;
   clearAllAlerts: () => void;
   
@@ -158,6 +172,9 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
   fileAttachments: FileAttachment[];
   suppliers: Supplier[];
   materialOrders: MaterialOrder[];
+  shoppingLists: ShoppingList[];
+  receipts: Receipt[];
+  allowances: Allowance[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -183,6 +200,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fileAttachments: parsed.fileAttachments || [],
           suppliers: parsed.suppliers || [],
           materialOrders: parsed.materialOrders || [],
+          shoppingLists: parsed.shoppingLists || [],
+          receipts: parsed.receipts || [],
+          allowances: parsed.allowances || [],
         };
       } catch {
         return generateCompleteSeedData();
@@ -1069,6 +1089,14 @@ const approveChangeOrder = (id: string) => {
     });
     
     updateEstimate(estimateId, { status: 'converted', convertedToJobId: jobId });
+    (estimate.clientAllowances || []).forEach(allowance => {
+      addAllowance({
+        ...allowance,
+        jobId,
+        estimateId,
+        affectsContractorCost: false,
+      });
+    });
     return jobId;
   };
 
@@ -1194,6 +1222,188 @@ const approveChangeOrder = (id: string) => {
 
   const deleteMaterialOrder = (id: string) => {
     setData(prev => ({ ...prev, materialOrders: (prev.materialOrders || []).filter(o => o.id !== id) }));
+  };
+
+  const addShoppingList = (list: Omit<ShoppingList, 'id' | 'createdAt'>) => {
+    const id = crypto.randomUUID();
+    setData(prev => ({ ...prev, shoppingLists: [...(prev.shoppingLists || []), { ...list, id, createdAt: new Date().toISOString() }] }));
+    return id;
+  };
+
+  const updateShoppingList = (id: string, updates: Partial<ShoppingList>) => {
+    setData(prev => ({
+      ...prev,
+      shoppingLists: (prev.shoppingLists || []).map(list => list.id === id ? { ...list, ...updates } : list),
+    }));
+  };
+
+  const deleteShoppingList = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      shoppingLists: (prev.shoppingLists || []).filter(list => list.id !== id),
+      receipts: (prev.receipts || []).filter(receipt => receipt.shoppingListId !== id),
+    }));
+  };
+
+  const addShoppingListItem = (listId: string, item: Omit<ShoppingListItem, 'id'>) => {
+    setData(prev => ({
+      ...prev,
+      shoppingLists: (prev.shoppingLists || []).map(list => list.id === listId
+        ? { ...list, items: [...list.items, { ...item, id: crypto.randomUUID() }] }
+        : list),
+    }));
+  };
+
+  const updateShoppingListItem = (listId: string, itemId: string, updates: Partial<ShoppingListItem>) => {
+    setData(prev => ({
+      ...prev,
+      shoppingLists: (prev.shoppingLists || []).map(list => list.id === listId
+        ? { ...list, items: list.items.map(item => item.id === itemId ? { ...item, ...updates } : item) }
+        : list),
+    }));
+  };
+
+  const deleteShoppingListItem = (listId: string, itemId: string) => {
+    setData(prev => ({
+      ...prev,
+      shoppingLists: (prev.shoppingLists || []).map(list => list.id === listId
+        ? { ...list, items: list.items.filter(item => item.id !== itemId) }
+        : list),
+    }));
+  };
+
+  const addShoppingReceipt = (receipt: Omit<Receipt, 'id'>) => {
+    const id = crypto.randomUUID();
+    const expenseId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    setData(prev => {
+      const list = (prev.shoppingLists || []).find(item => item.id === receipt.shoppingListId);
+      const reimbursableTotal = list?.items.reduce((sum, item) => {
+        if (item.allowanceId && item.allowanceHandling !== 'contractor_paid_reimbursable') return sum;
+        return sum + (item.actualCost || item.estimatedCost || 0);
+      }, 0) || receipt.total;
+      const receipts = [...(prev.receipts || []), { ...receipt, id }];
+      const expense: Expense = {
+        id: expenseId,
+        jobId: receipt.jobId,
+        date: receipt.date,
+        vendor: receipt.vendor,
+        amount: reimbursableTotal,
+        category: 'materials',
+        paymentSource: 'company_card',
+        receipt: receipt.imageUrl,
+        notes: [`source: shopping_list_receipt`, receipt.notes, `Shopping list receipt ${id}`, reimbursableTotal !== receipt.total ? 'Client allowance/client direct items excluded from contractor cost.' : ''].filter(Boolean).join('\n'),
+        createdAt: now,
+      };
+      const expenses = reimbursableTotal > 0 ? [...prev.expenses, expense] : prev.expenses;
+      const jobEntries = prev.timeEntries.filter(entry => entry.jobId === receipt.jobId);
+      const jobExpenses = expenses.filter(item => item.jobId === receipt.jobId);
+      const actualCost = jobEntries.reduce((sum, entry) => sum + entry.laborCost, 0) + jobExpenses.reduce((sum, item) => sum + item.amount, 0);
+      return {
+        ...prev,
+        receipts,
+        expenses,
+        jobs: prev.jobs.map(job => job.id === receipt.jobId ? { ...job, actualCost, updatedAt: now } : job),
+        shoppingLists: (prev.shoppingLists || []).map(list => list.id === receipt.shoppingListId
+          ? { ...list, status: 'completed', completedAt: receipt.date, items: list.items.map(item => ({ ...item, purchased: true })) }
+          : list),
+      };
+    });
+    return id;
+  };
+
+  const getAllowanceStatus = (allowanceAmount: number, usedAmount: number) => {
+    if (usedAmount > allowanceAmount) return 'over_limit' as const;
+    if (allowanceAmount > 0 && usedAmount >= allowanceAmount * 0.8) return 'near_limit' as const;
+    return 'under' as const;
+  };
+
+  const normalizeAllowance = (allowance: Allowance): Allowance => {
+    const usedAmount = allowance.selections.reduce((sum, selection) => sum + selection.total, 0);
+    const remainingAmount = allowance.allowanceAmount - usedAmount;
+    return {
+      ...allowance,
+      usedAmount,
+      remainingAmount,
+      status: getAllowanceStatus(allowance.allowanceAmount, usedAmount),
+      affectsContractorCost: allowance.affectsContractorCost === true,
+    };
+  };
+
+  const addAllowance = (allowance: Omit<Allowance, 'id' | 'usedAmount' | 'remainingAmount' | 'status' | 'selections'> & { selections?: AllowanceSelection[] }) => {
+    const id = crypto.randomUUID();
+    const newAllowance = normalizeAllowance({
+      ...allowance,
+      id,
+      usedAmount: 0,
+      remainingAmount: allowance.allowanceAmount,
+      status: 'under',
+      affectsContractorCost: allowance.affectsContractorCost === true,
+      selections: allowance.selections || [],
+    });
+    setData(prev => ({ ...prev, allowances: [...(prev.allowances || []), newAllowance] }));
+    return id;
+  };
+
+  const updateAllowance = (id: string, updates: Partial<Allowance>) => {
+    setData(prev => ({
+      ...prev,
+      allowances: (prev.allowances || []).map(allowance => allowance.id === id ? normalizeAllowance({ ...allowance, ...updates }) : allowance),
+    }));
+  };
+
+  const deleteAllowance = (id: string) => {
+    setData(prev => ({ ...prev, allowances: (prev.allowances || []).filter(allowance => allowance.id !== id) }));
+  };
+
+  const addAllowanceSelection = (allowanceId: string, selection: Omit<AllowanceSelection, 'id' | 'allowanceId'>, reimbursable = false) => {
+    const newSelection: AllowanceSelection = { ...selection, id: crypto.randomUUID(), allowanceId };
+    setData(prev => {
+      const allowance = (prev.allowances || []).find(item => item.id === allowanceId);
+      const allowances = (prev.allowances || []).map(item => item.id === allowanceId
+        ? normalizeAllowance({ ...item, selections: [...item.selections, newSelection] })
+        : item);
+      const expenses = reimbursable && allowance ? [...prev.expenses, {
+        id: crypto.randomUUID(),
+        jobId: allowance.jobId,
+        date: selection.date,
+        vendor: selection.vendor || 'Allowance selection',
+        amount: selection.total,
+        category: 'materials' as const,
+        paymentSource: 'company_card' as const,
+        receipt: selection.receiptAttachment,
+        notes: `source: reimbursable_allowance\nAllowance: ${allowance.name}\n${selection.notes || ''}`,
+        createdAt: new Date().toISOString(),
+      }] : prev.expenses;
+      const jobId = allowance?.jobId;
+      const jobs = jobId ? prev.jobs.map(job => {
+        if (job.id !== jobId) return job;
+        const laborCost = prev.timeEntries.filter(entry => entry.jobId === jobId).reduce((sum, entry) => sum + entry.laborCost, 0);
+        const expenseCost = expenses.filter(expense => expense.jobId === jobId).reduce((sum, expense) => sum + expense.amount, 0);
+        return { ...job, actualCost: laborCost + expenseCost, updatedAt: new Date().toISOString() };
+      }) : prev.jobs;
+      return { ...prev, allowances, expenses, jobs };
+    });
+  };
+
+  const updateAllowanceSelection = (allowanceId: string, selectionId: string, updates: Partial<AllowanceSelection>) => {
+    setData(prev => ({
+      ...prev,
+      allowances: (prev.allowances || []).map(allowance => allowance.id === allowanceId
+        ? normalizeAllowance({ ...allowance, selections: allowance.selections.map(selection => selection.id === selectionId ? { ...selection, ...updates } : selection) })
+        : allowance),
+    }));
+  };
+
+  const createAllowanceOverageChangeOrder = (allowanceId: string) => {
+    const allowance = (data.allowances || []).find(item => item.id === allowanceId);
+    if (!allowance || allowance.remainingAmount >= 0) return;
+    addChangeOrder({
+      jobId: allowance.jobId,
+      description: `${allowance.name} allowance overage`,
+      amount: Math.abs(allowance.remainingAmount),
+      status: 'pending',
+    });
   };
 
   return (
@@ -1322,6 +1532,22 @@ const approveChangeOrder = (id: string) => {
       addMaterialOrder,
       updateMaterialOrder,
       deleteMaterialOrder,
+      addShoppingList,
+      updateShoppingList,
+      deleteShoppingList,
+      addShoppingListItem,
+      updateShoppingListItem,
+      deleteShoppingListItem,
+      addShoppingReceipt,
+      shoppingLists: data.shoppingLists || [],
+      receipts: data.receipts || [],
+      addAllowance,
+      updateAllowance,
+      deleteAllowance,
+      addAllowanceSelection,
+      updateAllowanceSelection,
+      createAllowanceOverageChangeOrder,
+      allowances: data.allowances || [],
     }}>
       {children}
     </AppContext.Provider>

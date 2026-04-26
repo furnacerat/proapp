@@ -324,6 +324,7 @@ export interface Estimate {
   validUntil?: string;
   exclusions?: EstimateExclusion[];
   allowances?: EstimateAllowance[];
+  clientAllowances?: Allowance[];
   taxable: EstimateTaxable;
   createdAt: string;
   updatedAt: string;
@@ -553,6 +554,8 @@ export interface MaterialOrderItem {
   orderedQuantity?: number;
   receivedQuantity?: number;
   lineTotal: number;
+  allowanceId?: string;
+  costTreatment?: 'contractor_cost' | 'allowance_item' | 'client_direct_purchase' | 'reimbursable_allowance';
 }
 
 export interface MaterialOrder {
@@ -573,6 +576,87 @@ export interface MaterialOrder {
   receivedDate?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export type ShoppingListStatus = 'open' | 'shopping' | 'completed' | 'cancelled';
+export type ShoppingListItemCategory = 'material' | 'tool' | 'supply' | 'hardware' | 'rental' | 'other';
+export type ShoppingListAddOnStatus = 'included_expense' | 'client_add_on' | 'change_order_needed';
+export type AllowanceCategory = 'materials' | 'fixtures' | 'cabinets' | 'flooring' | 'lighting' | 'plumbing' | 'appliances' | 'other';
+export type AllowanceStatus = 'under' | 'near_limit' | 'over_limit';
+export type AllowanceSelectionStatus = 'planned' | 'selected' | 'purchased' | 'installed';
+
+export interface AllowanceSelection {
+  id: string;
+  allowanceId: string;
+  itemName: string;
+  vendor?: string;
+  quantity?: number;
+  unitCost?: number;
+  total: number;
+  date: string;
+  receiptAttachment?: string;
+  notes?: string;
+  status: AllowanceSelectionStatus;
+}
+
+export interface Allowance {
+  id: string;
+  jobId: string;
+  estimateId?: string;
+  name: string;
+  category: AllowanceCategory;
+  allowanceAmount: number;
+  usedAmount: number;
+  remainingAmount: number;
+  status: AllowanceStatus;
+  clientResponsible: boolean;
+  affectsContractorCost: boolean;
+  includeInClientProposal?: boolean;
+  notes?: string;
+  selections: AllowanceSelection[];
+}
+
+export interface ShoppingListItem {
+  id: string;
+  name: string;
+  category: ShoppingListItemCategory;
+  quantity: number;
+  unit: string;
+  estimatedCost?: number;
+  actualCost?: number;
+  purchased: boolean;
+  urgent: boolean;
+  notes?: string;
+  linkedPriceBookItemId?: string;
+  linkedEstimateLineItemId?: string;
+  addOnStatus?: ShoppingListAddOnStatus;
+  allowanceId?: string;
+  allowanceHandling?: 'track_only' | 'contractor_paid_reimbursable' | 'client_paid_direct';
+}
+
+export interface ShoppingList {
+  id: string;
+  jobId: string;
+  jobName: string;
+  title: string;
+  status: ShoppingListStatus;
+  createdAt: string;
+  completedAt?: string;
+  store?: string;
+  notes?: string;
+  items: ShoppingListItem[];
+}
+
+export interface Receipt {
+  id: string;
+  shoppingListId: string;
+  jobId: string;
+  vendor: string;
+  date: string;
+  total: number;
+  tax?: number;
+  imageUrl?: string;
+  notes?: string;
 }
 
 // SMTP settings for outbound emails
@@ -656,6 +740,9 @@ export interface AppData {
   fileAttachments?: FileAttachment[];
   suppliers?: Supplier[];
   materialOrders?: MaterialOrder[];
+  shoppingLists?: ShoppingList[];
+  receipts?: Receipt[];
+  allowances?: Allowance[];
 }
 
 // ============ CONSTANTS ============
