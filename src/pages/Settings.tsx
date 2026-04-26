@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 
-type SettingsTab = 'branding' | 'markups' | 'email' | 'smtp' | 'import';
+type SettingsTab = 'branding' | 'smart' | 'markups' | 'email' | 'smtp' | 'import';
 
 export function Settings() {
   const { branding, updateBranding, smtpSettings, updateSmtpSettings } = useApp();
@@ -51,6 +51,7 @@ export function Settings() {
 
   const tabs = [
     { id: 'branding', label: 'Branding' },
+    { id: 'smart', label: 'Smart Mode' },
     { id: 'markups', label: 'Default Markups' },
     { id: 'email', label: 'Email & Terms' },
     { id: 'smtp', label: 'SMTP' },
@@ -121,6 +122,51 @@ export function Settings() {
               ) : branding.logoUrl ? (
                 <img src={branding.logoUrl} alt="logo" style={{ maxWidth: '200px', marginTop: '8px' }} />
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'smart' && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h3 className="card-title">Smart Features</h3>
+              <p className="text-sm text-muted">Enable the Intelligence Engine for recommendations, alerts, and estimate assistance.</p>
+            </div>
+            <span className={`badge ${branding.smartFeaturesEnabled !== false ? 'badge-green' : 'badge-gray'}`}>
+              {branding.smartFeaturesEnabled !== false ? 'On' : 'Off'}
+            </span>
+          </div>
+          <div className="card-body">
+            <label className="smart-toggle-row">
+              <div>
+                <div className="font-bold">Smart Mode</div>
+                <div className="text-sm text-muted">Show priority next actions, profit intelligence, delay detection, cash-flow alerts, and estimate suggestions.</div>
+              </div>
+              <input
+                type="checkbox"
+                checked={branding.smartFeaturesEnabled !== false}
+                onChange={e => setBrand('smartFeaturesEnabled', e.target.checked)}
+              />
+            </label>
+            <div className="smart-settings-grid mt-4">
+              <div className="smart-setting-tile">
+                <strong>Next Actions</strong>
+                <span>Follow-ups, job actions, and payment reminders.</span>
+              </div>
+              <div className="smart-setting-tile">
+                <strong>Profit Intelligence</strong>
+                <span>Underpricing, margin, and over-budget warnings.</span>
+              </div>
+              <div className="smart-setting-tile">
+                <strong>Estimate Assistance</strong>
+                <span>Project-type suggestions from templates and historical work.</span>
+              </div>
+              <div className="smart-setting-tile">
+                <strong>Delay & Cash Flow</strong>
+                <span>Inactive jobs, overdue tasks, and payment shortfall alerts.</span>
+              </div>
             </div>
           </div>
         </div>

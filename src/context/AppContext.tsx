@@ -210,6 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logoDataUrl: '',
     termsText: '',
     termsUrl: '',
+    smartFeaturesEnabled: true,
   } as BrandingSettings);
 
   const updateBranding = (updates: Partial<BrandingSettings>) => {

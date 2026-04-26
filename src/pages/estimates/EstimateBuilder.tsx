@@ -6,6 +6,10 @@ import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
 import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
+import { getEstimateSuggestions } from '../../utils/insights';
+import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
+import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
+import { renderEmailAll } from '../../utils/emailTemplates';
 import {
   Plus, Trash2, Save, Send, ArrowLeft, Copy, FileText, Printer,
   Package, Clock, DollarSign, ChevronDown, ChevronUp,
@@ -35,7 +39,7 @@ const CATEGORIES: { value: EstimateLineCategory; label: string; icon: any; color
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { branding, estimates, customers, materials, laborRates, assemblies, projectTypeTemplates, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob } = useApp();
+  const { branding, estimates, customers, materials, laborRates, assemblies, projectTypeTemplates, jobs, expenses, timeEntries, addCustomer, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob, sendEmail } = useApp();
   const { showToast } = useToast();
 
   const isNew = id === 'new';
@@ -72,10 +76,13 @@ export function EstimateBuilder() {
   const [priceSearch, setPriceSearch] = useState('');
   const [pricePickerTab, setPricePickerTab] = useState<'materials' | 'labor'>('materials');
   const [priceTarget, setPriceTarget] = useState<{ scopeId?: string; sectionId?: string } | null>(null);
+  const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
   const [newItemForm, setNewItemForm] = useState({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' as EstimateLineCategory });
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [quickCustomer, setQuickCustomer] = useState({ name: '', email: '', phone: '', address: '' });
   const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
 
   // Handler functions
@@ -144,18 +151,42 @@ export function EstimateBuilder() {
   };
 
   // Auto-save
-  const saveEstimate = useCallback(() => {
-    if (isNew) return;
+  const buildCurrentEstimate = useCallback((): Estimate => {
     const totals = calculateTotals;
-    updateEstimate(estimate!.id, {
+    const now = new Date().toISOString();
+    return {
+      ...(estimate || {}),
       ...formData,
+      id: estimate?.id || 'draft',
+      estimateNumber: estimate?.estimateNumber || `EST-${new Date().getFullYear()}-DRAFT`,
+      customerId: formData.customerId,
+      status: formData.status as EstimateStatus,
+      type: formData.type as JobType,
       markupPercent: parseFloat(formData.markupPercent) || 0,
       scopes,
       sections: legacySections,
+      taxable: estimate?.taxable || 'none',
+      createdAt: estimate?.createdAt || now,
+      updatedAt: estimate?.updatedAt || now,
+      projectedLaborHours: totals.laborHours,
+      projectedMaterialCost: totals.materialTotal,
+      projectedLaborCost: totals.laborTotal,
+      marginPercent: totals.profitPercent,
+      marginAmount: totals.profit,
       ...totals,
+    } as Estimate;
+  }, [estimate, formData, scopes, legacySections]);
+
+  const saveEstimate = useCallback((notify = false) => {
+    if (isNew || !estimate) return false;
+    const current = buildCurrentEstimate();
+    updateEstimate(estimate!.id, {
+      ...current,
     });
     setLastSaved(new Date());
-  }, [estimate, formData, scopes, legacySections, isNew]);
+    if (notify) showToast('Estimate saved');
+    return true;
+  }, [estimate, buildCurrentEstimate, isNew, updateEstimate, showToast]);
 
   useEffect(() => {
     if (!isNew && estimate) {
@@ -385,12 +416,70 @@ export function EstimateBuilder() {
     const totals = calculateTotals;
     const newId = addEstimate({
       ...formData,
+      estimateNumber: `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`,
+      status: formData.status as EstimateStatus,
+      type: formData.type as JobType,
+      markupPercent: parseFloat(formData.markupPercent) || 0,
       scopes,
       sections: legacySections,
+      taxable: 'none',
       ...totals,
     } as any);
     navigate(`/estimates/${newId}`);
     showToast('Estimate created');
+  };
+
+  const handleQuickAddCustomer = () => {
+    if (!quickCustomer.name.trim()) {
+      showToast('Customer name required', 'error');
+      return;
+    }
+    const customerId = addCustomer({
+      name: quickCustomer.name.trim(),
+      email: quickCustomer.email.trim(),
+      phone: quickCustomer.phone.trim(),
+      address: quickCustomer.address.trim(),
+    });
+    setFormData({ ...formData, customerId, address: formData.address || quickCustomer.address.trim() });
+    setQuickCustomer({ name: '', email: '', phone: '', address: '' });
+    setShowCustomerPicker(false);
+    showToast('Customer added');
+  };
+
+  const handleOpenPrint = () => {
+    if (!estimate && isNew) {
+      showToast('Create the estimate before printing', 'warning');
+      return;
+    }
+    saveEstimate(false);
+    setShowPrintPreview(true);
+  };
+
+  const handleSend = async () => {
+    if (!estimate && isNew) {
+      showToast('Create the estimate before sending', 'warning');
+      return;
+    }
+    const current = buildCurrentEstimate();
+    const currentCustomer = customers?.find(c => c.id === current.customerId);
+    if (!currentCustomer?.email) {
+      showToast('Add a customer email before sending', 'warning');
+      return;
+    }
+
+    saveEstimate(false);
+    const email = renderEmailAll('estimate', branding, {
+      estimate: current,
+      customer: currentCustomer,
+      totals: { total: formatCurrency(calculateTotals.total) },
+    });
+    const delivered = await sendEmail({
+      to: currentCustomer.email,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+    });
+    showToast(delivered ? 'Estimate sent' : 'Email draft opened');
   };
 
   const badge = (status: string) => {
@@ -400,6 +489,53 @@ export function EstimateBuilder() {
 
   const selectedCustomer = customers?.find(c => c.id === formData.customerId);
   const projectType = PROJECT_TYPES.find(p => p.value === formData.type);
+  const smartEnabled = branding.smartFeaturesEnabled !== false;
+  const estimateSuggestions = useMemo(() => smartEnabled
+    ? getEstimateSuggestions(formData.type as JobType, materials || [], laborRates || [], projectTypeTemplates || [], jobs || [], expenses || [], timeEntries || [])
+    : [],
+  [smartEnabled, formData.type, materials, laborRates, projectTypeTemplates, jobs, expenses, timeEntries]);
+
+  const suggestionToLineItem = (suggestion: typeof estimateSuggestions[number]): EstimateLineItem => ({
+    id: crypto.randomUUID(),
+    name: suggestion.name,
+    description: suggestion.description,
+    quantity: suggestion.quantity,
+    unit: suggestion.unit,
+    unitPrice: suggestion.unitPrice,
+    category: suggestion.category,
+    isLabor: suggestion.isLabor,
+    hours: suggestion.isLabor ? suggestion.quantity : undefined,
+    linkedMaterialId: suggestion.linkedMaterialId,
+    linkedLaborRateId: suggestion.linkedLaborRateId,
+    notes: suggestion.reason,
+    total: suggestion.quantity * suggestion.unitPrice,
+  });
+
+  const addSmartSuggestions = (suggestionsToAdd: typeof estimateSuggestions) => {
+    if (suggestionsToAdd.length === 0) return;
+    const lineItems = suggestionsToAdd.map(suggestionToLineItem);
+    const sectionId = crypto.randomUUID();
+    const scopeId = crypto.randomUUID();
+    const total = lineItems.reduce((sum, item) => sum + item.total, 0);
+    const smartScope: EstimateScope = {
+      id: scopeId,
+      name: `${projectType?.label || 'Project'} Smart Suggestions`,
+      projectType: formData.type as JobType,
+      sections: [{ id: sectionId, name: 'Recommended Items', lineItems }],
+      subtotal: total,
+      isOptional: false,
+      sortOrder: scopes.length,
+    };
+    setScopes([...scopes, smartScope]);
+    setActiveScopeId(scopeId);
+    setActiveSectionId(sectionId);
+    setAcceptedSuggestionIds([...acceptedSuggestionIds, ...suggestionsToAdd.map(suggestion => suggestion.id)]);
+    showToast('Smart suggestions added');
+  };
+
+  const addSmartSuggestion = (suggestion: typeof estimateSuggestions[number]) => {
+    addSmartSuggestions([suggestion]);
+  };
 
   return (
     <div className="eb-root">
@@ -434,13 +570,13 @@ export function EstimateBuilder() {
           {!isNew && estimate?.status === 'approved' && !estimate.convertedToJobId && (
             <button className="eb-actionBtn" onClick={() => setShowConvertModal(true)}><Briefcase size={16} /><span>Convert</span></button>
           )}
-          {!isNew && <button className="eb-actionBtn" onClick={saveEstimate}><Save size={16} /><span>Save</span></button>}
+          {!isNew && <button className="eb-actionBtn" onClick={() => saveEstimate(true)}><Save size={16} /><span>Save</span></button>}
           {isNew ? (
             <button className="eb-actionBtn eb-actionBtnPrimary" onClick={handleCreate}><Plus size={16} /><span>Create</span></button>
           ) : (
             <>
-              <button className="eb-actionBtn"><Printer size={16} /></button>
-              <button className="eb-actionBtn"><Send size={16} /></button>
+              <button className="eb-actionBtn" onClick={handleOpenPrint}><Printer size={16} /><span>Print</span></button>
+              <button className="eb-actionBtn" onClick={handleSend}><Send size={16} /><span>Send</span></button>
             </>
           )}
         </div>
@@ -468,6 +604,41 @@ export function EstimateBuilder() {
               ))}
             </div>
           </div>
+
+          {smartEnabled && estimateSuggestions.length > 0 && (
+            <div className="eb-section eb-smartAssist">
+              <div className="eb-sectionHeader">
+                <div>
+                  <p className="eb-sectionEyebrow">Smart Estimate Assistance</p>
+                  <h2>Recommended Items</h2>
+                </div>
+                <button className="btn btn-sm btn-primary" onClick={() => addSmartSuggestions(estimateSuggestions.filter(item => !acceptedSuggestionIds.includes(item.id)))}>
+                  <CheckCircle size={15} /> Accept All
+                </button>
+              </div>
+              <div className="eb-suggestionList">
+                {estimateSuggestions.map(suggestion => {
+                  const accepted = acceptedSuggestionIds.includes(suggestion.id);
+                  return (
+                    <div key={suggestion.id} className={`eb-suggestionItem ${accepted ? 'accepted' : ''}`}>
+                      <div>
+                        <div className="eb-suggestionTitle">{suggestion.name}</div>
+                        <div className="eb-suggestionMeta">
+                          <span>{suggestion.quantity} {suggestion.unit}</span>
+                          <span>{formatCurrency(suggestion.unitPrice)}</span>
+                          <span>{suggestion.category}</span>
+                        </div>
+                        <div className="eb-suggestionReason">{suggestion.reason}</div>
+                      </div>
+                      <button className="btn btn-sm btn-secondary" disabled={accepted} onClick={() => addSmartSuggestion(suggestion)}>
+                        {accepted ? 'Added' : 'Add'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="eb-section">
             <div className="eb-sectionHeader">
@@ -661,7 +832,7 @@ export function EstimateBuilder() {
                     <span className="eb-profitValue eb-profitValueGreen">{formatCurrency(calculateTotals.profit)}</span>
                   </div>
                   <div className="eb-profitItem">
-                    <span className="eb-profitLabel">%</span>
+                    <span className="eb-profitLabel">Margin %</span>
                     <span className="eb-profitValue eb-profitValueGreen">{calculateTotals.profitPercent.toFixed(1)}%</span>
                   </div>
                 </div>
@@ -734,6 +905,28 @@ export function EstimateBuilder() {
             </button>
           ))}
           {customers?.length === 0 && <div className="text-center text-muted py-4">No customers yet</div>}
+        </div>
+        <div className="eb-quickCustomer">
+          <div className="eb-quickCustomerTitle">Add Customer</div>
+          <div className="form-group">
+            <label className="form-label">Name</label>
+            <input className="form-input" value={quickCustomer.name} onChange={e => setQuickCustomer({...quickCustomer, name: e.target.value})} placeholder="Customer name" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input className="form-input" type="email" value={quickCustomer.email} onChange={e => setQuickCustomer({...quickCustomer, email: e.target.value})} placeholder="customer@email.com" />
+          </div>
+          <div className="form-row form-row-2">
+            <div className="form-group">
+              <label className="form-label">Phone</label>
+              <input className="form-input" value={quickCustomer.phone} onChange={e => setQuickCustomer({...quickCustomer, phone: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Address</label>
+              <input className="form-input" value={quickCustomer.address} onChange={e => setQuickCustomer({...quickCustomer, address: e.target.value})} />
+            </div>
+          </div>
+          <button className="btn btn-primary w-full" onClick={handleQuickAddCustomer}><Plus size={16} /> Add & Select Customer</button>
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
           <Link to="/customers" className="btn btn-secondary" onClick={() => setShowCustomerPicker(false)}>Manage Customers</Link>
@@ -873,6 +1066,15 @@ export function EstimateBuilder() {
           )}
         </div>
       </Modal>
+
+      {showPrintPreview && (
+        <PrintTemplateModal
+          isOpen={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          title="Client Estimate Preview"
+          data={buildClientEstimatePrintData(buildCurrentEstimate(), selectedCustomer, branding)}
+        />
+      )}
 
       {/* Convert to Job Modal */}
       <Modal isOpen={showConvertModal} onClose={() => setShowConvertModal(false)} title="Convert to Job" size="sm">

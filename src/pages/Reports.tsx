@@ -2,11 +2,12 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/formatters';
-import { PieChart, TrendingUp, DollarSign, Clock, Users } from 'lucide-react';
+import { PieChart, TrendingUp, DollarSign, Clock, Users, Zap, AlertTriangle } from 'lucide-react';
 import { getJobLaborCost, getJobExpenseTotal } from '../utils/calculations';
+import { getPerformanceInsights } from '../utils/insights';
 
 export function Reports() {
-  const { jobs, workers, timeEntries, expenses, invoices, payments } = useApp();
+  const { jobs, workers, timeEntries, expenses, invoices, payments, estimates } = useApp();
   const [reportType, setReportType] = useState('profit');
 
   const profitData = useMemo(() => {
@@ -44,6 +45,7 @@ export function Reports() {
   }, [invoices, payments, jobs]);
 
   const unpaidTotal = unpaidData.reduce((sum, i) => sum + i.balance, 0);
+  const performance = useMemo(() => getPerformanceInsights(estimates, jobs, expenses, timeEntries, invoices, payments), [estimates, jobs, expenses, timeEntries, invoices, payments]);
 
   const hoursByWorker = useMemo(() => {
     return workers.map(w => {
@@ -55,6 +57,7 @@ export function Reports() {
   const totalHours = hoursByWorker.reduce((s, w) => s + w.hours, 0);
 
   const reports = [
+    { id: 'performance', label: 'Performance Insights', icon: Zap },
     { id: 'profit', label: 'Profit by Job', icon: TrendingUp },
     { id: 'expenses', label: 'Expenses by Category', icon: PieChart },
     { id: 'labor', label: 'Labor Cost by Job', icon: Clock },
@@ -76,6 +79,65 @@ export function Reports() {
             </button>
           ))}
         </div>
+
+        {reportType === 'performance' && (
+          <div>
+            <div className="kpi-grid mb-4">
+              <div className="kpi-card"><div className="kpi-label">Average Profit Margin</div><div className="kpi-value kpi-primary">{performance.averageProfitMargin.toFixed(1)}%</div></div>
+              <div className="kpi-card"><div className="kpi-label">Close Rate</div><div className="kpi-value">{performance.closeRate.toFixed(0)}%</div></div>
+              <div className="kpi-card"><div className="kpi-label">Cash Flow Outlook</div><div className={`kpi-value ${performance.cashFlowBalance >= 0 ? 'kpi-success' : 'kpi-danger'}`}>{formatCurrency(performance.cashFlowBalance)}</div></div>
+              <div className="kpi-card"><div className="kpi-label">Risk Flags</div><div className="kpi-value kpi-accent">{performance.underpricingWarnings.length}</div></div>
+            </div>
+
+            <div className="grid-2 gap-4 mb-4">
+              <div className="card">
+                <div className="card-header"><h3 className="card-title">Most Profitable Job Types</h3></div>
+                <div className="card-body">
+                  {performance.mostProfitableJobTypes.length === 0 ? <p className="text-muted">No job type data yet.</p> : performance.mostProfitableJobTypes.map(type => (
+                    <div key={type.type} className="performance-row">
+                      <div>
+                        <div className="font-medium">{type.type.replace('_', ' ')}</div>
+                        <div className="text-sm text-muted">{type.count} jobs • {formatCurrency(type.profit)} profit</div>
+                      </div>
+                      <strong>{type.margin.toFixed(1)}%</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-header"><h3 className="card-title">Expense Breakdown</h3></div>
+                <div className="card-body">
+                  {performance.expenseBreakdown.slice(0, 6).map(item => (
+                    <div key={item.category} className="chart-bar-row">
+                      <div className="flex justify-between mb-1"><span className="font-medium">{item.category}</span><span>{formatCurrency(item.amount)}</span></div>
+                      <div className="chart-track"><div className="chart-fill" style={{ width: `${Math.min(100, item.percent)}%` }} /></div>
+                      <div className="text-sm text-muted">{item.percent.toFixed(1)}%</div>
+                    </div>
+                  ))}
+                  {performance.expenseBreakdown.length === 0 && <p className="text-muted">No expenses yet.</p>}
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div className="flex items-center gap-2"><AlertTriangle size={18} className="text-accent" /><h3 className="card-title">Profit Intelligence</h3></div>
+              </div>
+              <div className="card-body">
+                {performance.underpricingWarnings.length === 0 ? (
+                  <p className="text-muted">No underpricing trends detected from completed jobs.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {performance.underpricingWarnings.map(warning => (
+                      <div key={warning} className="smart-warning-note">{warning} Review markup, labor assumptions, or material allowances before similar bids.</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {reportType === 'profit' && (
           <div>

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
-import { generateInsights, getWeeklySummary, getKPIS } from '../utils/insights';
+import { generateInsights, getWeeklySummary, getKPIS, generateSmartNextActions, getPerformanceInsights } from '../utils/insights';
 import { JOB_TYPES } from '../data/types';
 import { useToast } from '../components/common/Toast';
 import { Modal } from '../components/common/Modal';
@@ -12,13 +12,16 @@ import {
 } from 'lucide-react';
 
 export function Dashboard() {
-  const { jobs, workers, tasks, timeEntries, expenses, invoices, payments, jobTemplates, createJobFromTemplate, alerts, clearAllAlerts } = useApp();
+  const { jobs, workers, tasks, timeEntries, expenses, invoices, payments, estimates, jobTemplates, createJobFromTemplate, alerts, clearAllAlerts, branding } = useApp();
   const { showToast } = useToast();
   
   const [quickAddType, setQuickAddType] = useState<string | null>(null);
   const [templateModalJob, setTemplateModalJob] = useState({ name: '', address: '', customer: '', templateId: '' });
 
-  const insights = useMemo(() => generateInsights(jobs, expenses, timeEntries, workers, invoices, payments, tasks), [jobs, expenses, timeEntries, workers, invoices, payments, tasks]);
+  const smartEnabled = branding.smartFeaturesEnabled !== false;
+  const insights = useMemo(() => smartEnabled ? generateInsights(jobs, expenses, timeEntries, workers, invoices, payments, tasks) : [], [smartEnabled, jobs, expenses, timeEntries, workers, invoices, payments, tasks]);
+  const smartActions = useMemo(() => smartEnabled ? generateSmartNextActions(estimates, jobs, expenses, timeEntries, invoices, payments, tasks) : [], [smartEnabled, estimates, jobs, expenses, timeEntries, invoices, payments, tasks]);
+  const performance = useMemo(() => getPerformanceInsights(estimates, jobs, expenses, timeEntries, invoices, payments), [estimates, jobs, expenses, timeEntries, invoices, payments]);
   const weekly = useMemo(() => getWeeklySummary(jobs, timeEntries, expenses, payments), [jobs, timeEntries, expenses, payments]);
   const kpis = useMemo(() => getKPIS(jobs, expenses, timeEntries, invoices, payments), [jobs, expenses, timeEntries, invoices, payments]);
 
@@ -45,6 +48,15 @@ export function Dashboard() {
       case 'warning': return 'bg-yellow-500';
       case 'success': return 'bg-green-500';
       default: return 'bg-blue-500';
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'critical': return 'badge badge-red';
+      case 'high': return 'badge badge-orange';
+      case 'medium': return 'badge badge-yellow';
+      default: return 'badge badge-blue';
     }
   };
 
@@ -108,7 +120,61 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="card mb-6">
+        {smartEnabled ? (
+          <div className="smart-priority-card mb-6">
+            <div className="smart-priority-header">
+              <div>
+                <div className="page-eyebrow">Smart Next Action Engine</div>
+                <h3>Priority Recommendations</h3>
+              </div>
+              <span className="badge badge-green">Smart Mode On</span>
+            </div>
+            <div className="smart-priority-grid">
+              <div className="smart-priority-main">
+                {smartActions.length > 0 ? (
+                  smartActions.slice(0, 4).map(action => (
+                    <Link key={action.id} to={action.to} className="smart-action-item">
+                      <span className={getPriorityBadge(action.priority)}>{action.priority}</span>
+                      <div className="smart-action-copy">
+                        <strong>{action.title}</strong>
+                        <p>{action.description}</p>
+                      </div>
+                      <span className="btn btn-sm btn-secondary">{action.actionLabel}</span>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="smart-empty-state">
+                    <CheckSquare size={28} />
+                    <div>
+                      <strong>No urgent actions right now</strong>
+                      <p>Smart Mode will surface follow-ups, job delays, over-budget work, and payment reminders here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="smart-snapshot">
+                <div className="smart-snapshot-row"><span>Avg. Margin</span><strong>{performance.averageProfitMargin.toFixed(1)}%</strong></div>
+                <div className="smart-snapshot-row"><span>Close Rate</span><strong>{performance.closeRate.toFixed(0)}%</strong></div>
+                <div className="smart-snapshot-row"><span>Cash Outlook</span><strong className={performance.cashFlowBalance >= 0 ? 'text-success' : 'text-danger'}>{formatCurrency(performance.cashFlowBalance)}</strong></div>
+                {performance.underpricingWarnings[0] && (
+                  <div className="smart-warning-note">{performance.underpricingWarnings[0]}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="card mb-6">
+            <div className="card-body flex items-center justify-between gap-4">
+              <div>
+                <div className="font-bold">Smart Mode is off</div>
+                <div className="text-sm text-muted">Enable smart features in Settings to see recommendations and automation alerts.</div>
+              </div>
+              <Link to="/settings" className="btn btn-primary">Open Settings</Link>
+            </div>
+          </div>
+        )}
+
+        {smartEnabled && <div className="card mb-6">
           <div className="card-header">
             <div className="flex items-center gap-2">
               <Zap size={20} className="text-primary" />
@@ -133,7 +199,7 @@ export function Dashboard() {
               )}
             </div>
           </div>
-        </div>
+        </div>}
 
         <div className="grid-2 gap-6 mb-6">
           <div className="card">
