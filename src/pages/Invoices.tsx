@@ -1,148 +1,330 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle,
+  Clock3,
+  Copy,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Mail,
+  Plus,
+  Printer,
+  ReceiptText,
+  Search,
+  Trash2,
+  TrendingUp,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatDate } from '../utils/formatters';
 import { INVOICE_TYPES, INVOICE_STATUSES } from '../data/types';
-import type { Invoice } from '../data/types';
+import type { Invoice, InvoiceStatus, PaymentMethod } from '../data/types';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
-import { Plus, Search, Trash2, Printer } from 'lucide-react';
 import { buildClientInvoiceData } from '../utils/buildPrintData';
 import { PrintTemplateModal } from '../components/print/PrintTemplateModal';
 import type { PrintInvoiceData } from '../data/printTypes';
 import { DEFAULT_PRINT_SETTINGS } from '../data/printTypes';
 
+type GroupMode = 'none' | 'job' | 'customer' | 'status';
+
+interface InvoiceSummary extends Invoice {
+  jobName: string;
+  customer: string;
+  progress: number;
+  paid: number;
+  balance: number;
+  effectiveStatus: InvoiceStatus;
+  ageBucket: '0-7' | '8-30' | '30+';
+  daysPastDue: number;
+  expectedPaid: number;
+}
+
+const todayString = () => new Date().toISOString().split('T')[0];
+
 export function Invoices() {
-  const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice, branding } = useApp();
+  const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice, getJobProgress, branding } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [groupMode, setGroupMode] = useState<GroupMode>('none');
   const [showModal, setShowModal] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  // ── Print preview state ────────────────────────────────────────
   const [printData, setPrintData] = useState<PrintInvoiceData | null>(null);
 
   const [formData, setFormData] = useState({
     jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: ''
   });
   const [paymentForm, setPaymentForm] = useState({
-    amount: '', date: new Date().toISOString().split('T')[0], method: 'check', checkNumber: '', notes: ''
+    amount: '', date: todayString(), method: 'check', checkNumber: '', notes: ''
   });
 
-  const filteredInvoices = useMemo(() => {
-    let result = [...invoices].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (search) {
-      const s = search.toLowerCase();
-      result = result.filter(i => {
-        const job = jobs.find(j => j.id === i.jobId);
-        return i.invoiceNumber.toLowerCase().includes(s) || job?.name.toLowerCase().includes(s);
-      });
-    }
-    if (jobFilter) result = result.filter(i => i.jobId === jobFilter);
-    if (statusFilter) result = result.filter(i => i.status === statusFilter);
-    return result;
-  }, [invoices, jobs, search, jobFilter, statusFilter]);
+  const getInvoicePayments = (invoiceId: string) => payments.filter(payment => payment.invoiceId === invoiceId);
 
-  const getInvoicePayments = (invoiceId: string) => payments.filter(p => p.invoiceId === invoiceId);
+  const invoiceSummaries = useMemo<InvoiceSummary[]>(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return invoices.map(invoice => {
+      const job = jobs.find(item => item.id === invoice.jobId);
+      const paid = payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0);
+      const balance = Math.max(0, invoice.amount - paid);
+      const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : now;
+      dueDate.setHours(0, 0, 0, 0);
+      const daysPastDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+      const effectiveStatus: InvoiceStatus = balance <= 0 ? 'paid' : daysPastDue > 0 && invoice.status !== 'draft' ? 'overdue' : paid > 0 ? 'partial' : invoice.status;
+      const outstandingAge = Math.max(0, daysPastDue);
+      const ageBucket: InvoiceSummary['ageBucket'] = outstandingAge <= 7 ? '0-7' : outstandingAge <= 30 ? '8-30' : '30+';
+      const progress = job ? getJobProgress(job.id) : 0;
+      return {
+        ...invoice,
+        jobName: job?.name || 'Unknown Job',
+        customer: job?.customer || 'No customer',
+        progress,
+        paid,
+        balance,
+        effectiveStatus,
+        ageBucket,
+        daysPastDue,
+        expectedPaid: job ? job.contractAmount * (progress / 100) : 0,
+      };
+    }).sort((a, b) => new Date(a.dueDate || a.createdAt).getTime() - new Date(b.dueDate || b.createdAt).getTime());
+  }, [invoices, jobs, payments, getJobProgress]);
+
+  const filteredInvoices = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return invoiceSummaries.filter(invoice => {
+      if (query && ![invoice.invoiceNumber, invoice.jobName, invoice.customer, invoice.type, invoice.effectiveStatus].some(value => value.toLowerCase().includes(query))) return false;
+      if (jobFilter && invoice.jobId !== jobFilter) return false;
+      if (statusFilter && invoice.effectiveStatus !== statusFilter) return false;
+      return true;
+    });
+  }, [invoiceSummaries, search, jobFilter, statusFilter]);
+
+  const groupedInvoices = useMemo(() => {
+    const groups = new Map<string, { label: string; invoices: InvoiceSummary[] }>();
+    filteredInvoices.forEach(invoice => {
+      const key = groupMode === 'job' ? invoice.jobId : groupMode === 'customer' ? invoice.customer : groupMode === 'status' ? invoice.effectiveStatus : 'all';
+      const label = groupMode === 'job' ? invoice.jobName : groupMode === 'customer' ? invoice.customer : groupMode === 'status' ? invoice.effectiveStatus : 'Invoices';
+      const group = groups.get(key) || { label, invoices: [] };
+      group.invoices.push(invoice);
+      groups.set(key, group);
+    });
+    return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
+  }, [filteredInvoices, groupMode]);
+
+  const totalInvoiced = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const outstanding = invoiceSummaries.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const overdueInvoices = invoiceSummaries.filter(invoice => invoice.balance > 0 && invoice.effectiveStatus === 'overdue');
+  const overdueAmount = overdueInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  const dueSoon = invoiceSummaries.filter(invoice => {
+    if (invoice.balance <= 0 || invoice.effectiveStatus === 'overdue') return false;
+    const due = new Date(invoice.dueDate);
+    const now = new Date();
+    const diff = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 && diff <= 7;
+  });
+  const aging = {
+    '0-7': invoiceSummaries.filter(invoice => invoice.balance > 0 && invoice.ageBucket === '0-7').reduce((sum, invoice) => sum + invoice.balance, 0),
+    '8-30': invoiceSummaries.filter(invoice => invoice.balance > 0 && invoice.ageBucket === '8-30').reduce((sum, invoice) => sum + invoice.balance, 0),
+    '30+': invoiceSummaries.filter(invoice => invoice.balance > 0 && invoice.ageBucket === '30+').reduce((sum, invoice) => sum + invoice.balance, 0),
+  };
+
+  const alerts = useMemo(() => {
+    const underpaidJobs = jobs.map(job => {
+      const progress = getJobProgress(job.id);
+      const jobInvoices = invoiceSummaries.filter(invoice => invoice.jobId === job.id);
+      const paid = jobInvoices.reduce((sum, invoice) => sum + invoice.paid, 0);
+      const expected = job.contractAmount * (progress / 100);
+      return { job, progress, paid, expected, shortfall: expected - paid };
+    }).filter(item => item.progress >= 50 && item.shortfall > item.job.contractAmount * 0.15);
+    const largeBalances = invoiceSummaries.filter(invoice => invoice.balance >= 5000);
+    return [
+      ...overdueInvoices.slice(0, 2).map(invoice => ({ title: 'Overdue invoice', detail: `${invoice.invoiceNumber} is ${formatCurrency(invoice.balance)} past due.` })),
+      ...underpaidJobs.slice(0, 2).map(item => ({ title: 'Job underpaid vs progress', detail: `${item.job.name} is ${item.progress}% complete with ${formatCurrency(item.shortfall)} expected unpaid.` })),
+      ...largeBalances.slice(0, 2).map(invoice => ({ title: 'Large outstanding balance', detail: `${invoice.invoiceNumber} has ${formatCurrency(invoice.balance)} outstanding.` })),
+    ];
+  }, [jobs, invoiceSummaries, overdueInvoices, getJobProgress]);
 
   const handleSave = () => {
-    if (!formData.jobId || !formData.amount) { showToast('Fill required fields', 'error'); return; }
+    if (!formData.jobId || !formData.amount) {
+      showToast('Fill required fields', 'error');
+      return;
+    }
+    const amount = parseFloat(formData.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast('Enter a valid invoice amount', 'error');
+      return;
+    }
     const invNum = formData.invoiceNumber || `INV-${String(invoices.length + 1).padStart(3, '0')}`;
-    addInvoice({ jobId: formData.jobId, invoiceNumber: invNum, amount: parseFloat(formData.amount), type: formData.type as any, dueDate: formData.dueDate, status: formData.status as any, notes: formData.notes });
+    addInvoice({
+      jobId: formData.jobId,
+      invoiceNumber: invNum,
+      amount,
+      type: formData.type as Invoice['type'],
+      dueDate: formData.dueDate,
+      status: formData.status as InvoiceStatus,
+      notes: formData.notes
+    });
     showToast('Invoice created');
     setShowModal(false);
     setFormData({ jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: '' });
   };
 
   const handleAddPayment = () => {
-    if (!paymentForm.amount || !paymentModalId) { showToast('Enter amount', 'error'); return; }
-    addPayment({ invoiceId: paymentModalId, amount: parseFloat(paymentForm.amount), date: paymentForm.date, method: paymentForm.method as any, checkNumber: paymentForm.checkNumber, notes: paymentForm.notes });
+    if (!paymentForm.amount || !paymentModalId) {
+      showToast('Enter amount', 'error');
+      return;
+    }
+    const amount = parseFloat(paymentForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast('Enter a valid payment amount', 'error');
+      return;
+    }
+    addPayment({
+      invoiceId: paymentModalId,
+      amount,
+      date: paymentForm.date,
+      method: paymentForm.method as PaymentMethod,
+      checkNumber: paymentForm.checkNumber,
+      notes: paymentForm.notes
+    });
     showToast('Payment recorded');
     setPaymentModalId(null);
-    setPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], method: 'check', checkNumber: '', notes: '' });
+    setPaymentForm({ amount: '', date: todayString(), method: 'check', checkNumber: '', notes: '' });
   };
 
-  const handleDelete = () => { if (deleteId) { deleteInvoice(deleteId); showToast('Invoice deleted'); setDeleteId(null); } };
+  const handleDelete = () => {
+    if (deleteId) {
+      deleteInvoice(deleteId);
+      showToast('Invoice deleted');
+      setDeleteId(null);
+    }
+  };
 
-  const totalInvoiced = invoices.reduce((sum, i) => sum + i.amount, 0);
-  const totalPaidInv = payments.reduce((sum, p) => sum + p.amount, 0);
-
-  /** Opens the print preview overlay with sanitized client-facing data only */
   const handlePrintInvoice = (inv: Invoice) => {
     const job = jobs.find(j => j.id === inv.jobId);
-    const invPayments = payments.filter(p => p.invoiceId === inv.id);
-    // buildClientInvoiceData applies whitelist — no internal cost/profit fields passed through
+    const invPayments = getInvoicePayments(inv.id);
     const data = buildClientInvoiceData(inv, job, invPayments, branding, DEFAULT_PRINT_SETTINGS);
     setPrintData(data);
   };
 
+  const duplicateInvoice = (invoice: InvoiceSummary) => {
+    addInvoice({
+      jobId: invoice.jobId,
+      invoiceNumber: `${invoice.invoiceNumber}-COPY`,
+      amount: invoice.amount,
+      type: invoice.type,
+      dueDate: invoice.dueDate,
+      status: 'draft',
+      notes: invoice.notes,
+    });
+    showToast('Invoice duplicated as draft');
+  };
+
+  const sendReminder = (invoice?: InvoiceSummary) => {
+    showToast(invoice ? `Reminder queued for ${invoice.invoiceNumber}` : `Reminders queued for ${overdueInvoices.length} overdue invoices`);
+  };
+
   return (
-    <div>
-      <div className="page-header">
+    <div className="invoice-command-page">
+      <div className="invoice-command-header">
         <div>
           <div className="page-eyebrow">Finance</div>
           <h1 className="page-title">Invoices &amp; Payments</h1>
-          <p className="page-subtitle">Track invoicing, payments received, and outstanding balances across all jobs.</p>
+          <p className="page-subtitle">Track, collect, and act on payments before cash flow gets tight.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={18} /> Create Invoice</button>
       </div>
-      <div className="page-content">
-        <div className="kpi-grid mb-6">
-          <div className="kpi-card"><div className="kpi-label">Total Invoiced</div><div className="kpi-value kpi-primary">{formatCurrency(totalInvoiced)}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Total Paid</div><div className="kpi-value kpi-success">{formatCurrency(totalPaidInv)}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Outstanding</div><div className="kpi-value kpi-accent">{formatCurrency(totalInvoiced - totalPaidInv)}</div></div>
+
+      <section className="invoice-kpi-grid">
+        <InvoiceKpi icon={ReceiptText} label="Total Invoiced" value={formatCurrency(totalInvoiced)} sub={`${invoices.length} invoices`} />
+        <InvoiceKpi icon={CheckCircle} label="Total Paid" value={formatCurrency(totalPaid)} sub={`${payments.length} payments`} tone="paid" />
+        <InvoiceKpi icon={Wallet} label="Outstanding" value={formatCurrency(outstanding)} sub={`${invoiceSummaries.filter(invoice => invoice.balance > 0).length} open invoices`} tone={outstanding > 0 ? 'warning' : 'paid'} />
+      </section>
+
+      <section className="invoice-urgent-panel">
+        <div>
+          <h2>Urgent Actions</h2>
+          <p>{overdueInvoices.length} overdue invoice{overdueInvoices.length === 1 ? '' : 's'} • {formatCurrency(overdueAmount)} overdue • {dueSoon.length} due soon</p>
         </div>
-        <div className="filters">
-          <div className="search-bar"><Search /><input className="form-input" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{paddingLeft: '40px'}} /></div>
-          <select className="form-select" value={jobFilter} onChange={e => setJobFilter(e.target.value)} style={{width: '180px'}}><option value="">All Jobs</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}</select>
-          <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{width: '130px'}}><option value="">All Status</option>{INVOICE_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
+        <div className="invoice-urgent-actions">
+          <button className="btn btn-secondary" onClick={() => setStatusFilter('overdue')}><AlertTriangle size={16} /> View Overdue</button>
+          <button className="btn btn-primary" onClick={() => sendReminder()}><Mail size={16} /> Send Reminders</button>
         </div>
-        <div className="card">
-          <div className="table-container">
-            <table className="table table-responsive">
-              <thead><tr><th>Invoice</th><th>Job</th><th>Type</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>
-                {filteredInvoices.length === 0 ? <tr><td colSpan={8} className="text-center text-muted">No invoices</td></tr> : filteredInvoices.map(inv => {
-                  const job = jobs.find(j => j.id === inv.jobId);
-                  const invPayments = getInvoicePayments(inv.id);
-                  const paid = invPayments.reduce((s, p) => s + p.amount, 0);
-                  return (
-                    <tr key={inv.id}>
-                      <td data-label="Invoice" className="font-medium">{inv.invoiceNumber}</td>
-                      <td data-label="Job"><Link to={`/jobs/${inv.jobId}`}>{job?.name}</Link></td>
-                      <td data-label="Type"><span className="badge badge-gray">{inv.type}</span></td>
-                      <td data-label="Amount">{formatCurrency(inv.amount)}</td>
-                      <td data-label="Paid" className="text-success">{formatCurrency(paid)}</td>
-                      <td data-label="Balance" className="font-medium">{formatCurrency(inv.amount - paid)}</td>
-                      <td data-label="Status"><span className={`badge ${inv.status === 'paid' ? 'badge-green' : inv.status === 'partial' ? 'badge-yellow' : 'badge-blue'}`}>{inv.status}</span></td>
-                      <td data-label="Actions">
-                        <div className="flex gap-2 justify-end">
-                          <button className="btn btn-sm btn-secondary" onClick={() => setPaymentModalId(inv.id)}>Pay</button>
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => handlePrintInvoice(inv)}
-                            title="Preview &amp; Print Invoice"
-                          >
-                            <Printer size={14} />
-                          </button>
-                          <button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteId(inv.id)}><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      </section>
+
+      <section className="invoice-aging-grid">
+        <AgingCard label="0-7 days" value={aging['0-7']} />
+        <AgingCard label="8-30 days" value={aging['8-30']} />
+        <AgingCard label="30+ days" value={aging['30+']} urgent={aging['30+'] > 0} />
+      </section>
+
+      {alerts.length > 0 && (
+        <section className="invoice-alert-grid">
+          {alerts.map(alert => (
+            <div key={`${alert.title}-${alert.detail}`} className="invoice-alert-card">
+              <AlertTriangle size={18} />
+              <span><strong>{alert.title}</strong>{alert.detail}</span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <section className="invoice-controls">
+        <div className="invoice-search">
+          <Search size={18} />
+          <input placeholder="Search invoice, job, customer..." value={search} onChange={event => setSearch(event.target.value)} />
         </div>
+        <select value={jobFilter} onChange={event => setJobFilter(event.target.value)}>
+          <option value="">All Jobs</option>
+          {jobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}
+        </select>
+        <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+          <option value="">All Status</option>
+          {INVOICE_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+        </select>
+      </section>
+
+      <div className="invoice-group-toggle">
+        <span>Group</span>
+        {(['none', 'job', 'customer', 'status'] as GroupMode[]).map(mode => (
+          <button key={mode} className={groupMode === mode ? 'is-active' : ''} onClick={() => setGroupMode(mode)}>
+            {mode === 'none' ? 'None' : mode === 'job' ? 'By Job' : mode === 'customer' ? 'By Customer' : 'By Status'}
+          </button>
+        ))}
       </div>
 
-      {/* ── Create Invoice Modal ── */}
+      <section className="invoice-table-card">
+        {groupMode === 'none' ? (
+          <InvoiceTable invoices={filteredInvoices} onPayment={setPaymentModalId} onReminder={sendReminder} onPrint={handlePrintInvoice} onDuplicate={duplicateInvoice} onDelete={setDeleteId} />
+        ) : (
+          <div className="invoice-group-list">
+            {groupedInvoices.length === 0 ? <div className="invoice-empty">No invoices</div> : groupedInvoices.map(group => {
+              const total = group.invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+              const balance = group.invoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+              return (
+                <div key={group.key} className="invoice-group-card">
+                  <div className="invoice-group-header">
+                    <h3>{group.label.replace('_', ' ')}</h3>
+                    <span>{group.invoices.length} invoices • {formatCurrency(total)} billed • {formatCurrency(balance)} open</span>
+                  </div>
+                  <InvoiceTable invoices={group.invoices} onPayment={setPaymentModalId} onReminder={sendReminder} onPrint={handlePrintInvoice} onDuplicate={duplicateInvoice} onDelete={setDeleteId} compact />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Invoice">
         <div className="form-group"><label className="form-label">Job *</label><select className="form-select" value={formData.jobId} onChange={e => setFormData({...formData, jobId: e.target.value})}><option value="">Select job</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}</select></div>
         <div className="form-row form-row-2">
@@ -153,25 +335,24 @@ export function Invoices() {
           <div className="form-group"><label className="form-label">Type</label><select className="form-select" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>{INVOICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Due Date</label><input className="form-input" type="date" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} /></div>
         </div>
+        <div className="form-group"><label className="form-label">Status</label><select className="form-select" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>{INVOICE_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Notes (Client-visible)</label><textarea className="form-textarea" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Notes shown on client invoice" /></div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSave}>Create Invoice</button></div>
       </Modal>
 
-      {/* ── Record Payment Modal ── */}
       <Modal isOpen={!!paymentModalId} onClose={() => setPaymentModalId(null)} title="Record Payment">
         <div className="form-group"><label className="form-label">Amount *</label><input className="form-input" type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} /></div>
         <div className="form-row form-row-2">
           <div className="form-group"><label className="form-label">Date</label><input className="form-input" type="date" value={paymentForm.date} onChange={e => setPaymentForm({...paymentForm, date: e.target.value})} /></div>
-          <div className="form-group"><label className="form-label">Method</label><select className="form-select" value={paymentForm.method} onChange={e => setPaymentForm({...paymentForm, method: e.target.value})}><option value="check">Check</option><option value="cash">Cash</option><option value="ach">ACH</option><option value="card">Card</option></select></div>
+          <div className="form-group"><label className="form-label">Method</label><select className="form-select" value={paymentForm.method} onChange={e => setPaymentForm({...paymentForm, method: e.target.value})}><option value="check">Check</option><option value="cash">Cash</option><option value="card">Card</option><option value="ach">Transfer</option><option value="other">Other</option></select></div>
         </div>
-        <div className="form-group"><label className="form-label">Check #</label><input className="form-input" value={paymentForm.checkNumber} onChange={e => setPaymentForm({...paymentForm, checkNumber: e.target.value})} /></div>
+        <div className="form-group"><label className="form-label">Check / Reference #</label><input className="form-input" value={paymentForm.checkNumber} onChange={e => setPaymentForm({...paymentForm, checkNumber: e.target.value})} /></div>
+        <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} /></div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
       </Modal>
 
-      {/* ── Delete Confirm ── */}
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
 
-      {/* ── Print Preview Overlay (portal into #print-root) ── */}
       {printData && (
         <PrintTemplateModal
           isOpen={!!printData}
@@ -180,6 +361,95 @@ export function Invoices() {
           data={printData}
         />
       )}
+    </div>
+  );
+}
+
+function InvoiceKpi({ icon: Icon, label, value, sub, tone }: { icon: LucideIcon; label: string; value: string; sub: string; tone?: 'paid' | 'warning' }) {
+  return (
+    <div className={`invoice-kpi-card ${tone || ''}`}>
+      <div className="invoice-kpi-icon"><Icon size={18} /></div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{sub}</small>
+    </div>
+  );
+}
+
+function AgingCard({ label, value, urgent }: { label: string; value: number; urgent?: boolean }) {
+  return (
+    <div className={`invoice-aging-card ${urgent ? 'urgent' : ''}`}>
+      <Clock3 size={18} />
+      <span>{label}</span>
+      <strong>{formatCurrency(value)}</strong>
+    </div>
+  );
+}
+
+function InvoiceTable({
+  invoices,
+  onPayment,
+  onReminder,
+  onPrint,
+  onDuplicate,
+  onDelete,
+  compact,
+}: {
+  invoices: InvoiceSummary[];
+  onPayment: (id: string) => void;
+  onReminder: (invoice: InvoiceSummary) => void;
+  onPrint: (invoice: Invoice) => void;
+  onDuplicate: (invoice: InvoiceSummary) => void;
+  onDelete: (id: string) => void;
+  compact?: boolean;
+}) {
+  if (invoices.length === 0) return <div className="invoice-empty">No invoices</div>;
+
+  return (
+    <div className={`invoice-table-wrap ${compact ? 'compact' : ''}`}>
+      <table className="invoice-table">
+        <thead>
+          <tr>
+            <th>Invoice #</th>
+            <th>Job</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Paid</th>
+            <th>Balance</th>
+            <th>Status</th>
+            <th>Job Progress</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map(invoice => (
+            <tr key={invoice.id} className={invoice.effectiveStatus === 'overdue' ? 'is-overdue' : invoice.effectiveStatus === 'paid' ? 'is-paid' : ''}>
+              <td data-label="Invoice #" className="invoice-number">{invoice.invoiceNumber}</td>
+              <td data-label="Job"><Link to={`/jobs/${invoice.jobId}`}>{invoice.jobName}</Link><small>{invoice.customer}</small></td>
+              <td data-label="Type"><span className="badge badge-gray">{invoice.type.replace('_', ' ')}</span></td>
+              <td data-label="Amount">{formatCurrency(invoice.amount)}</td>
+              <td data-label="Paid" className="invoice-paid">{formatCurrency(invoice.paid)}</td>
+              <td data-label="Balance" className="invoice-balance">{formatCurrency(invoice.balance)}</td>
+              <td data-label="Status"><span className={`badge ${invoice.effectiveStatus === 'paid' ? 'badge-green' : invoice.effectiveStatus === 'overdue' ? 'badge-red' : invoice.effectiveStatus === 'partial' ? 'badge-yellow' : 'badge-blue'}`}>{invoice.effectiveStatus.replace('_', ' ')}</span></td>
+              <td data-label="Job Progress">
+                <div className="invoice-progress-cell">
+                  <span>{invoice.progress}% complete</span>
+                  <small>{formatCurrency(invoice.paid)} paid / {formatCurrency(invoice.expectedPaid)} expected</small>
+                </div>
+              </td>
+              <td data-label="Actions">
+                <div className="invoice-row-actions">
+                  <button className="btn btn-sm btn-secondary" onClick={() => onPayment(invoice.id)}><CreditCard size={14} /> Record Payment</button>
+                  <button className="btn btn-sm btn-secondary btn-icon" onClick={() => onReminder(invoice)} title="Send Reminder"><Bell size={14} /></button>
+                  <button className="btn btn-sm btn-secondary btn-icon" onClick={() => onPrint(invoice)} title="Print"><Printer size={14} /></button>
+                  <button className="btn btn-sm btn-secondary btn-icon" onClick={() => onDuplicate(invoice)} title="Duplicate"><Copy size={14} /></button>
+                  <button className="btn btn-sm btn-danger btn-icon" onClick={() => onDelete(invoice.id)} title="Delete"><Trash2 size={14} /></button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
