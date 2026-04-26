@@ -9811,3 +9811,561 @@ body {
     max-width: none;
   }
 }
+
+/* Expenses financial control */
+.expenses-command-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.expenses-command-header,
+.expense-snapshot-panel,
+.expense-quick-add,
+.expense-breakdown-card,
+.expense-table-card {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.84);
+  box-shadow: 0 20px 60px rgba(2, 6, 23, 0.26);
+}
+
+.expenses-command-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 26px;
+  background:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(59, 130, 246, 0.1)),
+    rgba(15, 23, 42, 0.8);
+}
+
+.expense-financial-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.expense-financial-card {
+  min-height: 136px;
+  padding: 17px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.82);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.expense-financial-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.48);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.expense-financial-card.danger {
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+.expense-financial-card.good {
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.expense-financial-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  border-radius: 13px;
+  color: #bbf7d0;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.5), rgba(37, 99, 235, 0.34));
+}
+
+.expense-financial-card span,
+.expense-financial-card small,
+.expense-section-heading p,
+.expense-quick-add p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.expense-financial-card strong {
+  display: block;
+  margin: 5px 0 4px;
+  color: var(--text-primary);
+  font-size: 1.65rem;
+}
+
+.expense-financial-card.danger strong {
+  color: #fecdd3;
+}
+
+.expense-financial-card.good strong {
+  color: #bbf7d0;
+}
+
+.expense-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.expense-alert-card {
+  display: flex;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 14px;
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.18);
+}
+
+.expense-alert-card span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: #fef3c7;
+  font-size: 0.84rem;
+}
+
+.expense-alert-card strong {
+  color: #fde68a;
+}
+
+.expense-snapshot-panel,
+.expense-quick-add,
+.expense-breakdown-card,
+.expense-table-card {
+  padding: 18px;
+}
+
+.expense-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.expense-section-heading h2,
+.expense-quick-add h2 {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.expense-section-heading p,
+.expense-quick-add p {
+  margin: 0;
+}
+
+.expense-source-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.expense-source-pills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: rgba(2, 6, 23, 0.24);
+  font-size: 0.76rem;
+}
+
+.expense-job-snapshots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.expense-job-snapshot {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  min-height: 150px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 15px;
+  background: rgba(2, 6, 23, 0.24);
+  color: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.expense-job-snapshot:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.44);
+  background: rgba(30, 41, 59, 0.72);
+}
+
+.expense-job-snapshot strong {
+  display: block;
+  color: var(--text-primary);
+}
+
+.expense-job-snapshot span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.expense-profit-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.82);
+}
+
+.expense-profit-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #34d399, #60a5fa);
+}
+
+.expense-snapshot-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.expense-snapshot-stats span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.expense-snapshot-stats b {
+  color: var(--text-primary);
+}
+
+.expense-snapshot-stats .danger b {
+  color: #fecdd3;
+}
+
+.expense-snapshot-stats .good b {
+  color: #bbf7d0;
+}
+
+.expense-quick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 130px 170px 1fr auto;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.expense-quick-grid input,
+.expense-quick-grid select,
+.expense-controls input,
+.expense-controls select,
+.expense-search input {
+  min-height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 11px;
+  background: rgba(2, 6, 23, 0.34);
+  color: var(--text-primary);
+  padding: 0 11px;
+}
+
+.expense-category-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.expense-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.expense-category-pill span {
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.expense-category-pill strong {
+  color: var(--text-primary);
+}
+
+.expense-empty-inline {
+  color: var(--text-muted);
+}
+
+.expense-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 180px 170px 150px 150px 160px 150px;
+  gap: 10px;
+}
+
+.expense-search {
+  position: relative;
+}
+
+.expense-search svg {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.expense-search input {
+  width: 100%;
+  padding-left: 40px;
+}
+
+.expense-group-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.expense-group-toggle span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.expense-group-toggle button {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.expense-group-toggle button:hover,
+.expense-group-toggle button.is-active {
+  color: #eff6ff;
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(37, 99, 235, 0.24);
+}
+
+.expense-table-wrap {
+  overflow-x: auto;
+}
+
+.expense-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.expense-table th {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.expense-table td {
+  padding: 13px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(2, 6, 23, 0.24);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.expense-table td:first-child {
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 12px 0 0 12px;
+}
+
+.expense-table td:last-child {
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0 12px 12px 0;
+}
+
+.expense-table tr {
+  transition: transform 0.18s ease;
+}
+
+.expense-table tbody tr:hover {
+  transform: translateY(-1px);
+}
+
+.expense-table tr.is-reimbursable td {
+  border-color: rgba(52, 211, 153, 0.24);
+  background: rgba(6, 78, 59, 0.16);
+}
+
+.expense-table tr.is-allowance td {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(30, 64, 175, 0.14);
+}
+
+.expense-table a {
+  color: #bfdbfe;
+  font-weight: 700;
+}
+
+.expense-amount {
+  color: var(--text-primary) !important;
+  font-weight: 800;
+}
+
+.expense-source-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-transform: capitalize;
+}
+
+.expense-source-stack span {
+  color: var(--text-primary);
+}
+
+.expense-source-stack small,
+.expense-notes-cell small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.expense-notes-cell {
+  max-width: 260px;
+}
+
+.expense-notes-cell > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.expense-group-card {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.68);
+}
+
+.expense-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.expense-group-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.expense-group-header span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.expense-empty {
+  padding: 30px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.expense-receipt-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1220px) {
+  .expense-financial-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expense-alert-grid,
+  .expense-job-snapshots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expense-quick-grid,
+  .expense-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .expenses-command-header,
+  .expense-section-heading,
+  .expense-group-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .expense-financial-summary,
+  .expense-alert-grid,
+  .expense-job-snapshots,
+  .expense-quick-grid,
+  .expense-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .expense-source-pills {
+    justify-content: flex-start;
+  }
+
+  .expense-table thead {
+    display: none;
+  }
+
+  .expense-table,
+  .expense-table tbody,
+  .expense-table tr,
+  .expense-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .expense-table tr {
+    margin-bottom: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 14px;
+    background: rgba(2, 6, 23, 0.24);
+    overflow: hidden;
+  }
+
+  .expense-table td,
+  .expense-table td:first-child,
+  .expense-table td:last-child {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .expense-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 0.76rem;
+  }
+
+  .expense-notes-cell {
+    max-width: none;
+  }
+}
