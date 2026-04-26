@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
 import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
-import { Plus, Edit, Trash2, Package, Calculator, Search } from 'lucide-react';
+import {
+  Plus, Edit, Trash2, Package, Search, Filter, Tags, Clock, Layers,
+  Sparkles, ChevronRight, History, Hammer, Boxes, ArrowUpRight
+} from 'lucide-react';
 import type { Assembly, AssemblyItem } from '../../data/types';
 
 export function AssembliesLibrary() {
-  const { assemblies, laborRates, materials, addAssembly, updateAssembly, deleteAssembly } = useApp();
+  const { assemblies, estimates, laborRates, materials, addAssembly, updateAssembly, deleteAssembly } = useApp();
   const { showToast } = useToast();
   
   const [showModal, setShowModal] = useState(false);
@@ -17,6 +21,11 @@ export function AssembliesLibrary() {
   const [showPricePicker, setShowPricePicker] = useState(false);
   const [pricePickerTab, setPricePickerTab] = useState<'materials' | 'labor'>('materials');
   const [priceSearch, setPriceSearch] = useState('');
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All Categories');
+  const [showFilters, setShowFilters] = useState(true);
+  const [selectedAssemblyId, setSelectedAssemblyId] = useState<string | null>(assemblies[0]?.id || null);
+  const [detailTab, setDetailTab] = useState<'details' | 'history'>('details');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -220,8 +229,243 @@ export function AssembliesLibrary() {
     showToast('Added 8 starter assemblies');
   };
 
+  const categoryChips = ['All Categories', 'Demolition', 'Framing', 'Drywall', 'Flooring', 'Painting', 'Plumbing', 'Electrical'];
+  const normalizeCategory = (category?: string) => {
+    const value = (category || 'Uncategorized').toLowerCase();
+    if (value.includes('demo')) return 'Demolition';
+    if (value.includes('frame')) return 'Framing';
+    if (value.includes('drywall')) return 'Drywall';
+    if (value.includes('floor')) return 'Flooring';
+    if (value.includes('paint')) return 'Painting';
+    if (value.includes('plumb')) return 'Plumbing';
+    if (value.includes('electric')) return 'Electrical';
+    return category || 'Uncategorized';
+  };
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { 'All Categories': assemblies.length };
+    assemblies.forEach(assembly => {
+      const category = normalizeCategory(assembly.category);
+      counts[category] = (counts[category] || 0) + 1;
+    });
+    return counts;
+  }, [assemblies]);
+
+  const filteredAssemblies = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return assemblies.filter(assembly => {
+      const normalizedCategory = normalizeCategory(assembly.category);
+      const matchesCategory = activeCategory === 'All Categories' || normalizedCategory === activeCategory;
+      const matchesSearch = !term ||
+        assembly.name.toLowerCase().includes(term) ||
+        assembly.category?.toLowerCase().includes(term) ||
+        assembly.description?.toLowerCase().includes(term) ||
+        assembly.items?.some(item => item.name.toLowerCase().includes(term));
+      return matchesCategory && matchesSearch;
+    });
+  }, [assemblies, activeCategory, search]);
+
+  const selectedAssembly = assemblies.find(a => a.id === selectedAssemblyId) || filteredAssemblies[0] || assemblies[0] || null;
+  const selectedTotals = selectedAssembly ? calculateTotal(selectedAssembly.items || []) : null;
+  const totalCategories = new Set(assemblies.map(a => normalizeCategory(a.category))).size;
+  const mostUsed = assemblies.length > 0
+    ? [...assemblies].sort((a, b) => (b.items?.length || 0) - (a.items?.length || 0))[0]
+    : null;
+  const timeSaved = assemblies.reduce((sum, assembly) => sum + (assembly.laborHours || 0), 0);
+  const usageHistory = selectedAssembly
+    ? estimates.filter(estimate => JSON.stringify(estimate).toLowerCase().includes(selectedAssembly.name.toLowerCase()))
+    : [];
+
+  const selectAssembly = (assembly: Assembly) => {
+    setSelectedAssemblyId(assembly.id);
+    setDetailTab('details');
+  };
+
   return (
-    <div>
+    <div className="assemblies-page">
+      <div className="assemblies-shell">
+        <div className="assemblies-header">
+          <div>
+            <div className="assemblies-eyebrow">Reusable estimating systems</div>
+            <h1>Assemblies Library</h1>
+            <p>Pre-built labor and material assemblies to help you estimate faster and more accurately.</p>
+          </div>
+          <div className="assemblies-header-actions">
+            <div className="assemblies-search">
+              <Search size={18} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search assemblies..." />
+            </div>
+            <button className={`assemblies-filter-btn ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
+              <Filter size={17} /> Filters
+            </button>
+            <button className="assemblies-primary-btn" onClick={() => setShowModal(true)}>
+              <Plus size={18} /> New Assembly
+            </button>
+          </div>
+        </div>
+
+        <div className="assemblies-kpis">
+          <div className="assembly-kpi-card">
+            <div className="assembly-kpi-icon"><Package size={20} /></div>
+            <span>Total Assemblies</span>
+            <strong>{assemblies.length}</strong>
+          </div>
+          <div className="assembly-kpi-card">
+            <div className="assembly-kpi-icon"><Tags size={20} /></div>
+            <span>Categories</span>
+            <strong>{totalCategories}</strong>
+          </div>
+          <div className="assembly-kpi-card">
+            <div className="assembly-kpi-icon"><Sparkles size={20} /></div>
+            <span>Most Used</span>
+            <strong>{mostUsed?.name || 'None yet'}</strong>
+          </div>
+          <div className="assembly-kpi-card">
+            <div className="assembly-kpi-icon"><Clock size={20} /></div>
+            <span>Time Saved</span>
+            <strong>{timeSaved.toFixed(0)}h</strong>
+          </div>
+        </div>
+
+        {showFilters && (
+          <div className="assembly-category-bar">
+            <div className="assembly-category-scroll">
+              {categoryChips.map(category => (
+                <button
+                  key={category}
+                  className={`assembly-chip ${activeCategory === category ? 'active' : ''}`}
+                  onClick={() => setActiveCategory(category)}
+                >
+                  {category}
+                  <span>{categoryCounts[category] || 0}</span>
+                </button>
+              ))}
+            </div>
+            <button className="assembly-manage-btn" onClick={() => setShowModal(true)}>Manage Categories</button>
+          </div>
+        )}
+
+        {assemblies.length === 0 ? (
+          <div className="assembly-empty-premium">
+            <div className="assembly-empty-icon"><Layers size={42} /></div>
+            <h2>Build your first assembly</h2>
+            <p>Create reusable bundles of labor and materials to speed up estimating.</p>
+            <div className="assembly-empty-actions">
+              <button className="assemblies-primary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> New Assembly</button>
+              <button className="assemblies-secondary-btn" onClick={handleAddStarter}><Package size={18} /> Import Starter Assemblies</button>
+            </div>
+          </div>
+        ) : (
+          <div className="assemblies-workspace">
+            <div className="assemblies-list-card">
+              <div className="assemblies-table-head">
+                <span>Assembly</span>
+                <span>Category</span>
+                <span>Items</span>
+                <span>Cost</span>
+                <span>Labor</span>
+                <span>Total</span>
+                <span></span>
+              </div>
+              <div className="assemblies-table-body">
+                {filteredAssemblies.map(assembly => {
+                  const totals = calculateTotal(assembly.items || []);
+                  const selected = selectedAssembly?.id === assembly.id;
+                  return (
+                    <button key={assembly.id} className={`assembly-row ${selected ? 'selected' : ''}`} onClick={() => selectAssembly(assembly)}>
+                      <span className="assembly-row-main">
+                        <span className="assembly-thumb"><Package size={18} /></span>
+                        <span>
+                          <strong>{assembly.name}</strong>
+                          <small>{assembly.description || 'Reusable labor and material bundle'}</small>
+                        </span>
+                      </span>
+                      <span><em className="assembly-category-badge">{assembly.category || 'Uncategorized'}</em></span>
+                      <span>{assembly.items?.length || 0}</span>
+                      <span>{formatCurrency(totals.materialTotal + totals.equipmentTotal + totals.otherTotal)}</span>
+                      <span>{formatCurrency(totals.laborTotal)}</span>
+                      <span className="assembly-total-cell">{formatCurrency(totals.subtotal)}</span>
+                      <span className="assembly-arrow"><ChevronRight size={18} /></span>
+                    </button>
+                  );
+                })}
+                {filteredAssemblies.length === 0 && (
+                  <div className="assembly-no-results">No assemblies match your search or filters.</div>
+                )}
+              </div>
+            </div>
+
+            <aside className="assembly-detail-panel">
+              {selectedAssembly && selectedTotals ? (
+                <>
+                  <div className="assembly-detail-hero">
+                    <div className="assembly-detail-image"><Boxes size={46} /></div>
+                    <div>
+                      <div className="assembly-category-badge">{selectedAssembly.category || 'Uncategorized'}</div>
+                      <h2>{selectedAssembly.name}</h2>
+                      <p>{selectedAssembly.description || 'No description yet. Add notes to help your team understand when to use this assembly.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="assembly-detail-stats">
+                    <div><span>Labor time</span><strong>{selectedAssembly.laborHours || 0}h</strong></div>
+                    <div><span>Items</span><strong>{selectedAssembly.items?.length || 0}</strong></div>
+                    <div><span>Labor cost</span><strong>{formatCurrency(selectedTotals.laborTotal)}</strong></div>
+                    <div><span>Total price</span><strong>{formatCurrency(selectedTotals.subtotal)}</strong></div>
+                  </div>
+
+                  <div className="assembly-detail-tabs">
+                    <button className={detailTab === 'details' ? 'active' : ''} onClick={() => setDetailTab('details')}><Hammer size={15} /> Details</button>
+                    <button className={detailTab === 'history' ? 'active' : ''} onClick={() => setDetailTab('history')}><History size={15} /> Usage History</button>
+                  </div>
+
+                  {detailTab === 'details' ? (
+                    <div className="assembly-items-list">
+                      <div className="assembly-item-line assembly-item-head">
+                        <div>Item name</div><div>Cost</div><div>Labor</div><div>Total</div>
+                      </div>
+                      {(selectedAssembly.items || []).map((item, index) => {
+                        const lineTotal = item.quantity * item.unitPrice;
+                        return (
+                          <div key={`${item.name}-${index}`} className="assembly-item-line">
+                            <div>
+                              <strong>{item.name}</strong>
+                              <span>{item.category} - {item.quantity} {item.unit}</span>
+                            </div>
+                            <div>{formatCurrency(item.unitPrice)}</div>
+                            <div>{item.category === 'labor' ? formatCurrency(lineTotal) : '-'}</div>
+                            <div>{formatCurrency(lineTotal)}</div>
+                          </div>
+                        );
+                      })}
+                      {(selectedAssembly.items || []).length === 0 && <div className="assembly-no-results">No included items yet.</div>}
+                    </div>
+                  ) : (
+                    <div className="assembly-history-list">
+                      {usageHistory.length > 0 ? usageHistory.slice(0, 5).map(estimate => (
+                        <Link key={estimate.id} to={`/estimates/${estimate.id}`} className="assembly-history-item">
+                          <span>{estimate.name}</span>
+                          <ArrowUpRight size={15} />
+                        </Link>
+                      )) : (
+                        <div className="assembly-no-results">No usage history found yet. Add this assembly from the Estimate Builder to begin tracking usage.</div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="assembly-detail-actions">
+                    <button className="assemblies-secondary-btn" onClick={() => handleEdit(selectedAssembly)}><Edit size={16} /> Edit Assembly</button>
+                    <button className="assemblies-danger-btn" onClick={() => setDeleteId(selectedAssembly.id)}><Trash2 size={16} /> Delete Assembly</button>
+                    <Link to="/estimates/new" className="assemblies-primary-btn"><Plus size={16} /> Add to Estimate</Link>
+                  </div>
+                </>
+              ) : (
+                <div className="assembly-no-results">Select an assembly to inspect details.</div>
+              )}
+            </aside>
+          </div>
+        )}
+      </div>
       <div className="page-header">
         <h1 className="page-title">Assemblies Library</h1>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
