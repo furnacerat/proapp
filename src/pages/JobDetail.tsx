@@ -30,7 +30,7 @@ export function JobDetail() {
     addPunchListItem, updatePunchListItem, deletePunchListItem,
     addJobIssue, updateJobIssue, deleteJobIssue,
     addFileAttachment, updateFileAttachment, deleteFileAttachment,
-    allowances, addAllowance, deleteAllowance, addAllowanceSelection, updateAllowanceSelection, createAllowanceOverageChangeOrder,
+    allowances, materialOrders, shoppingLists, addAllowance, deleteAllowance, addAllowanceSelection, updateAllowanceSelection, createAllowanceOverageChangeOrder,
   } = useApp();
   const { showToast } = useToast();
   
@@ -146,6 +146,8 @@ export function JobDetail() {
   const jobIssueEntries = useMemo(() => (jobIssues || []).filter(i => i.jobId === id), [jobIssues, id]);
   const jobAttachments = useMemo(() => (fileAttachments || []).filter(f => f.jobId === id), [fileAttachments, id]);
   const jobAllowances = useMemo(() => (allowances || []).filter(a => a.jobId === id), [allowances, id]);
+  const jobMaterialOrders = useMemo(() => (materialOrders || []).filter(o => o.jobId === id), [materialOrders, id]);
+  const jobShoppingLists = useMemo(() => (shoppingLists || []).filter(l => l.jobId === id), [shoppingLists, id]);
 
   const profit = useMemo(() => getJobProfit(id!), [id, job, getJobProfit]);
   const balance = useMemo(() => getJobBalance(id!), [id, jobInvoices, payments]);
@@ -341,6 +343,8 @@ export function JobDetail() {
     { id: 'time', label: 'Time', icon: <Clock size={14} />, count: jobTimeEntries.length },
     { id: 'expenses', label: 'Expenses', icon: <Receipt size={14} />, count: jobExpenses.length },
     { id: 'allowances', label: 'Allowances', icon: <DollarSign size={14} />, count: jobAllowances.length },
+    { id: 'orders', label: 'Orders', icon: <ShoppingCart size={14} />, count: jobMaterialOrders.length },
+    { id: 'shopping', label: 'Shopping', icon: <ShoppingCart size={14} />, count: jobShoppingLists.length },
     { id: 'tasks', label: 'Tasks', icon: <CheckSquare size={14} />, count: jobTasks.length },
     { id: 'invoices', label: 'Invoices', icon: <FileText size={14} />, count: jobInvoices.length },
     { id: 'changeorders', label: 'Changes', icon: <Edit size={14} />, count: jobChangeOrders.length },
@@ -465,6 +469,8 @@ export function JobDetail() {
                   <div><span className="text-muted">Due:</span> {formatDate(job.dueDate)}</div>
                   <div><span className="text-muted">Progress:</span> {progress}%</div>
                   <div><span className="text-muted">Change Orders:</span> {formatCurrency(changeOrderTotal)}</div>
+                  <div><span className="text-muted">Orders:</span> {jobMaterialOrders.length}</div>
+                  <div><span className="text-muted">Shopping Lists:</span> {jobShoppingLists.length}</div>
                 </div>
                 <div className="mt-4">
                   <h4 className="font-medium mb-2">Notes</h4>
@@ -600,6 +606,66 @@ export function JobDetail() {
                       <td><button className="btn btn-sm btn-danger btn-icon" onClick={() => setDeleteConfirm({ type: 'expense', id: exp.id })}><Trash2 size={14} /></button></td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'orders' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Material Orders ({jobMaterialOrders.length})</h3>
+              <Link className="btn btn-sm btn-primary" to="/estimates/orders">Open Orders</Link>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>PO #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Expected</th></tr></thead>
+                <tbody>
+                  {jobMaterialOrders.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center text-muted">No material orders linked to this job</td></tr>
+                  ) : jobMaterialOrders.map(order => (
+                    <tr key={order.id}>
+                      <td>{order.poNumber}</td>
+                      <td>{order.supplierName || 'Unassigned'}</td>
+                      <td><span className={`badge ${getStatusColor(order.status)}`}>{order.status.replace('_', ' ')}</span></td>
+                      <td>{order.items.length}</td>
+                      <td>{formatCurrency(order.total)}</td>
+                      <td>{order.expectedDate ? formatDate(order.expectedDate) : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'shopping' && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Shopping Lists ({jobShoppingLists.length})</h3>
+              <Link className="btn btn-sm btn-primary" to={`/shopping-lists?jobId=${job.id}`}>Open Shopping</Link>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead><tr><th>List</th><th>Status</th><th>Supplier</th><th>Items</th><th>Estimated</th><th>Completed</th></tr></thead>
+                <tbody>
+                  {jobShoppingLists.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center text-muted">No shopping lists linked to this job</td></tr>
+                  ) : jobShoppingLists.map(list => {
+                    const estimated = list.items.reduce((sum, item) => sum + (item.actualCost ?? item.estimatedCost ?? 0), 0);
+                    const purchased = list.items.filter(item => item.purchased).length;
+                    return (
+                      <tr key={list.id}>
+                        <td>{list.title}</td>
+                        <td><span className={`badge ${getStatusColor(list.status)}`}>{list.status}</span></td>
+                        <td>{list.supplierName || list.store || 'Unassigned'}</td>
+                        <td>{purchased}/{list.items.length}</td>
+                        <td>{formatCurrency(estimated)}</td>
+                        <td>{list.completedAt ? formatDate(list.completedAt) : '-'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

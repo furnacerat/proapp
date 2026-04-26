@@ -181,34 +181,100 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'buildops_pro_data';
 
+const normalizeAppData = (raw: AppData): AppData => {
+  const data = {
+    ...raw,
+    photos: raw.photos || [],
+    changeOrders: raw.changeOrders || [],
+    jobTemplates: raw.jobTemplates || [],
+    alerts: raw.alerts || [],
+    timeline: raw.timeline || [],
+    jobLogs: raw.jobLogs || [],
+    punchLists: raw.punchLists || [],
+    jobIssues: raw.jobIssues || [],
+    fileAttachments: raw.fileAttachments || [],
+    suppliers: raw.suppliers || [],
+    materialOrders: raw.materialOrders || [],
+    shoppingLists: raw.shoppingLists || [],
+    receipts: raw.receipts || [],
+    allowances: raw.allowances || [],
+  };
+
+  const normalizedJobs = data.jobs.map(job => ({
+    ...job,
+    customerId: job.customerId || data.customers.find(customer => customer.name.toLowerCase() === (job.customer || '').toLowerCase())?.id || '',
+  }));
+  const jobById = new Map(normalizedJobs.map(job => [job.id, job]));
+  const estimateById = new Map(data.estimates.map(estimate => [estimate.id, estimate]));
+  const invoiceById = new Map(data.invoices.map(invoice => [invoice.id, invoice]));
+  const listById = new Map((data.shoppingLists || []).map(list => [list.id, list]));
+  const getCustomerIdForJob = (jobId?: string) => jobId ? jobById.get(jobId)?.customerId : undefined;
+  const getCustomerIdForEstimate = (estimateId?: string) => estimateId ? estimateById.get(estimateId)?.customerId : undefined;
+
+  return {
+    ...data,
+    jobs: normalizedJobs,
+    tasks: data.tasks.map(task => ({
+      ...task,
+      taskType: task.taskType || 'task',
+      assignmentRole: task.assignmentRole || (task.assignedTo ? 'worker' : 'office'),
+      customerId: task.customerId || getCustomerIdForJob(task.jobId) || getCustomerIdForEstimate(task.estimateId),
+    })),
+    timeEntries: data.timeEntries.map(entry => ({ ...entry })),
+    expenses: data.expenses.map(expense => ({
+      ...expense,
+      sourceType: expense.sourceType || (expense.source === 'shopping_list' ? 'shopping_list' : expense.source === 'order' ? 'material_order' : expense.source === 'time_entry' ? 'time_entry' : expense.source === 'allowance' ? 'allowance' : 'manual'),
+      sourceId: expense.sourceId,
+      reimbursable: expense.reimbursable ?? expense.costTreatment === 'reimbursable',
+    })),
+    invoices: data.invoices.map(invoice => ({
+      ...invoice,
+      customerId: invoice.customerId || getCustomerIdForJob(invoice.jobId),
+      estimateId: invoice.estimateId || jobById.get(invoice.jobId)?.estimateId,
+    })),
+    payments: data.payments.map(payment => {
+      const invoice = invoiceById.get(payment.invoiceId);
+      return {
+        ...payment,
+        jobId: payment.jobId || invoice?.jobId,
+        customerId: payment.customerId || invoice?.customerId || getCustomerIdForJob(invoice?.jobId),
+      };
+    }),
+    materialOrders: (data.materialOrders || []).map(order => ({
+      ...order,
+      customerId: order.customerId || getCustomerIdForJob(order.jobId) || getCustomerIdForEstimate(order.estimateId),
+    })),
+    shoppingLists: (data.shoppingLists || []).map(list => ({
+      ...list,
+      customerId: list.customerId || getCustomerIdForJob(list.jobId),
+      estimateId: list.estimateId || jobById.get(list.jobId)?.estimateId,
+    })),
+    receipts: (data.receipts || []).map(receipt => {
+      const list = listById.get(receipt.shoppingListId);
+      return {
+        ...receipt,
+        customerId: receipt.customerId || list?.customerId || getCustomerIdForJob(receipt.jobId),
+      };
+    }),
+    allowances: (data.allowances || []).map(allowance => ({
+      ...allowance,
+      affectsContractorCost: allowance.affectsContractorCost === true,
+    })),
+  };
+};
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        return {
-          ...parsed,
-          photos: parsed.photos || [],
-          changeOrders: parsed.changeOrders || [],
-          jobTemplates: parsed.jobTemplates || [],
-          alerts: parsed.alerts || [],
-          timeline: parsed.timeline || [],
-          jobLogs: parsed.jobLogs || [],
-          punchLists: parsed.punchLists || [],
-          jobIssues: parsed.jobIssues || [],
-          fileAttachments: parsed.fileAttachments || [],
-          suppliers: parsed.suppliers || [],
-          materialOrders: parsed.materialOrders || [],
-          shoppingLists: parsed.shoppingLists || [],
-          receipts: parsed.receipts || [],
-          allowances: parsed.allowances || [],
-        };
+        return normalizeAppData(parsed);
       } catch {
-        return generateCompleteSeedData();
+        return normalizeAppData(generateCompleteSeedData());
       }
     }
-    return generateCompleteSeedData();
+    return normalizeAppData(generateCompleteSeedData());
   });
 
   useEffect(() => {
@@ -410,7 +476,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     const newJob: Job = { ...job, id, actualCost: 0, createdAt: now, updatedAt: now };
-    setData(prev => ({ ...prev, jobs: [...prev.jobs, newJob] }));
+    const starterTask: Task = {
+      id: crypto.randomUUID(),
+      title: `Confirm next steps for ${job.name}`,
+      description: 'Review schedule, materials, and first field action.',
+      dueDate: newJob.startDate || now.split('T')[0],
+      jobId: id,
+      customerId: newJob.customerId,
+      estimateId: newJob.estimateId,
+      priority: newJob.status === 'active' ? 'high' : 'medium',
+      status: 'open',
+      taskType: 'task',
+      assignmentRole: 'owner',
+      sourceType: 'job_creation',
+      sourceId: id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setData(prev => ({ ...prev, jobs: [...prev.jobs, newJob], tasks: [...prev.tasks, starterTask] }));
     return id;
   };
 
@@ -507,7 +590,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     
-    setData(prev => ({ ...prev, timeEntries: [...prev.timeEntries, newEntry] }));
+    setData(prev => ({
+      ...prev,
+      timeEntries: [...prev.timeEntries, newEntry],
+      tasks: entry.taskId ? prev.tasks.map(task => task.id === entry.taskId && task.status === 'open' ? { ...task, status: 'in_progress', updatedAt: new Date().toISOString() } : task) : prev.tasks,
+    }));
     recalcJobCosts(entry.jobId);
   };
 
@@ -547,6 +634,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addExpense = (expense: Omit<Expense, 'id' | 'createdAt'>) => {
     const newExpense: Expense = {
+      sourceType: 'manual',
+      reimbursable: expense.costTreatment === 'reimbursable',
       ...expense,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -573,8 +662,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addTask = (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
+    const job = task.jobId ? data.jobs.find(item => item.id === task.jobId) : undefined;
     const newTask: Task = {
+      taskType: 'task',
+      assignmentRole: task.assignedTo ? 'worker' : 'office',
       ...task,
+      customerId: task.customerId || job?.customerId,
+      estimateId: task.estimateId || job?.estimateId,
       id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
@@ -597,12 +691,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addInvoice = (invoice: Omit<Invoice, 'id' | 'createdAt'>) => {
+    const job = data.jobs.find(j => j.id === invoice.jobId);
     const newInvoice: Invoice = {
       ...invoice,
+      customerId: invoice.customerId || job?.customerId,
+      estimateId: invoice.estimateId || job?.estimateId,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     };
-    setData(prev => ({ ...prev, invoices: [...prev.invoices, newInvoice] }));
+    const followUpTask: Task = {
+      id: crypto.randomUUID(),
+      title: `Follow up on ${newInvoice.invoiceNumber}`,
+      description: 'Invoice payment follow-up.',
+      dueDate: newInvoice.dueDate,
+      customerId: newInvoice.customerId,
+      estimateId: newInvoice.estimateId,
+      jobId: newInvoice.jobId,
+      invoiceId: newInvoice.id,
+      priority: newInvoice.type === 'deposit' ? 'high' : 'medium',
+      status: 'open',
+      taskType: 'follow_up',
+      assignmentRole: 'office',
+      sourceType: 'manual',
+      sourceId: newInvoice.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setData(prev => ({ ...prev, invoices: [...prev.invoices, newInvoice], tasks: [...prev.tasks, followUpTask] }));
   };
 
   const updateInvoice = (id: string, updates: Partial<Invoice>) => {
@@ -621,12 +736,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addPayment = (payment: Omit<Payment, 'id' | 'createdAt'>) => {
+    const invoice = data.invoices.find(i => i.id === payment.invoiceId);
     const newPayment: Payment = {
       ...payment,
+      jobId: payment.jobId || invoice?.jobId,
+      customerId: payment.customerId || invoice?.customerId || (invoice ? data.jobs.find(job => job.id === invoice.jobId)?.customerId : undefined),
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     };
-    setData(prev => ({ ...prev, payments: [...prev.payments, newPayment] }));
+    setData(prev => ({
+      ...prev,
+      payments: [...prev.payments, newPayment],
+      tasks: prev.tasks.map(task => task.invoiceId === payment.invoiceId && task.status !== 'done' ? { ...task, status: 'done', updatedAt: new Date().toISOString() } : task),
+    }));
   };
 
   const deletePayment = (id: string) => {
@@ -1099,6 +1221,87 @@ const approveChangeOrder = (id: string) => {
         affectsContractorCost: false,
       });
     });
+    const estimateItems = [
+      ...(estimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+      ...(estimate.sections || []).flatMap(section => section.lineItems || []),
+    ];
+    const materialItems = estimateItems.filter(item => item.category === 'material' && !item.isExcluded);
+    if (materialItems.length > 0) {
+      addShoppingList({
+        jobId,
+        jobName: estimate.name,
+        customerId: estimate.customerId,
+        estimateId,
+        title: `${estimate.name} Material List`,
+        status: 'open',
+        notes: 'Created from approved estimate during job conversion.',
+        items: materialItems.map(item => ({
+          id: crypto.randomUUID(),
+          name: item.name,
+          category: 'material' as const,
+          quantity: item.quantity || item.defaultQuantity || 0,
+          unit: item.unit,
+          estimatedCost: (item.quantity || item.defaultQuantity || 0) * (item.unitCost || item.unitPrice || 0),
+          purchased: false,
+          urgent: false,
+          notes: item.notes,
+          linkedPriceBookItemId: item.linkedMaterialId,
+          linkedEstimateLineItemId: item.id,
+          addOnStatus: 'included_expense' as const,
+          allowanceId: item.isAllowance ? item.id : undefined,
+        })),
+      });
+      addMaterialOrder({
+        estimateId,
+        jobId,
+        customerId: estimate.customerId,
+        poNumber: `PO-${Date.now().toString().slice(-6)}`,
+        status: 'draft',
+        items: materialItems.map(item => {
+          const quantity = item.quantity || item.defaultQuantity || 0;
+          const unitPrice = item.unitCost || item.unitPrice || 0;
+          return {
+            id: crypto.randomUUID(),
+            name: item.name,
+            description: item.description,
+            quantity,
+            unit: item.unit,
+            unitPrice,
+            category: 'material' as const,
+            lineTotal: quantity * unitPrice,
+            allowanceId: item.isAllowance ? item.id : undefined,
+          };
+        }),
+        subtotal: materialItems.reduce((sum, item) => {
+          const quantity = item.quantity || item.defaultQuantity || 0;
+          return sum + quantity * (item.unitCost || item.unitPrice || 0);
+        }, 0),
+        total: materialItems.reduce((sum, item) => {
+          const quantity = item.quantity || item.defaultQuantity || 0;
+          return sum + quantity * (item.unitCost || item.unitPrice || 0);
+        }, 0),
+        notes: 'Draft material order created from approved estimate.',
+      });
+    }
+    [
+      { title: 'Collect deposit', priority: 'high' as const, taskType: 'follow_up' as const },
+      { title: 'Order materials', priority: 'high' as const, taskType: 'order' as const },
+      { title: 'Schedule kickoff / inspection', priority: 'medium' as const, taskType: 'inspection' as const },
+      { title: 'Start demo / first work phase', priority: 'medium' as const, taskType: 'task' as const },
+    ].forEach(task => addTask({
+      title: task.title,
+      description: `Auto-created from approved estimate ${estimate.estimateNumber}.`,
+      dueDate: new Date().toISOString().split('T')[0],
+      customerId: estimate.customerId,
+      estimateId,
+      jobId,
+      priority: task.priority,
+      status: 'open',
+      taskType: task.taskType,
+      assignmentRole: 'office',
+      sourceType: 'approved_estimate',
+      sourceId: estimateId,
+    }));
     return jobId;
   };
 
@@ -1217,15 +1420,70 @@ const approveChangeOrder = (id: string) => {
 
   const addMaterialOrder = (order: Omit<MaterialOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const id = crypto.randomUUID();
-    setData(prev => ({ ...prev, materialOrders: [...(prev.materialOrders || []), { ...order, id, createdAt: new Date().toISOString() }] }));
+    const now = new Date().toISOString();
+    setData(prev => {
+      const job = order.jobId ? prev.jobs.find(item => item.id === order.jobId) : undefined;
+      const newOrder = { ...order, id, customerId: order.customerId || job?.customerId, createdAt: now };
+      const task: Task | null = order.jobId ? {
+        id: crypto.randomUUID(),
+        title: `Track material order ${order.poNumber}`,
+        description: order.supplierName ? `Confirm status with ${order.supplierName}.` : 'Confirm supplier status and delivery date.',
+        dueDate: order.expectedDate,
+        customerId: newOrder.customerId,
+        estimateId: order.estimateId || job?.estimateId,
+        jobId: order.jobId,
+        orderId: id,
+        priority: 'medium',
+        status: 'open',
+        taskType: 'order',
+        assignmentRole: 'office',
+        sourceType: 'order',
+        sourceId: id,
+        createdAt: now,
+        updatedAt: now,
+      } : null;
+      return { ...prev, materialOrders: [...(prev.materialOrders || []), newOrder], tasks: task ? [...prev.tasks, task] : prev.tasks };
+    });
     return id;
   };
 
   const updateMaterialOrder = (id: string, updates: Partial<MaterialOrder>) => {
-    setData(prev => ({
-      ...prev,
-      materialOrders: (prev.materialOrders || []).map(o => o.id === id ? { ...o, ...updates, updatedAt: new Date().toISOString() } : o),
-    }));
+    setData(prev => {
+      const existing = (prev.materialOrders || []).find(order => order.id === id);
+      const updated = existing ? { ...existing, ...updates, updatedAt: new Date().toISOString() } : undefined;
+      const shouldCreateExpense = updated && updated.jobId && updated.status === 'received' && existing?.status !== 'received' && !prev.expenses.some(expense => expense.sourceType === 'material_order' && expense.sourceId === id);
+      const expense: Expense | null = shouldCreateExpense && updated ? {
+        id: crypto.randomUUID(),
+        jobId: updated.jobId!,
+        date: updated.receivedDate || new Date().toISOString().split('T')[0],
+        vendor: updated.supplierName || 'Material order',
+        amount: updated.total,
+        category: 'materials',
+        source: 'order',
+        sourceType: 'material_order',
+        sourceId: id,
+        expenseType: 'material',
+        costTreatment: 'contractor_cost',
+        reimbursable: false,
+        paymentSource: 'company_card',
+        notes: `source: material_order\nPO: ${updated.poNumber}`,
+        createdAt: new Date().toISOString(),
+      } : null;
+      const expenses = expense ? [...prev.expenses, expense] : prev.expenses;
+      const jobs = expense ? prev.jobs.map(job => {
+        if (job.id !== expense.jobId) return job;
+        const laborCost = prev.timeEntries.filter(entry => entry.jobId === job.id).reduce((sum, entry) => sum + entry.laborCost, 0);
+        const expenseCost = expenses.filter(item => item.jobId === job.id).reduce((sum, item) => sum + item.amount, 0);
+        return { ...job, actualCost: laborCost + expenseCost, updatedAt: new Date().toISOString() };
+      }) : prev.jobs;
+      return {
+        ...prev,
+        jobs,
+        expenses,
+        tasks: updated?.status === 'received' ? prev.tasks.map(task => task.orderId === id && task.status !== 'done' ? { ...task, status: 'done', updatedAt: new Date().toISOString() } : task) : prev.tasks,
+        materialOrders: (prev.materialOrders || []).map(order => order.id === id ? { ...order, ...updates, updatedAt: new Date().toISOString() } : order),
+      };
+    });
   };
 
   const deleteMaterialOrder = (id: string) => {
@@ -1234,7 +1492,10 @@ const approveChangeOrder = (id: string) => {
 
   const addShoppingList = (list: Omit<ShoppingList, 'id' | 'createdAt'>) => {
     const id = crypto.randomUUID();
-    setData(prev => ({ ...prev, shoppingLists: [...(prev.shoppingLists || []), { ...list, id, createdAt: new Date().toISOString() }] }));
+    setData(prev => {
+      const job = prev.jobs.find(item => item.id === list.jobId);
+      return { ...prev, shoppingLists: [...(prev.shoppingLists || []), { ...list, id, customerId: list.customerId || job?.customerId, estimateId: list.estimateId || job?.estimateId, createdAt: new Date().toISOString() }] };
+    });
     return id;
   };
 
@@ -1290,7 +1551,7 @@ const approveChangeOrder = (id: string) => {
         if (item.allowanceId && item.allowanceHandling !== 'contractor_paid_reimbursable') return sum;
         return sum + (item.actualCost || item.estimatedCost || 0);
       }, 0) || receipt.total;
-      const receipts = [...(prev.receipts || []), { ...receipt, id }];
+      const receipts = [...(prev.receipts || []), { ...receipt, id, expenseId, customerId: receipt.customerId || list?.customerId }];
       const expense: Expense = {
         id: expenseId,
         jobId: receipt.jobId,
@@ -1299,8 +1560,12 @@ const approveChangeOrder = (id: string) => {
         amount: reimbursableTotal,
         category: 'materials',
         source: 'shopping_list',
+        sourceType: 'shopping_list',
+        sourceId: receipt.shoppingListId,
         expenseType: 'material',
         costTreatment: reimbursableTotal !== receipt.total ? 'allowance' : 'contractor_cost',
+        reimbursable: list?.items.some(item => item.allowanceHandling === 'contractor_paid_reimbursable') || false,
+        allowanceId: list?.items.find(item => item.allowanceId)?.allowanceId,
         paymentSource: 'company_card',
         receipt: receipt.imageUrl,
         notes: [`source: shopping_list_receipt`, receipt.notes, `Shopping list receipt ${id}`, reimbursableTotal !== receipt.total ? 'Client allowance/client direct items excluded from contractor cost.' : ''].filter(Boolean).join('\n'),
@@ -1382,8 +1647,12 @@ const approveChangeOrder = (id: string) => {
         amount: selection.total,
         category: 'materials' as const,
         source: 'allowance' as const,
+        sourceType: 'allowance' as const,
+        sourceId: allowanceId,
         expenseType: 'allowance' as const,
         costTreatment: 'reimbursable' as const,
+        reimbursable: true,
+        allowanceId,
         paymentSource: 'company_card' as const,
         receipt: selection.receiptAttachment,
         notes: `source: reimbursable_allowance\nAllowance: ${allowance.name}\n${selection.notes || ''}`,

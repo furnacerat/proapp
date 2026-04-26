@@ -1,4 +1,4 @@
-import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory } from '../data/types';
+import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance } from '../data/types';
 import { formatCurrency } from './formatters';
 
 export interface Insight {
@@ -19,7 +19,7 @@ export interface SmartAction {
   description: string;
   actionLabel: string;
   to: string;
-  category: 'follow_up' | 'job' | 'payment' | 'delay' | 'profit' | 'cash_flow';
+  category: 'follow_up' | 'job' | 'payment' | 'delay' | 'profit' | 'cash_flow' | 'materials' | 'scope' | 'allowance';
 }
 
 export interface PerformanceInsight {
@@ -73,7 +73,10 @@ export function generateSmartNextActions(
   timeEntries: TimeEntry[],
   invoices: Invoice[],
   payments: Payment[],
-  tasks: Task[]
+  tasks: Task[],
+  materialOrders: MaterialOrder[] = [],
+  shoppingLists: ShoppingList[] = [],
+  allowances: Allowance[] = []
 ): SmartAction[] {
   const actions: SmartAction[] = [];
   const paidByInvoice = getPaidByInvoice(payments);
@@ -94,6 +97,20 @@ export function generateSmartNextActions(
           category: 'follow_up',
         });
       }
+    });
+
+  estimates
+    .filter(estimate => estimate.status === 'approved' && !estimate.convertedToJobId)
+    .forEach(estimate => {
+      actions.push({
+        id: `approved-estimate-${estimate.id}`,
+        priority: 'high',
+        title: `Convert approved estimate: ${estimate.name}`,
+        description: 'Approved estimates should become jobs before scope, materials, and billing drift.',
+        actionLabel: 'Convert to job',
+        to: `/estimates/${estimate.id}`,
+        category: 'job',
+      });
     });
 
   invoices
@@ -160,6 +177,97 @@ export function generateSmartNextActions(
           actionLabel: 'Review job',
           to: `/jobs/${job.id}`,
           category: 'profit',
+        });
+      }
+
+      const jobTasks = tasks.filter(task => task.jobId === job.id && task.status !== 'done');
+      if (jobTasks.length === 0) {
+        actions.push({
+          id: `job-missing-tasks-${job.id}`,
+          priority: 'medium',
+          title: `${job.name} has no open tasks`,
+          description: 'Add a checklist so field work and office follow-up stay accountable.',
+          actionLabel: 'Add tasks',
+          to: '/tasks',
+          category: 'job',
+        });
+      }
+
+      const jobOrders = materialOrders.filter(order => order.jobId === job.id);
+      const jobShopping = shoppingLists.filter(list => list.jobId === job.id);
+      if (job.status === 'active' && jobOrders.length === 0 && jobShopping.length === 0) {
+        actions.push({
+          id: `job-missing-materials-${job.id}`,
+          priority: 'high',
+          title: `${job.name} has no material plan`,
+          description: 'Create an order or shopping list before the crew loses time.',
+          actionLabel: 'Create order',
+          to: '/estimates/orders',
+          category: 'materials',
+        });
+      }
+    });
+
+  shoppingLists
+    .filter(list => list.status === 'completed')
+    .forEach(list => {
+      const hasReceiptExpense = expenses.some(expense => expense.sourceType === 'shopping_list' && expense.sourceId === list.id);
+      if (!hasReceiptExpense) {
+        actions.push({
+          id: `shopping-receipt-${list.id}`,
+          priority: 'high',
+          title: `Add receipt for ${list.title}`,
+          description: 'Completed shopping lists should create job expenses and update profit.',
+          actionLabel: 'Open shopping lists',
+          to: '/shopping-lists',
+          category: 'materials',
+        });
+      }
+    });
+
+  expenses
+    .filter(expense => expense.sourceType === 'manual' && !expense.notes?.toLowerCase().includes('estimate'))
+    .slice(0, 4)
+    .forEach(expense => {
+      const job = jobs.find(item => item.id === expense.jobId);
+      actions.push({
+        id: `expense-change-order-${expense.id}`,
+        priority: expense.amount > 1000 ? 'high' : 'medium',
+        title: `Review unestimated expense${job ? ` on ${job.name}` : ''}`,
+        description: `${formatCurrency(expense.amount)} from ${expense.vendor} may need a change order or client approval.`,
+        actionLabel: 'Review expenses',
+        to: '/expenses',
+        category: 'scope',
+      });
+    });
+
+  allowances
+    .filter(allowance => allowance.remainingAmount < 0)
+    .forEach(allowance => {
+      actions.push({
+        id: `allowance-overage-${allowance.id}`,
+        priority: 'high',
+        title: `${allowance.name} allowance is over budget`,
+        description: `Create a change order for ${formatCurrency(Math.abs(allowance.remainingAmount))}.`,
+        actionLabel: 'Open job',
+        to: `/jobs/${allowance.jobId}`,
+        category: 'allowance',
+      });
+    });
+
+  jobs
+    .filter(job => job.status === 'completed')
+    .forEach(job => {
+      const hasFinalInvoice = invoices.some(invoice => invoice.jobId === job.id && invoice.type === 'final');
+      if (!hasFinalInvoice) {
+        actions.push({
+          id: `final-invoice-${job.id}`,
+          priority: 'high',
+          title: `Create final invoice for ${job.name}`,
+          description: 'Completed jobs should close the billing loop.',
+          actionLabel: 'Create invoice',
+          to: '/invoices',
+          category: 'payment',
         });
       }
     });

@@ -11,6 +11,7 @@ export type ExpenseCategory = 'materials' | 'permits' | 'dump_fees' | 'fuel' | '
 export type ExpenseSource = 'manual' | 'shopping_list' | 'order' | 'time_entry' | 'allowance' | 'receipt';
 export type ExpenseType = 'material' | 'labor' | 'equipment' | 'permit' | 'fuel' | 'rental' | 'subcontractor' | 'allowance';
 export type ExpenseCostTreatment = 'contractor_cost' | 'allowance' | 'reimbursable';
+export type ExpenseSourceType = 'manual' | 'shopping_list' | 'material_order' | 'time_entry' | 'allowance' | 'receipt';
 export type PaymentSource = 'company_card' | 'cash' | 'check' | 'finance' | 'credit' | 'other';
 export type InvoiceType = 'deposit' | 'progress' | 'final' | 'change_order';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue';
@@ -411,6 +412,7 @@ export interface TimeEntry {
   id: string;
   jobId: string;
   workerId: string;
+  taskId?: string;
   date: string;
   startTime: string;
   endTime?: string;
@@ -429,8 +431,12 @@ export interface Expense {
   amount: number;
   category: ExpenseCategory;
   source?: ExpenseSource;
+  sourceType?: ExpenseSourceType;
+  sourceId?: string;
   expenseType?: ExpenseType;
   costTreatment?: ExpenseCostTreatment;
+  reimbursable?: boolean;
+  allowanceId?: string;
   paymentSource?: PaymentSource;
   notes?: string;
   receipt?: string;
@@ -447,7 +453,12 @@ export interface Task {
   taskType?: TaskType;
   sourceType?: 'manual' | 'approved_estimate' | 'order' | 'job_creation';
   sourceId?: string;
+  customerId?: string;
+  estimateId?: string;
   jobId?: string;
+  orderId?: string;
+  shoppingListId?: string;
+  invoiceId?: string;
   priority: Priority;
   status: TaskStatus;
   createdAt: string;
@@ -457,6 +468,8 @@ export interface Task {
 export interface Invoice {
   id: string;
   invoiceNumber: string;
+  customerId?: string;
+  estimateId?: string;
   jobId: string;
   amount: number;
   type: InvoiceType;
@@ -469,6 +482,8 @@ export interface Invoice {
 export interface Payment {
   id: string;
   invoiceId: string;
+  customerId?: string;
+  jobId?: string;
   amount: number;
   date: string;
   method?: PaymentMethod;
@@ -614,6 +629,7 @@ export interface MaterialOrderItem {
 
 export interface MaterialOrder {
   id: string;
+  customerId?: string;
   estimateId?: string;
   jobId?: string;
   supplierId?: string;
@@ -692,6 +708,8 @@ export interface ShoppingListItem {
 
 export interface ShoppingList {
   id: string;
+  customerId?: string;
+  estimateId?: string;
   jobId: string;
   jobName: string;
   title: string;
@@ -708,6 +726,8 @@ export interface ShoppingList {
 export interface Receipt {
   id: string;
   shoppingListId: string;
+  expenseId?: string;
+  customerId?: string;
   jobId: string;
   vendor: string;
   date: string;

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export function Dashboard() {
-  const { jobs, workers, tasks, timeEntries, expenses, invoices, payments, estimates, jobTemplates, createJobFromTemplate, alerts, clearAllAlerts, branding } = useApp();
+  const { jobs, workers, tasks, timeEntries, expenses, invoices, payments, estimates, jobTemplates, createJobFromTemplate, alerts, clearAllAlerts, branding, materialOrders, shoppingLists, allowances } = useApp();
   const { showToast } = useToast();
   
   const [quickAddType, setQuickAddType] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function Dashboard() {
 
   const smartEnabled = branding.smartFeaturesEnabled !== false;
   const insights = useMemo(() => smartEnabled ? generateInsights(jobs, expenses, timeEntries, workers, invoices, payments, tasks) : [], [smartEnabled, jobs, expenses, timeEntries, workers, invoices, payments, tasks]);
-  const smartActions = useMemo(() => smartEnabled ? generateSmartNextActions(estimates, jobs, expenses, timeEntries, invoices, payments, tasks) : [], [smartEnabled, estimates, jobs, expenses, timeEntries, invoices, payments, tasks]);
+  const smartActions = useMemo(() => smartEnabled ? generateSmartNextActions(estimates, jobs, expenses, timeEntries, invoices, payments, tasks, materialOrders, shoppingLists, allowances) : [], [smartEnabled, estimates, jobs, expenses, timeEntries, invoices, payments, tasks, materialOrders, shoppingLists, allowances]);
   const performance = useMemo(() => getPerformanceInsights(estimates, jobs, expenses, timeEntries, invoices, payments), [estimates, jobs, expenses, timeEntries, invoices, payments]);
   const weekly = useMemo(() => getWeeklySummary(jobs, timeEntries, expenses, payments), [jobs, timeEntries, expenses, payments]);
   const kpis = useMemo(() => getKPIS(jobs, expenses, timeEntries, invoices, payments), [jobs, expenses, timeEntries, invoices, payments]);
@@ -30,6 +30,15 @@ export function Dashboard() {
   const highPriorityTasks = tasks.filter(t => t.status === 'open' && (t.priority === 'high' || t.priority === 'urgent'));
   const jobsDueSoon = jobs.filter(j => j.status === 'active' && new Date(j.dueDate) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const unpaidInvoices = invoices.filter(i => i.status !== 'paid');
+  const today = new Date().toISOString().split('T')[0];
+  const todayTasks = tasks.filter(t => t.dueDate === today && t.status !== 'done');
+  const activeJobsNeedingAttention = jobs.filter(job => ['active', 'scheduled', 'awaiting_materials'].includes(job.status) && (
+    !tasks.some(task => task.jobId === job.id && task.status !== 'done') ||
+    !materialOrders.some(order => order.jobId === job.id) && !shoppingLists.some(list => list.jobId === job.id)
+  ));
+  const openShoppingLists = shoppingLists.filter(list => list.status !== 'completed' && list.status !== 'cancelled');
+  const laborLoggedToday = timeEntries.filter(entry => entry.date === today).reduce((sum, entry) => sum + entry.totalHours, 0);
+  const ordersInFlight = materialOrders.filter(order => !['received', 'cancelled'].includes(order.status));
 
   const handleCreateFromTemplate = () => {
     if (!templateModalJob.templateId || !templateModalJob.name || !templateModalJob.customer) {
@@ -200,6 +209,24 @@ export function Dashboard() {
             </div>
           </div>
         </div>}
+
+        <div className="connected-flow-card mb-6">
+          <div className="connected-flow-header">
+            <div>
+              <div className="page-eyebrow">Daily Command Center</div>
+              <h3>Connected Workflow Pulse</h3>
+            </div>
+            <span className="badge badge-blue">Customer - Estimate - Job - Cash</span>
+          </div>
+          <div className="connected-flow-grid">
+            <Link to="/tasks" className="connected-flow-item"><strong>{todayTasks.length}</strong><span>Today's tasks</span></Link>
+            <Link to="/jobs" className="connected-flow-item"><strong>{activeJobsNeedingAttention.length}</strong><span>Jobs needing attention</span></Link>
+            <Link to="/estimates/orders" className="connected-flow-item"><strong>{ordersInFlight.length}</strong><span>Orders in flight</span></Link>
+            <Link to="/shopping-lists" className="connected-flow-item"><strong>{openShoppingLists.length}</strong><span>Open shopping lists</span></Link>
+            <Link to="/time-entries" className="connected-flow-item"><strong>{laborLoggedToday.toFixed(1)}h</strong><span>Labor logged today</span></Link>
+            <Link to="/invoices" className="connected-flow-item"><strong>{unpaidInvoices.length}</strong><span>Due or overdue invoices</span></Link>
+          </div>
+        </div>
 
         <div className="grid-2 gap-6 mb-6">
           <div className="card">
