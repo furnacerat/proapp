@@ -80,12 +80,18 @@ export interface Assembly {
 export interface AssemblyItem {
   name: string;
   description?: string;
-  quantity: number;
+  quantity: number | null;
   unit: string;
   unitPrice: number;
   category: 'material' | 'labor' | 'equipment' | 'other' | 'allowance';
   linkedMaterialId?: string;
   linkedLaborRateId?: string;
+  quantityMode?: LineItemQuantityMode;
+  defaultQuantity?: number;
+  measurementPrompt?: string;
+  isOptional?: boolean;
+  clientVisible?: boolean;
+  notes?: string;
 }
 
 export interface Assembly {
@@ -162,37 +168,67 @@ export interface EstimateTemplate {
 export interface Template {
   id: string;
   name: string;
+  category?: string;
+  description?: string;
   type: 'estimate' | 'job';
   scope?: string;
+  scopeSections?: TemplateScopeSection[];
   laborAssumptions?: string;
   materialAssumptions?: string;
   markupPercent: number;
   assemblyIds?: string[];
+  recommendedAssemblies?: string[];
+  measurementPrompts?: string[];
   items?: TemplateItem[];
+  requiredItems?: TemplateItem[];
+  optionalItems?: TemplateItem[];
+  clientFacingNotes?: string;
+  internalEstimatorNotes?: string;
   createdAt: string;
+}
+
+export interface TemplateScopeSection {
+  name: string;
+  description?: string;
+  phase?: string;
 }
 
 export interface TemplateItem {
   name: string;
   description?: string;
-  quantity: number;
+  quantity: number | null;
+  unit?: string;
   unitPrice: number;
   category: string;
   isLabor: boolean;
+  quantityMode?: LineItemQuantityMode;
+  defaultQuantity?: number;
+  measurementPrompt?: string;
+  materialType?: string;
+  markupPercent?: number;
+  clientVisible?: boolean;
+  isOptional?: boolean;
+  notes?: string;
 }
 
 // ============ ESTIMATE ENTITIES ============
 
 export type EstimateLineCategory = 'labor' | 'material' | 'equipment' | 'subcontractor' | 'other' | 'allowance';
+export type LineItemQuantityMode = 'fixed' | 'user_required' | 'calculated' | 'optional';
 
 export interface EstimateLineItem {
   id: string;
   sourceType?: 'manual' | 'priceBook' | 'assembly' | 'template';
   sourceId?: string;
+  originTemplateId?: string;
+  originAssemblyId?: string;
   name: string;
   description?: string;
-  quantity: number;
+  quantity: number | null;
   unit: string;
+  quantityMode?: LineItemQuantityMode;
+  defaultQuantity?: number;
+  measurementPrompt?: string;
   unitCost?: number;
   unitPrice: number;
   markupPercent?: number;
@@ -204,6 +240,7 @@ export interface EstimateLineItem {
   hours?: number;
   laborRateId?: string;
   materialCost?: number;
+  materialType?: string;
   equipmentCost?: number;
   subcontractorCost?: number;
   total: number;

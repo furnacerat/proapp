@@ -6475,6 +6475,33 @@ body {
 .eb-sourceBadge.template { color: #86efac; background: rgba(34, 197, 94, 0.16); }
 .eb-sourceBadge.manual { color: #cbd5e1; background: rgba(148, 163, 184, 0.14); }
 .eb-sourceBadge.hidden { color: #fecaca; background: rgba(220, 38, 38, 0.18); }
+.eb-sourceBadge.required { color: #fde68a; background: rgba(245, 158, 11, 0.18); }
+.eb-sourceBadge.optional { color: #cbd5e1; background: rgba(148, 163, 184, 0.16); }
+.eb-sourceBadge.needsQuantity { color: #fecaca; background: rgba(220, 38, 38, 0.2); }
+.eb-sourceBadge.priceBook { color: #bfdbfe; background: rgba(37, 99, 235, 0.18); }
+
+.eb-itemsTable tr.needs-quantity {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.eb-itemWarning {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: #fde68a;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.eb-checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e5edf7;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
 
 .eb-guidedPrompt,
 .eb-guidedBuilder {

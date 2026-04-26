@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
-import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate, Template, Allowance, AllowanceCategory } from '../../data/types';
+import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate, Template, TemplateItem, Allowance, AllowanceCategory, LineItemQuantityMode } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
 import { getEstimateSuggestions } from '../../utils/insights';
@@ -35,6 +35,13 @@ const CATEGORIES: { value: EstimateLineCategory; label: string; icon: any; color
   { value: 'allowance', label: 'Allowance', icon: DollarSign, color: '#eab308' },
   { value: 'other', label: 'Other', icon: FileText, color: '#64748b' },
 ];
+
+const quantityModeLabels: Record<LineItemQuantityMode, string> = {
+  fixed: 'Fixed default quantity',
+  user_required: 'User-required quantity',
+  calculated: 'Calculated from measurement',
+  optional: 'Optional item',
+};
 
 type GuidedQuestionType = 'yesNo' | 'multipleChoice' | 'numeric' | 'dropdown';
 type GuidedAnswerValue = boolean | string | number;
@@ -204,7 +211,18 @@ export function EstimateBuilder() {
   const [guidedDismissed, setGuidedDismissed] = useState(false);
   const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
-  const [newItemForm, setNewItemForm] = useState({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' as EstimateLineCategory });
+  const [newItemForm, setNewItemForm] = useState({
+    name: '',
+    quantity: '1',
+    unit: 'ea',
+    unitPrice: '0',
+    category: 'material' as EstimateLineCategory,
+    quantityMode: 'fixed' as LineItemQuantityMode,
+    materialType: '',
+    markupPercent: '',
+    clientVisible: true,
+    notes: '',
+  });
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -213,6 +231,30 @@ export function EstimateBuilder() {
   const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
 
   const defaultMarkup = parseFloat(formData.markupPercent) || 0;
+
+  const quantityValue = (quantity: number | null | undefined) => Number.isFinite(Number(quantity)) ? Number(quantity) : 0;
+
+  const itemNeedsQuantity = (item: Pick<EstimateLineItem, 'quantity' | 'quantityMode'>) => {
+    return item.quantityMode === 'user_required' && quantityValue(item.quantity) <= 0;
+  };
+
+  const getTemplateItems = (template: Template): TemplateItem[] => [
+    ...(template.requiredItems || []).map(item => ({ ...item, isOptional: false })),
+    ...(template.items || []).map(item => ({ ...item, isOptional: item.isOptional || item.quantityMode === 'optional' })),
+    ...(template.optionalItems || []).map(item => ({ ...item, isOptional: true, quantityMode: item.quantityMode || ('optional' as LineItemQuantityMode) })),
+  ];
+
+  const getSourceBadges = (item: EstimateLineItem) => {
+    const badges: { label: string; className: string }[] = [];
+    if (item.isOptional || item.quantityMode === 'optional') badges.push({ label: 'Optional', className: 'optional' });
+    else if (item.quantityMode === 'user_required') badges.push({ label: 'Required', className: 'required' });
+    if (itemNeedsQuantity(item)) badges.push({ label: 'Needs Quantity', className: 'needsQuantity' });
+    if (item.sourceType === 'template' || item.originTemplateId) badges.push({ label: 'From Template', className: 'template' });
+    if (item.sourceType === 'assembly' || item.originAssemblyId) badges.push({ label: 'From Assembly', className: 'assembly' });
+    if (item.sourceType === 'priceBook' || item.linkedMaterialId || item.linkedLaborRateId) badges.push({ label: 'From Price Book', className: 'priceBook' });
+    if (item.clientVisible === false) badges.push({ label: 'Hidden', className: 'hidden' });
+    return badges;
+  };
 
   const getItemCost = (item: EstimateLineItem) => {
     return item.unitCost ?? item.unitPrice ?? 0;
@@ -223,7 +265,7 @@ export function EstimateBuilder() {
   };
 
   const getItemCostTotal = (item: EstimateLineItem) => {
-    return (item.quantity || 0) * getItemCost(item);
+    return quantityValue(item.quantity) * getItemCost(item);
   };
 
   const getItemPriceTotal = (item: EstimateLineItem) => {
@@ -235,12 +277,15 @@ export function EstimateBuilder() {
     const category = (item.category || (item.isLabor ? 'labor' : 'material')) as EstimateLineCategory;
     const type = item.type || (category === 'allowance' ? 'other' : category);
     const markupPercent = item.markupPercent ?? defaultMarkup;
-    const costTotal = (item.quantity || 0) * unitCost;
+    const quantityMode = item.quantityMode || (item.isOptional ? 'optional' : item.quantity === null ? 'user_required' : 'fixed');
+    const costTotal = quantityValue(item.quantity) * unitCost;
     const priceTotal = costTotal * (1 + markupPercent / 100);
 
     return {
       ...item,
       sourceType,
+      quantity: item.quantity ?? null,
+      quantityMode,
       category,
       type: type as EstimateLineItem['type'],
       unitCost,
@@ -251,7 +296,42 @@ export function EstimateBuilder() {
       total: costTotal,
       clientVisible: item.clientVisible !== false,
       isLabor: item.isLabor || category === 'labor',
+      isOptional: item.isOptional || quantityMode === 'optional',
     };
+  };
+
+  const templateItemToLineItem = (template: Template, item: TemplateItem, index: number): EstimateLineItem => {
+    const quantityMode = item.quantityMode || (item.isOptional ? 'optional' : item.quantity === null ? 'user_required' : 'fixed');
+    const quantity = item.quantity ?? item.defaultQuantity ?? (quantityMode === 'fixed' ? 1 : null);
+    return normalizeLineItem({
+      id: crypto.randomUUID(),
+      sourceType: 'template',
+      sourceId: template.id,
+      originTemplateId: template.id,
+      name: item.name,
+      description: item.description,
+      quantity,
+      quantityMode,
+      defaultQuantity: item.defaultQuantity,
+      measurementPrompt: item.measurementPrompt,
+      unit: item.unit || 'ea',
+      unitPrice: item.unitPrice || 0,
+      unitCost: item.unitPrice || 0,
+      markupPercent: item.markupPercent ?? template.markupPercent ?? defaultMarkup,
+      category: (item.isLabor ? 'labor' : item.category || 'material') as EstimateLineCategory,
+      type: (item.isLabor ? 'labor' : item.category || 'material') as EstimateLineItem['type'],
+      isLabor: item.isLabor,
+      isOptional: item.isOptional || quantityMode === 'optional',
+      materialType: item.materialType,
+      clientVisible: item.clientVisible !== false,
+      notes: item.notes,
+      internalNotes: [
+        `Added from template: ${template.name}`,
+        item.measurementPrompt ? `Measurement prompt: ${item.measurementPrompt}` : '',
+      ].filter(Boolean).join(' | '),
+      total: quantityValue(quantity) * (item.unitPrice || 0),
+      sortOrder: index,
+    }, 'template');
   };
 
   useEffect(() => {
@@ -275,30 +355,17 @@ export function EstimateBuilder() {
                 ? 'new_build'
                 : 'remodel';
 
-      const templateLineItems: EstimateLineItem[] = (template.items || []).map((item, index) => normalizeLineItem({
-        id: crypto.randomUUID(),
-        sourceType: 'template',
-        sourceId: template.id,
-        name: item.name,
-        description: item.description,
-        quantity: item.quantity || 1,
-        unit: 'ea',
-        unitPrice: item.unitPrice || 0,
-        unitCost: item.unitPrice || 0,
-        markupPercent: template.markupPercent || defaultMarkup,
-        category: (item.isLabor ? 'labor' : item.category || 'material') as EstimateLineCategory,
-        isLabor: item.isLabor,
-        total: (item.quantity || 1) * (item.unitPrice || 0),
-        sortOrder: index + 1,
-      }, 'template'));
+      const templateLineItems: EstimateLineItem[] = getTemplateItems(template).map((item, index) => templateItemToLineItem(template, item, index + 1));
       const templateAssemblies = (template.assemblyIds || [])
         .map(assemblyId => assemblies?.find(assembly => assembly.id === assemblyId))
         .filter(Boolean) as Assembly[];
       const lineItems = [
         ...templateAssemblies.flatMap(assembly => assemblyToLineItems(assembly).map(item => ({
           ...item,
-          sourceType: 'template' as const,
-          sourceId: template.id,
+          sourceType: 'assembly' as const,
+          sourceId: assembly.id,
+          originTemplateId: template.id,
+          originAssemblyId: assembly.id,
           internalNotes: `Added from template ${template.name} via assembly ${assembly.name}`,
         }))),
         ...templateLineItems,
@@ -313,6 +380,7 @@ export function EstimateBuilder() {
           template.scope ? `Scope: ${template.scope}` : '',
           template.laborAssumptions ? `Labor: ${template.laborAssumptions}` : '',
           template.materialAssumptions ? `Materials: ${template.materialAssumptions}` : '',
+          template.clientFacingNotes ? `Client notes: ${template.clientFacingNotes}` : '',
         ].filter(Boolean).join('\n'),
       }));
 
@@ -368,13 +436,24 @@ export function EstimateBuilder() {
 
   const handleAddItemToSection = (sectionId: string) => {
     setEditingItem({ sectionId });
-    setNewItemForm({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material' });
+    setNewItemForm({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material', quantityMode: 'fixed', materialType: '', markupPercent: '', clientVisible: true, notes: '' });
     setShowAddItem(true);
   };
 
   const handleEditItem = (sectionId: string, item: EstimateLineItem) => {
     setEditingItem({ item, sectionId });
-    setNewItemForm({ name: item.name, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice), category: item.category });
+    setNewItemForm({
+      name: item.name,
+      quantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
+      unit: item.unit,
+      unitPrice: String(getItemCost(item)),
+      category: item.category,
+      quantityMode: item.quantityMode || (item.isOptional ? 'optional' : 'fixed'),
+      materialType: item.materialType || '',
+      markupPercent: item.markupPercent === undefined ? '' : String(item.markupPercent),
+      clientVisible: item.clientVisible !== false,
+      notes: item.notes || '',
+    });
     setShowAddItem(true);
   };
 
@@ -493,6 +572,7 @@ export function EstimateBuilder() {
     const visibleItems = allEstimateItems.filter(item => !item.isExcluded);
 
     if (visibleItems.some(item => getItemCost(item) === 0)) warnings.push('This estimate has items with $0 cost');
+    if (visibleItems.some(itemNeedsQuantity)) warnings.push('This item needs a quantity before the estimate is complete.');
     if (visibleItems.some(item => (item.category === 'labor' || item.isLabor) && !(item.hours || item.quantity))) warnings.push('Labor is missing hours');
     if (defaultMarkupValue < 15) warnings.push('Markup is below your default target');
     if (visibleItems.some(item => item.clientVisible === false)) warnings.push('This estimate has items hidden from client view');
@@ -533,23 +613,29 @@ export function EstimateBuilder() {
         id: crypto.randomUUID(),
         sourceType: 'assembly',
         sourceId: assembly.id,
+        originAssemblyId: assembly.id,
         name: item.name || material?.name || rate?.name || assembly.name,
         description: item.description || material?.description || rate?.trade || assembly.name,
-        quantity: item.quantity || 0,
+        quantity: item.quantity ?? item.defaultQuantity ?? 0,
+        quantityMode: item.quantityMode || (item.isOptional ? 'optional' : item.quantity === null ? 'user_required' : 'fixed'),
+        defaultQuantity: item.defaultQuantity,
+        measurementPrompt: item.measurementPrompt,
         unit: item.unit || material?.unit || (rate ? 'hr' : 'ea'),
         unitCost,
         unitPrice: unitCost,
         category,
         type: category === 'allowance' ? 'other' : category as EstimateLineItem['type'],
         isLabor: category === 'labor',
-        hours: category === 'labor' ? item.quantity : undefined,
+        hours: category === 'labor' ? quantityValue(item.quantity) : undefined,
+        isOptional: item.isOptional || item.quantityMode === 'optional',
+        clientVisible: item.clientVisible !== false,
         linkedMaterialId: item.linkedMaterialId,
         linkedLaborRateId: item.linkedLaborRateId,
         priceBookSnapshot: { unitCost, unitPrice: unitCost, name: material?.name || rate?.name || item.name },
         internalNotes: `Added from assembly: ${assembly.name}`,
-        notes: `Assembly: ${assembly.name}`,
+        notes: item.notes || `Assembly: ${assembly.name}`,
         sortOrder: index,
-        total: (item.quantity || 0) * unitCost,
+        total: quantityValue(item.quantity) * unitCost,
       }, 'assembly');
     });
   };
@@ -1192,27 +1278,13 @@ export function EstimateBuilder() {
       .filter(Boolean) as Assembly[];
     const assemblyItems = templateAssemblies.flatMap(assembly => assemblyToLineItems(assembly).map(item => ({
       ...item,
-      sourceType: 'template' as const,
-      sourceId: template.id,
+      sourceType: 'assembly' as const,
+      sourceId: assembly.id,
+      originTemplateId: template.id,
+      originAssemblyId: assembly.id,
       internalNotes: `Added from template ${template.name} via assembly ${assembly.name}`,
     })));
-    const templateItems: EstimateLineItem[] = (template.items || []).map((item, index) => normalizeLineItem({
-      id: crypto.randomUUID(),
-      sourceType: 'template',
-      sourceId: template.id,
-      name: item.name,
-      description: item.description,
-      quantity: item.quantity || 1,
-      unit: 'ea',
-      unitCost: item.unitPrice || 0,
-      unitPrice: item.unitPrice || 0,
-      markupPercent: template.markupPercent || defaultMarkup,
-      category: (item.isLabor ? 'labor' : item.category || 'material') as EstimateLineCategory,
-      type: (item.isLabor ? 'labor' : item.category || 'material') as EstimateLineItem['type'],
-      isLabor: item.isLabor,
-      total: (item.quantity || 1) * (item.unitPrice || 0),
-      sortOrder: index,
-    }, 'template'));
+    const templateItems: EstimateLineItem[] = getTemplateItems(template).map((item, index) => templateItemToLineItem(template, item, index));
 
     const lineItems = [...assemblyItems, ...templateItems];
     const sectionId = crypto.randomUUID();
@@ -1225,6 +1297,7 @@ export function EstimateBuilder() {
         template.scope ? `Scope: ${template.scope}` : '',
         template.laborAssumptions ? `Labor: ${template.laborAssumptions}` : '',
         template.materialAssumptions ? `Materials: ${template.materialAssumptions}` : '',
+        template.clientFacingNotes ? `Client notes: ${template.clientFacingNotes}` : '',
       ].filter(Boolean).join('\n'),
     }));
     setScopes([{
@@ -1248,9 +1321,18 @@ export function EstimateBuilder() {
       name: item.name,
       description: item.description,
       quantity: item.quantity,
+      unit: item.unit,
+      quantityMode: item.quantityMode,
+      defaultQuantity: item.defaultQuantity,
+      measurementPrompt: item.measurementPrompt,
       unitPrice: getItemCost(item),
       category: item.category,
       isLabor: item.isLabor || item.category === 'labor',
+      isOptional: item.isOptional,
+      materialType: item.materialType,
+      markupPercent: item.markupPercent,
+      clientVisible: item.clientVisible,
+      notes: item.notes,
     }));
     addTemplate({
       name: `${formData.name || 'Estimate'} Template`,
@@ -1660,20 +1742,24 @@ export function EstimateBuilder() {
                                   <tbody>
                                     {section.lineItems?.map(rawItem => {
                                       const item = normalizeLineItem(rawItem);
-                                      const sourceLabel = item.sourceType === 'priceBook' ? 'Price Book' : item.sourceType === 'assembly' ? 'Assembly' : item.sourceType === 'template' ? 'Template' : 'Manual';
+                                      const sourceBadges = getSourceBadges(item);
                                       return (
-                                      <tr key={item.id} className={item.isExcluded ? 'excluded' : ''}>
+                                      <tr key={item.id} className={`${item.isExcluded ? 'excluded' : ''} ${itemNeedsQuantity(item) ? 'needs-quantity' : ''}`}>
                                         <td>
                                           <div className="eb-itemName">
                                             {item.name}
-                                            <span className={`eb-sourceBadge ${item.sourceType || 'manual'}`}>{sourceLabel}</span>
-                                            {item.clientVisible === false && <span className="eb-sourceBadge hidden">Hidden</span>}
+                                            {sourceBadges.map(badge => <span key={`${item.id}-${badge.label}`} className={`eb-sourceBadge ${badge.className}`}>{badge.label}</span>)}
                                           </div>
+                                          {itemNeedsQuantity(item) && <div className="eb-itemWarning"><AlertTriangle size={12} /> This item needs a quantity before the estimate is complete.</div>}
+                                          {item.measurementPrompt && !clientView && <div className="eb-itemDesc">{item.measurementPrompt}</div>}
                                           {item.description && !clientView && <div className="eb-itemDesc">{item.description}</div>}
                                           {!clientView && item.internalNotes && <div className="eb-itemDesc">{item.internalNotes}</div>}
                                         </td>
                                         <td className="eb-qtyCell">
-                                          <input className="eb-inlineInput" type="number" value={item.quantity} onChange={e => updateItem(section.id, item.id, { quantity: parseFloat(e.target.value) || 0, hours: item.isLabor ? parseFloat(e.target.value) || 0 : item.hours })} />
+                                          <input className="eb-inlineInput" type="number" value={item.quantity ?? ''} onChange={e => {
+                                            const nextQuantity = e.target.value === '' ? null : parseFloat(e.target.value) || 0;
+                                            updateItem(section.id, item.id, { quantity: nextQuantity, hours: item.isLabor ? quantityValue(nextQuantity) : item.hours });
+                                          }} />
                                         </td>
                                         <td className="eb-unitCell">
                                           <input className="eb-inlineInput eb-inlineInputUnit" value={item.unit} onChange={e => updateItem(section.id, item.id, { unit: e.target.value })} />
@@ -1818,30 +1904,30 @@ export function EstimateBuilder() {
                 <div className="eb-profitTitle">Save Back</div>
                 <button className="eb-saveBackBtn" onClick={handleSaveAsTemplate}><CheckSquare size={14} /> Save as New Template</button>
                 <button className="eb-saveBackBtn" onClick={handleSaveSelectionAsAssembly}><Package size={14} /> Save Items as Assembly</button>
-                {allEstimateItems.some(item => item.sourceType === 'template' && item.sourceId) && (
+                {allEstimateItems.some(item => (item.sourceType === 'template' && item.sourceId) || item.originTemplateId) && (
                   <button className="eb-saveBackBtn" onClick={() => {
-                    const sourceId = allEstimateItems.find(item => item.sourceType === 'template' && item.sourceId)?.sourceId;
-                    if (sourceId && confirm('Update the original template with current estimate items?')) {
+                    const sourceId = allEstimateItems.find(item => (item.sourceType === 'template' && item.sourceId) || item.originTemplateId)?.originTemplateId || allEstimateItems.find(item => item.sourceType === 'template' && item.sourceId)?.sourceId;
+                    if (sourceId && confirm('Save changes from this estimate back to the original template? The current estimate remains editable either way.')) {
                       updateTemplate(sourceId, {
                         name: formData.name,
                         markupPercent: parseFloat(formData.markupPercent) || 20,
                         scope: formData.notes,
-                        items: allEstimateItems.map(item => ({ name: item.name, description: item.description, quantity: item.quantity, unitPrice: getItemCost(item), category: item.category, isLabor: item.isLabor })),
+                        items: allEstimateItems.map(item => ({ name: item.name, description: item.description, quantity: item.quantity, unit: item.unit, quantityMode: item.quantityMode, defaultQuantity: item.defaultQuantity, measurementPrompt: item.measurementPrompt, unitPrice: getItemCost(item), category: item.category, isLabor: item.isLabor, isOptional: item.isOptional, materialType: item.materialType, markupPercent: item.markupPercent, clientVisible: item.clientVisible, notes: item.notes })),
                       });
-                      showToast('Original template updated');
+                      showToast('Changes saved to template');
                     }
-                  }}><RotateCcw size={14} /> Update Original Template</button>
+                  }}><RotateCcw size={14} /> Save Changes to Template</button>
                 )}
-                {allEstimateItems.some(item => item.sourceType === 'assembly' && item.sourceId) && (
+                {allEstimateItems.some(item => (item.sourceType === 'assembly' && item.sourceId) || item.originAssemblyId) && (
                   <button className="eb-saveBackBtn" onClick={() => {
-                    const sourceId = allEstimateItems.find(item => item.sourceType === 'assembly' && item.sourceId)?.sourceId;
-                    if (sourceId && confirm('Update the original assembly with current estimate items?')) {
+                    const sourceId = allEstimateItems.find(item => (item.sourceType === 'assembly' && item.sourceId) || item.originAssemblyId)?.originAssemblyId || allEstimateItems.find(item => item.sourceType === 'assembly' && item.sourceId)?.sourceId;
+                    if (sourceId && confirm('Save changes from this estimate back to the original assembly? The current estimate remains editable either way.')) {
                       updateAssembly(sourceId, {
-                        items: allEstimateItems.map(item => ({ name: item.name, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: getItemCost(item), category: item.category === 'allowance' ? 'other' : item.category as any, linkedMaterialId: item.linkedMaterialId, linkedLaborRateId: item.linkedLaborRateId })),
+                        items: allEstimateItems.map(item => ({ name: item.name, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: getItemCost(item), category: item.category === 'allowance' ? 'other' : item.category as any, linkedMaterialId: item.linkedMaterialId, linkedLaborRateId: item.linkedLaborRateId, quantityMode: item.quantityMode, defaultQuantity: item.defaultQuantity, measurementPrompt: item.measurementPrompt, isOptional: item.isOptional, clientVisible: item.clientVisible, notes: item.notes })),
                       } as any);
-                      showToast('Original assembly updated');
+                      showToast('Changes saved to assembly');
                     }
-                  }}><RotateCcw size={14} /> Update Original Assembly</button>
+                  }}><RotateCcw size={14} /> Save Changes to Assembly</button>
                 )}
               </div>
             )}
@@ -1874,6 +1960,12 @@ export function EstimateBuilder() {
               </select>
             </div>
           </div>
+          <div className="form-group">
+            <label className="form-label">Quantity Behavior</label>
+            <select className="form-select" value={newItemForm.quantityMode} onChange={e => setNewItemForm({...newItemForm, quantityMode: e.target.value as LineItemQuantityMode})}>
+              {Object.entries(quantityModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Unit Price</label>
@@ -1886,15 +1978,51 @@ export function EstimateBuilder() {
               </select>
             </div>
           </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Material Type</label>
+              <input className="form-input" value={newItemForm.materialType} onChange={e => setNewItemForm({...newItemForm, materialType: e.target.value})} placeholder="e.g., LVP, tile, paint" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Markup %</label>
+              <input className="form-input" type="number" value={newItemForm.markupPercent} onChange={e => setNewItemForm({...newItemForm, markupPercent: e.target.value})} placeholder={String(defaultMarkup)} />
+            </div>
+          </div>
+          <label className="eb-checkboxRow">
+            <input type="checkbox" checked={newItemForm.clientVisible} onChange={e => setNewItemForm({...newItemForm, clientVisible: e.target.checked})} />
+            <span>Visible to client</span>
+          </label>
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <textarea className="form-input" rows={2} value={newItemForm.notes} onChange={e => setNewItemForm({...newItemForm, notes: e.target.value})} />
+          </div>
           <div className="eb-itemFormTotal">
             <span>Line Total:</span>
-            <span>{formatCurrency(parseFloat(newItemForm.quantity) * parseFloat(newItemForm.unitPrice))}</span>
+            <span>{formatCurrency((parseFloat(newItemForm.quantity) || 0) * (parseFloat(newItemForm.unitPrice) || 0))}</span>
           </div>
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
           <button className="btn btn-secondary" onClick={() => setShowAddItem(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={() => {
-            const item: EstimateLineItem = { id: editingItem?.item?.id || '', name: newItemForm.name, quantity: parseFloat(newItemForm.quantity), unit: newItemForm.unit, unitPrice: parseFloat(newItemForm.unitPrice), category: newItemForm.category, total: parseFloat(newItemForm.quantity) * parseFloat(newItemForm.unitPrice), isLabor: newItemForm.category === 'labor' };
+            const quantity = newItemForm.quantity === '' ? null : parseFloat(newItemForm.quantity) || 0;
+            const unitPrice = parseFloat(newItemForm.unitPrice) || 0;
+            const item: EstimateLineItem = {
+              id: editingItem?.item?.id || '',
+              name: newItemForm.name,
+              quantity,
+              quantityMode: newItemForm.quantityMode,
+              unit: newItemForm.unit,
+              unitPrice,
+              unitCost: unitPrice,
+              category: newItemForm.category,
+              total: quantityValue(quantity) * unitPrice,
+              isLabor: newItemForm.category === 'labor',
+              isOptional: newItemForm.quantityMode === 'optional',
+              materialType: newItemForm.materialType || undefined,
+              markupPercent: newItemForm.markupPercent ? parseFloat(newItemForm.markupPercent) || 0 : undefined,
+              clientVisible: newItemForm.clientVisible,
+              notes: newItemForm.notes || undefined,
+            };
             if (editingItem?.item) { updateItem(editingItem.sectionId, editingItem.item.id, item); }
             else { addItem(editingItem?.sectionId || '', item); }
             setShowAddItem(false);

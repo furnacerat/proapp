@@ -1,4 +1,4 @@
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Customer, Estimate, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateSection, ProjectTypeTemplateItem } from './types';
+import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Customer, Estimate, LaborRate, Material, Assembly, Template, TemplateItem, ProjectTypeTemplate, ProjectTypeTemplateSection, ProjectTypeTemplateItem } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 const now = new Date().toISOString();
@@ -7,6 +7,95 @@ const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 const lastWeek = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
 const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
 const twoWeeks = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+
+const starterTemplateNames: Record<string, string[]> = {
+  Bathroom: ['Basic Bathroom Refresh', 'Full Bathroom Remodel', 'Tub to Shower Conversion', 'Tile Shower Remodel', 'Half Bath Remodel', 'Luxury Bathroom Remodel'],
+  Kitchen: ['Basic Kitchen Refresh', 'Full Kitchen Remodel', 'Cabinet Replacement', 'Countertop Replacement', 'Kitchen Flooring + Paint', 'Luxury Kitchen Remodel'],
+  Flooring: ['LVP Flooring Install', 'Tile Flooring Install', 'Hardwood Install', 'Flooring Demo + Replacement', 'Subfloor Repair + Flooring'],
+  Painting: ['Interior Room Paint', 'Whole House Interior Paint', 'Exterior Paint', 'Cabinet Painting', 'Trim and Door Painting'],
+  Drywall: ['Drywall Patch + Repair', 'Full Room Drywall', 'Basement Drywall', 'Ceiling Repair', 'Texture Removal + Finish'],
+  Remodel: ['Basement Finish', 'Room Addition', 'Whole Home Refresh', 'Rental Turnover', 'House Flip Make Ready'],
+  Exterior: ['Deck Repair', 'New Deck Build', 'Fence Install', 'Siding Repair', 'Gutter Replacement'],
+};
+
+function starterRequiredItems(category: string): TemplateItem[] {
+  const shared: TemplateItem[] = [
+    { name: 'Site protection and setup', description: 'Protect adjacent finishes and stage work area.', quantity: 1, unit: 'ea', unitPrice: 250, category: 'labor', isLabor: true, quantityMode: 'fixed', clientVisible: true },
+    { name: 'Project cleanup and closeout', description: 'Final cleanup, punch walkthrough, and closeout notes.', quantity: 1, unit: 'ea', unitPrice: 300, category: 'labor', isLabor: true, quantityMode: 'fixed', clientVisible: true },
+  ];
+  const byCategory: Record<string, TemplateItem[]> = {
+    Bathroom: [
+      { name: 'Toilet install', quantity: 1, defaultQuantity: 1, unit: 'ea', unitPrice: 225, category: 'labor', isLabor: true, quantityMode: 'fixed', notes: 'Fixed default quantity example.' },
+      { name: 'Bathroom floor finish', quantity: null, unit: 'sf', unitPrice: 8, category: 'material', isLabor: false, quantityMode: 'user_required', measurementPrompt: 'Enter bathroom floor square footage.' },
+      { name: 'Baseboard install', quantity: 0, unit: 'lf', unitPrice: 3.5, category: 'labor', isLabor: true, quantityMode: 'calculated', measurementPrompt: 'Calculate from room perimeter.' },
+    ],
+    Kitchen: [
+      { name: 'Cabinet installation', quantity: null, unit: 'lf', unitPrice: 325, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter cabinet linear feet.' },
+      { name: 'Countertop allowance', quantity: null, unit: 'sf', unitPrice: 85, category: 'material', isLabor: false, quantityMode: 'user_required', measurementPrompt: 'Enter countertop square footage.' },
+      { name: 'Plumbing reconnect', quantity: 1, unit: 'ea', unitPrice: 650, category: 'subcontractor', isLabor: false, quantityMode: 'fixed' },
+    ],
+    Flooring: [
+      { name: 'Flooring material', quantity: null, unit: 'sf', unitPrice: 5.5, category: 'material', isLabor: false, quantityMode: 'user_required', measurementPrompt: 'Enter flooring square footage plus waste.' },
+      { name: 'Flooring install labor', quantity: null, unit: 'sf', unitPrice: 4.25, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter installed square footage.' },
+      { name: 'Transition and trim allowance', quantity: 1, unit: 'ea', unitPrice: 225, category: 'material', isLabor: false, quantityMode: 'fixed' },
+    ],
+    Painting: [
+      { name: 'Paint surface prep', quantity: null, unit: 'sf', unitPrice: 0.65, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter paintable square footage.' },
+      { name: 'Paint application', quantity: null, unit: 'sf', unitPrice: 1.1, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter paintable square footage.' },
+      { name: 'Paint and supplies', quantity: 1, unit: 'allowance', unitPrice: 350, category: 'material', isLabor: false, quantityMode: 'fixed' },
+    ],
+    Drywall: [
+      { name: 'Drywall area', quantity: null, unit: 'sf', unitPrice: 2.75, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter drywall square footage.' },
+      { name: 'Tape and finish', quantity: null, unit: 'sf', unitPrice: 1.85, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter finish square footage.' },
+      { name: 'Drywall materials', quantity: null, unit: 'sf', unitPrice: 0.95, category: 'material', isLabor: false, quantityMode: 'user_required', measurementPrompt: 'Enter drywall square footage.' },
+    ],
+    Remodel: [
+      { name: 'Demolition allowance', quantity: 1, unit: 'ea', unitPrice: 1800, category: 'labor', isLabor: true, quantityMode: 'fixed' },
+      { name: 'Finish area', quantity: null, unit: 'sf', unitPrice: 8.5, category: 'material', isLabor: false, quantityMode: 'user_required', measurementPrompt: 'Enter finished square footage.' },
+      { name: 'Trade allowance', quantity: 1, unit: 'ea', unitPrice: 3500, category: 'subcontractor', isLabor: false, quantityMode: 'fixed' },
+    ],
+    Exterior: [
+      { name: 'Exterior work area', quantity: null, unit: 'sf', unitPrice: 12, category: 'labor', isLabor: true, quantityMode: 'user_required', measurementPrompt: 'Enter exterior square footage or equivalent work area.' },
+      { name: 'Linear footage item', quantity: 0, unit: 'lf', unitPrice: 14, category: 'material', isLabor: false, quantityMode: 'calculated', measurementPrompt: 'Calculate linear footage from field measurement.' },
+      { name: 'Fasteners and hardware', quantity: 1, unit: 'ea', unitPrice: 185, category: 'material', isLabor: false, quantityMode: 'fixed' },
+    ],
+  };
+  return [...shared, ...(byCategory[category] || byCategory.Remodel)];
+}
+
+function generateStarterEstimateTemplates(): Template[] {
+  return Object.entries(starterTemplateNames).flatMap(([category, names]) => names.map((name, index) => {
+    const requiredItems = starterRequiredItems(category);
+    const optionalItems: TemplateItem[] = [
+      { name: 'Optional accessory or upgrade', description: 'Estimator can include if the current job needs it.', quantity: 0, unit: 'ea', unitPrice: 175, category: 'material', isLabor: false, quantityMode: 'optional', isOptional: true, clientVisible: false },
+      { name: 'Hidden condition allowance', description: 'Use only if inspection shows likely repairs.', quantity: 0, unit: 'ea', unitPrice: 650, category: 'other', isLabor: false, quantityMode: 'optional', isOptional: true, clientVisible: false },
+    ];
+    const measurementPrompts = requiredItems.map(item => item.measurementPrompt).filter(Boolean) as string[];
+    return {
+      id: uuidv4(),
+      name,
+      category,
+      description: `${name} starter template with editable scope reminders and quantity prompts.`,
+      type: 'estimate' as const,
+      scope: `${category} starter scope for ${name.toLowerCase()}. Copy into an estimate, then adjust quantities, units, materials, markup, visibility, and notes for the real job.`,
+      scopeSections: [
+        { name: 'Discovery and measurements', phase: 'Planning', description: 'Confirm dimensions, selections, access, protection, and hidden-condition risk.' },
+        { name: 'Core work', phase: 'Production', description: 'Required labor, materials, and trade allowances for this project type.' },
+        { name: 'Optional upgrades', phase: 'Alternates', description: 'Items to review with the client or keep internal until needed.' },
+      ],
+      laborAssumptions: requiredItems.filter(item => item.isLabor).map(item => item.name).join(', '),
+      materialAssumptions: requiredItems.filter(item => !item.isLabor).map(item => item.name).join(', '),
+      markupPercent: category === 'Remodel' || name.includes('Luxury') ? 25 : 20,
+      recommendedAssemblies: category === 'Bathroom' ? ['Toilet Hookup', 'Faucet Install - Bathroom', 'Paint - Walls'] : category === 'Kitchen' ? ['Cabinet Demo', 'Faucet Install - Kitchen', 'Light Fixture'] : category === 'Flooring' ? ['Flooring Demo - Carpet', 'Trim Package'] : category === 'Painting' ? ['Paint - Walls', 'Paint - Trim'] : category === 'Drywall' ? ['Drywall Patch', 'Drywall - Room Walls'] : category === 'Exterior' ? ['Trim Package', 'Paint - Walls'] : ['Room Demolition', 'Drywall - Room Walls', 'Paint - Walls'],
+      measurementPrompts,
+      requiredItems,
+      optionalItems,
+      clientFacingNotes: 'Final scope and pricing are subject to field measurements, selections, hidden conditions, and approved changes.',
+      internalEstimatorNotes: `Starter ${index + 1} in ${category}. Required quantity prompts must be resolved before sending.`,
+      createdAt: now,
+    };
+  }));
+}
 
 export const initialData: AppData = {
   customers: [
@@ -369,10 +458,7 @@ export const initialData: AppData = {
       { name: 'Appliance Allowance', quantity: 1, unit: 'ea', unitPrice: 3000, category: 'allowance' },
     ], createdAt: now },
   ],
-  templates: [
-    { id: uuidv4(), name: 'Kitchen Remodel Basic', type: 'estimate', scope: 'Complete kitchen remodel', laborAssumptions: 'Demo, drywall, electrical, plumbing, cabinets, countertops', materialAssumptions: 'Cabinets, countertops, flooring, fixtures', markupPercent: 20, items: [{ name: 'Demo', description: 'Remove existing cabinets, countertops', quantity: 1, unitPrice: 1500, category: 'Labor', isLabor: true }], createdAt: now },
-    { id: uuidv4(), name: 'Bathroom Remodel', type: 'estimate', scope: 'Full bathroom renovation', laborAssumptions: 'Demo, plumbing, electrical, tile, fixtures', materialAssumptions: 'Tile, vanity, fixtures, plumbing', markupPercent: 20, items: [], createdAt: now },
-  ],
+  templates: generateStarterEstimateTemplates(),
   projectTypeTemplates: [
     {
       id: uuidv4(),
