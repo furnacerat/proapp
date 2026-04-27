@@ -1,10 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
+import { dataService } from '../services/dataService';
+
+interface DataServiceStatus {
+  mode: 'local' | 'supabase';
+  supabaseConfigured: boolean;
+  isSyncing: boolean;
+  lastSyncAt?: string;
+  syncError?: string;
+}
 
 interface AppContextType {
   data: AppData;
   setData: React.Dispatch<React.SetStateAction<AppData>>;
+  dataServiceStatus: DataServiceStatus;
+  syncCoreDataToSupabase: () => Promise<boolean>;
+  importLocalDataToSupabase: () => Promise<boolean>;
   branding: BrandingSettings;
   updateBranding: (updates: Partial<BrandingSettings>) => void;
   smtpSettings: SmtpSettings;
@@ -179,8 +191,6 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'buildops_pro_data';
-
 const normalizeAppData = (raw: AppData): AppData => {
   const data = {
     ...raw,
@@ -265,20 +275,20 @@ const normalizeAppData = (raw: AppData): AppData => {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = dataService.local.getAppData();
     if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        return normalizeAppData(parsed);
-      } catch {
-        return normalizeAppData(generateCompleteSeedData());
-      }
+      return normalizeAppData(stored);
     }
     return normalizeAppData(generateCompleteSeedData());
   });
+  const [dataServiceStatus, setDataServiceStatus] = useState<DataServiceStatus>({
+    mode: dataService.mode,
+    supabaseConfigured: dataService.isSupabaseConfigured,
+    isSyncing: false,
+  });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    dataService.local.saveAppData(data);
   }, [data]);
 
   useEffect(() => {
@@ -334,6 +344,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.location.href = mailto;
     return false;
   };
+
+  const runSupabaseSync = async (syncer: () => Promise<void>): Promise<boolean> => {
+    setDataServiceStatus(prev => ({ ...prev, isSyncing: true, syncError: undefined }));
+    try {
+      await syncer();
+      setDataServiceStatus(prev => ({
+        ...prev,
+        isSyncing: false,
+        lastSyncAt: new Date().toISOString(),
+        syncError: undefined,
+      }));
+      return true;
+    } catch (error) {
+      setDataServiceStatus(prev => ({
+        ...prev,
+        isSyncing: false,
+        syncError: error instanceof Error ? error.message : 'Supabase sync failed',
+      }));
+      return false;
+    }
+  };
+
+  const syncCoreDataToSupabase = () => runSupabaseSync(() => dataService.syncCoreDataToSupabase(data));
+  const importLocalDataToSupabase = () => runSupabaseSync(() => dataService.importLocalDataToSupabase(data));
 
   // Apply branding to CSS variables globally for a premium feel
   useEffect(() => {
@@ -1693,6 +1727,9 @@ const approveChangeOrder = (id: string) => {
     <AppContext.Provider value={{
       data,
       setData,
+      dataServiceStatus,
+      syncCoreDataToSupabase,
+      importLocalDataToSupabase,
       branding,
       updateBranding,
       smtpSettings,

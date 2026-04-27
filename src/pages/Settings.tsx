@@ -1,12 +1,21 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 
-type SettingsTab = 'branding' | 'smart' | 'markups' | 'email' | 'smtp' | 'import';
+type SettingsTab = 'branding' | 'smart' | 'markups' | 'email' | 'smtp' | 'database' | 'import';
 
 export function Settings() {
-  const { branding, updateBranding, smtpSettings, updateSmtpSettings } = useApp();
+  const {
+    branding,
+    updateBranding,
+    smtpSettings,
+    updateSmtpSettings,
+    dataServiceStatus,
+    syncCoreDataToSupabase,
+    importLocalDataToSupabase,
+  } = useApp();
   const [activeTab, setActiveTab] = useState<SettingsTab>('branding');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [databaseMessage, setDatabaseMessage] = useState('');
 
   const setBrand = (key: keyof typeof branding, value: any) => {
     updateBranding({ [key]: value } as any);
@@ -55,8 +64,19 @@ export function Settings() {
     { id: 'markups', label: 'Default Markups' },
     { id: 'email', label: 'Email & Terms' },
     { id: 'smtp', label: 'SMTP' },
+    { id: 'database', label: 'Database' },
     { id: 'import', label: 'Import/Export' },
   ];
+
+  const runCoreSync = async () => {
+    const ok = await syncCoreDataToSupabase();
+    setDatabaseMessage(ok ? 'Customers, estimates, and jobs were synced to Supabase.' : 'Supabase sync failed. Check configuration and schema.');
+  };
+
+  const runFullImport = async () => {
+    const ok = await importLocalDataToSupabase();
+    setDatabaseMessage(ok ? 'Local app data was imported to Supabase. Local storage was left untouched.' : 'Supabase import failed. Check configuration and schema.');
+  };
 
   return (
     <div className="page-content">
@@ -291,6 +311,45 @@ export function Settings() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'database' && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h3 className="card-title">Supabase Data Service</h3>
+              <p className="text-sm text-muted">Local storage remains active. Supabase is an optional sync target until you are ready to switch modes.</p>
+            </div>
+            <span className={`badge ${dataServiceStatus.supabaseConfigured ? 'badge-green' : 'badge-gray'}`}>
+              {dataServiceStatus.supabaseConfigured ? 'Configured' : 'Local Only'}
+            </span>
+          </div>
+          <div className="card-body">
+            <div className="grid-2">
+              <div className="smart-setting-tile">
+                <strong>Current Storage</strong>
+                <span>{dataServiceStatus.mode === 'supabase' ? 'Supabase configured, local storage preserved' : 'Local storage only'}</span>
+              </div>
+              <div className="smart-setting-tile">
+                <strong>Last Sync</strong>
+                <span>{dataServiceStatus.lastSyncAt ? new Date(dataServiceStatus.lastSyncAt).toLocaleString() : 'Not synced yet'}</span>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button className="btn btn-primary" onClick={runCoreSync} disabled={!dataServiceStatus.supabaseConfigured || dataServiceStatus.isSyncing}>
+                {dataServiceStatus.isSyncing ? 'Syncing...' : 'Sync Customers, Estimates, Jobs'}
+              </button>
+              <button className="btn btn-secondary" onClick={runFullImport} disabled={!dataServiceStatus.supabaseConfigured || dataServiceStatus.isSyncing}>
+                Import Local Data to Supabase
+              </button>
+            </div>
+            <p className="text-sm text-muted mt-2">
+              Create the Supabase tables with <code>supabase/schema.sql</code>, then add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to your environment.
+            </p>
+            {databaseMessage && <p className="text-sm mt-2">{databaseMessage}</p>}
+            {dataServiceStatus.syncError && <p className="text-sm text-danger mt-2">{dataServiceStatus.syncError}</p>}
           </div>
         </div>
       )}
