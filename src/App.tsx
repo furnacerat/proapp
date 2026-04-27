@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { ToastProvider } from './components/common/Toast';
 import { Layout } from './components/layout/Layout';
+import { DailyCommandCenter } from './pages/DailyCommandCenter';
 import { Dashboard } from './pages/Dashboard';
 import { Jobs } from './pages/Jobs';
 import { JobDetail } from './pages/JobDetail';
@@ -33,7 +34,8 @@ function App() {
         <ToastProvider>
           <Layout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<DailyCommandCenter />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/jobs" element={<Jobs />} />
               <Route path="/jobs/:id" element={<JobDetail />} />
               <Route path="/estimates" element={<EstimatesDashboard />} />

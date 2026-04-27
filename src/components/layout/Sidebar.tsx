@@ -19,6 +19,7 @@ import {
   User,
   Truck,
   ShoppingCart,
+  SunMedium,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -80,6 +81,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="nav-section">
           <div className="nav-section-title">Operations</div>
           <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose} end>
+            <SunMedium size={20} />
+            <span>Today</span>
+          </NavLink>
+          <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
             <LayoutDashboard size={20} />
             <span>Dashboard</span>
           </NavLink>
