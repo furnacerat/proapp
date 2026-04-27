@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { dataService } from '../services/dataService';
 
 type SettingsTab = 'branding' | 'smart' | 'markups' | 'email' | 'smtp' | 'database' | 'import';
 
@@ -12,10 +13,13 @@ export function Settings() {
     dataServiceStatus,
     syncCoreDataToSupabase,
     importLocalDataToSupabase,
+    data,
   } = useApp();
   const [activeTab, setActiveTab] = useState<SettingsTab>('branding');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [databaseMessage, setDatabaseMessage] = useState('');
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const migrationPreview = dataService.previewLocalMigration(data);
 
   const setBrand = (key: keyof typeof branding, value: any) => {
     updateBranding({ [key]: value } as any);
@@ -76,6 +80,11 @@ export function Settings() {
   const runFullImport = async () => {
     const ok = await importLocalDataToSupabase();
     setDatabaseMessage(ok ? 'Local app data was imported to Supabase. Local storage was left untouched.' : 'Supabase import failed. Check configuration and schema.');
+  };
+
+  const testDatabaseConnection = async () => {
+    const result = await dataService.testConnection();
+    setConnectionMessage(result.message);
   };
 
   return (
@@ -338,6 +347,9 @@ export function Settings() {
               </div>
             </div>
             <div className="flex gap-2 mt-4">
+              <button className="btn btn-secondary" onClick={testDatabaseConnection}>
+                Test Connection
+              </button>
               <button className="btn btn-primary" onClick={runCoreSync} disabled={!dataServiceStatus.supabaseConfigured || dataServiceStatus.isSyncing}>
                 {dataServiceStatus.isSyncing ? 'Syncing...' : 'Sync Customers, Estimates, Jobs'}
               </button>
@@ -346,10 +358,19 @@ export function Settings() {
               </button>
             </div>
             <p className="text-sm text-muted mt-2">
-              Create the Supabase tables with <code>supabase/schema.sql</code>, then add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to your environment.
+              Create the Supabase tables with <code>supabase/schema.sql</code>, then add <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code>, and optional <code>VITE_STORAGE_MODE</code> to your environment.
             </p>
+            {connectionMessage && <p className="text-sm mt-2">{connectionMessage}</p>}
             {databaseMessage && <p className="text-sm mt-2">{databaseMessage}</p>}
             {dataServiceStatus.syncError && <p className="text-sm text-danger mt-2">{dataServiceStatus.syncError}</p>}
+            <div className="smart-settings-grid mt-4">
+              {migrationPreview.map(item => (
+                <div className="smart-setting-tile" key={item.table}>
+                  <strong>{item.table}</strong>
+                  <span>{item.count} record{item.count === 1 ? '' : 's'} ready</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

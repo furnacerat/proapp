@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { dataService } from '../services/dataService';
 import type { Customer, Estimate, Invoice, Job } from '../data/types';
 import {
   Activity,
@@ -86,14 +87,12 @@ const getInvoiceBalance = (invoice: Invoice, payments: { invoiceId: string; amou
 
 export function Customers() {
   const {
-    customers,
+    customers: contextCustomers,
+    setData,
     estimates,
     jobs,
     invoices,
     payments,
-    addCustomer,
-    updateCustomer,
-    deleteCustomer,
     convertEstimateToJob,
     getJobProgress,
     getJobProfit,
@@ -102,8 +101,11 @@ export function Customers() {
   const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>(contextCustomers);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [customerLoadError, setCustomerLoadError] = useState('');
   const [segment, setSegment] = useState<SegmentKey>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(customers[0]?.id || null);
+  const [selectedId, setSelectedId] = useState<string | null>(contextCustomers[0]?.id || null);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [noteDraft, setNoteDraft] = useState('');
   const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
@@ -114,6 +116,29 @@ export function Customers() {
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '', address: '', notes: ''
   });
+
+  const refreshCustomers = async () => {
+    setIsLoadingCustomers(true);
+    setCustomerLoadError('');
+    try {
+      const loaded = await dataService.customers.getAll();
+      setCustomers(loaded);
+      setSelectedId(current => current && loaded.some(customer => customer.id === current)
+        ? current
+        : loaded[0]?.id || null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load customers';
+      setCustomerLoadError(message);
+      setCustomers(contextCustomers);
+      showToast(message, 'error');
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshCustomers();
+  }, []);
 
   const summaries = useMemo<CustomerSummary[]>(() => customers.map(customer => {
     const customerEstimates = estimates.filter(estimate => estimate.customerId === customer.id);
@@ -183,17 +208,33 @@ export function Customers() {
     return selectedCustomer.notes.split('\n').map(note => note.trim()).filter(Boolean);
   }, [selectedCustomer]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name) { showToast('Enter customer name', 'error'); return; }
 
-    if (editingCustomer) {
-      updateCustomer(editingCustomer.id, form);
-      showToast('Customer updated');
-      setSelectedId(editingCustomer.id);
-    } else {
-      const id = addCustomer(form);
-      showToast('Customer created');
-      setSelectedId(id);
+    try {
+      if (editingCustomer) {
+        const updated = await dataService.customers.update(editingCustomer.id, form);
+        if (!updated) throw new Error('Customer was not found.');
+        setCustomers(prev => prev.map(customer => customer.id === editingCustomer.id ? updated : customer));
+        setData(prev => ({ ...prev, customers: prev.customers.map(customer => customer.id === editingCustomer.id ? updated : customer) }));
+        showToast('Customer updated');
+        setSelectedId(editingCustomer.id);
+      } else {
+        const timestamp = new Date().toISOString();
+        const created = await dataService.customers.create({
+          id: crypto.randomUUID(),
+          ...form,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+        setCustomers(prev => [...prev, created]);
+        setData(prev => ({ ...prev, customers: [...prev.customers, created] }));
+        showToast('Customer created');
+        setSelectedId(created.id);
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Customer save failed', 'error');
+      return;
     }
 
     setForm({ name: '', company: '', email: '', phone: '', address: '', notes: '' });
@@ -214,11 +255,17 @@ export function Customers() {
     setShowModal(true);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      deleteCustomer(deleteId);
-      showToast('Customer deleted');
-      setDeleteId(null);
+      try {
+        await dataService.customers.delete(deleteId);
+        setCustomers(prev => prev.filter(customer => customer.id !== deleteId));
+        setData(prev => ({ ...prev, customers: prev.customers.filter(customer => customer.id !== deleteId) }));
+        showToast('Customer deleted');
+        setDeleteId(null);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Customer delete failed', 'error');
+      }
     }
   };
 
@@ -232,7 +279,13 @@ export function Customers() {
     if (!selectedCustomer || !noteDraft.trim()) return;
     const timestamp = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
     const nextNotes = [selectedCustomer.notes, `[${timestamp}] ${noteDraft.trim()}`].filter(Boolean).join('\n');
-    updateCustomer(selectedCustomer.id, { notes: nextNotes });
+    dataService.customers.update(selectedCustomer.id, { notes: nextNotes })
+      .then(updated => {
+        if (!updated) return;
+        setCustomers(prev => prev.map(customer => customer.id === selectedCustomer.id ? updated : customer));
+        setData(prev => ({ ...prev, customers: prev.customers.map(customer => customer.id === selectedCustomer.id ? updated : customer) }));
+      })
+      .catch(error => showToast(error instanceof Error ? error.message : 'Note save failed', 'error'));
     setNoteDraft('');
     showToast('Note added');
   };
@@ -240,7 +293,13 @@ export function Customers() {
   const handleUpdateNote = (index: number) => {
     if (!selectedCustomer || !editingNoteText.trim()) return;
     const nextNotes = noteEntries.map((note, noteIndex) => noteIndex === index ? editingNoteText.trim() : note).join('\n');
-    updateCustomer(selectedCustomer.id, { notes: nextNotes });
+    dataService.customers.update(selectedCustomer.id, { notes: nextNotes })
+      .then(updated => {
+        if (!updated) return;
+        setCustomers(prev => prev.map(customer => customer.id === selectedCustomer.id ? updated : customer));
+        setData(prev => ({ ...prev, customers: prev.customers.map(customer => customer.id === selectedCustomer.id ? updated : customer) }));
+      })
+      .catch(error => showToast(error instanceof Error ? error.message : 'Note update failed', 'error'));
     setEditingNoteIndex(null);
     setEditingNoteText('');
     showToast('Note updated');
@@ -248,7 +307,13 @@ export function Customers() {
 
   const handleDeleteNote = (index: number) => {
     if (!selectedCustomer) return;
-    updateCustomer(selectedCustomer.id, { notes: noteEntries.filter((_, noteIndex) => noteIndex !== index).join('\n') });
+    dataService.customers.update(selectedCustomer.id, { notes: noteEntries.filter((_, noteIndex) => noteIndex !== index).join('\n') })
+      .then(updated => {
+        if (!updated) return;
+        setCustomers(prev => prev.map(customer => customer.id === selectedCustomer.id ? updated : customer));
+        setData(prev => ({ ...prev, customers: prev.customers.map(customer => customer.id === selectedCustomer.id ? updated : customer) }));
+      })
+      .catch(error => showToast(error instanceof Error ? error.message : 'Note delete failed', 'error'));
     showToast('Note deleted');
   };
 
@@ -261,12 +326,53 @@ export function Customers() {
   const logContact = () => {
     if (!selectedCustomer) return;
     const timestamp = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-    updateCustomer(selectedCustomer.id, {
+    dataService.customers.update(selectedCustomer.id, {
       notes: [selectedCustomer.notes, `[${timestamp}] Contact logged with ${selectedCustomer.name}.`].filter(Boolean).join('\n')
-    });
+    })
+      .then(updated => {
+        if (!updated) return;
+        setCustomers(prev => prev.map(customer => customer.id === selectedCustomer.id ? updated : customer));
+        setData(prev => ({ ...prev, customers: prev.customers.map(customer => customer.id === selectedCustomer.id ? updated : customer) }));
+      })
+      .catch(error => showToast(error instanceof Error ? error.message : 'Contact log failed', 'error'));
     showToast('Contact logged');
     setActiveTab('notes');
   };
+
+  if (isLoadingCustomers) {
+    return (
+      <div>
+        <div className="customers-page-header page-header">
+          <div>
+            <div className="page-eyebrow">CRM Command Center</div>
+            <h1 className="page-title">Customers</h1>
+            <p className="page-subtitle">Manage clients, job history, estimates, invoices, and contact details in one place.</p>
+          </div>
+        </div>
+        <div className="customers-page page-content">
+          <div className="card"><div className="card-body">Loading customers...</div></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (customerLoadError) {
+    return (
+      <div>
+        <div className="customers-page-header page-header">
+          <div>
+            <div className="page-eyebrow">CRM Command Center</div>
+            <h1 className="page-title">Customers</h1>
+            <p className="page-subtitle">Manage clients, job history, estimates, invoices, and contact details in one place.</p>
+          </div>
+          <button className="btn btn-secondary" onClick={refreshCustomers}>Retry</button>
+        </div>
+        <div className="customers-page page-content">
+          <div className="card"><div className="card-body text-danger">{customerLoadError}</div></div>
+        </div>
+      </div>
+    );
+  }
 
   if (customers.length === 0) {
     return (
