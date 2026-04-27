@@ -1,40 +1,52 @@
-create table if not exists public.customers (
-  id text primary key,
-  payload jsonb not null default '{}'::jsonb,
-  name text,
-  status text,
-  user_id uuid null,
-  customer_id text null,
-  estimate_id text null,
-  job_id text null,
-  task_id text null,
-  invoice_id text null,
-  supplier_id text null,
-  allowance_id text null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.estimates (like public.customers including all);
-create table if not exists public.estimate_items (like public.customers including all);
-create table if not exists public.jobs (like public.customers including all);
-create table if not exists public.tasks (like public.customers including all);
-create table if not exists public.expenses (like public.customers including all);
-create table if not exists public.invoices (like public.customers including all);
-create table if not exists public.payments (like public.customers including all);
-create table if not exists public.time_entries (like public.customers including all);
-create table if not exists public.shopping_lists (like public.customers including all);
-create table if not exists public.shopping_list_items (like public.customers including all);
-create table if not exists public.material_orders (like public.customers including all);
-create table if not exists public.material_order_items (like public.customers including all);
-create table if not exists public.suppliers (like public.customers including all);
-create table if not exists public.allowances (like public.customers including all);
-create table if not exists public.allowance_selections (like public.customers including all);
-create table if not exists public.workers (like public.customers including all);
-create table if not exists public.receipts (like public.customers including all);
-create table if not exists public.job_photos (like public.customers including all);
-create table if not exists public.notes (like public.customers including all);
-create table if not exists public.activity_log (like public.customers including all);
+do $$
+declare
+  table_name text;
+  table_names text[] := array[
+    'customers',
+    'estimates',
+    'estimate_items',
+    'jobs',
+    'tasks',
+    'expenses',
+    'invoices',
+    'payments',
+    'time_entries',
+    'shopping_lists',
+    'shopping_list_items',
+    'material_orders',
+    'material_order_items',
+    'suppliers',
+    'allowances',
+    'allowance_selections',
+    'workers',
+    'receipts',
+    'job_photos',
+    'notes',
+    'activity_log'
+  ];
+begin
+  foreach table_name in array table_names loop
+    execute format(
+      'create table if not exists public.%I (
+        id text primary key,
+        payload jsonb not null default ''{}''::jsonb,
+        name text,
+        status text,
+        user_id uuid null,
+        customer_id text null,
+        estimate_id text null,
+        job_id text null,
+        task_id text null,
+        invoice_id text null,
+        supplier_id text null,
+        allowance_id text null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )',
+      table_name
+    );
+  end loop;
+end $$;
 
 create index if not exists customers_customer_id_idx on public.customers (customer_id);
 create index if not exists estimates_customer_id_idx on public.estimates (customer_id);
