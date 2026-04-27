@@ -292,6 +292,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data]);
 
   useEffect(() => {
+    if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured) return;
+    let cancelled = false;
+    Promise.all([
+      dataService.customers.getAll(),
+      dataService.estimates.getAll(),
+      dataService.jobs.getAll(),
+    ])
+      .then(([customers, estimates, jobs]) => {
+        if (cancelled) return;
+        setData(prev => ({
+          ...prev,
+          customers: customers.length ? customers : prev.customers,
+          estimates: estimates.length ? estimates : prev.estimates,
+          jobs: jobs.length ? jobs : prev.jobs,
+        }));
+      })
+      .catch(error => {
+        setDataServiceStatus(prev => ({
+          ...prev,
+          syncError: error instanceof Error ? error.message : 'Supabase load failed',
+        }));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     generateAlerts();
   }, [data.jobs, data.tasks, data.invoices, data.payments]);
 
@@ -528,6 +554,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: now,
     };
     setData(prev => ({ ...prev, jobs: [...prev.jobs, newJob], tasks: [...prev.tasks, starterTask] }));
+    void dataService.jobs.create(newJob).catch(() => undefined);
+    void dataService.tasks.create(starterTask).catch(() => undefined);
     return id;
   };
 
@@ -536,6 +564,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       jobs: prev.jobs.map(j => j.id === id ? { ...j, ...updates, updatedAt: new Date().toISOString() } : j),
     }));
+    void dataService.jobs.update(id, updates).catch(() => undefined);
   };
 
   const deleteJob = (id: string) => {
@@ -555,6 +584,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       jobIssues: (prev.jobIssues || []).filter(i => i.jobId !== id),
       fileAttachments: (prev.fileAttachments || []).filter(f => f.jobId !== id),
     }));
+    void dataService.jobs.delete(id).catch(() => undefined);
   };
 
   const duplicateJob = (id: string) => {
@@ -1168,6 +1198,10 @@ const approveChangeOrder = (id: string) => {
       taxable: estimate.taxable || 'none'
     };
     setData(prev => ({ ...prev, estimates: [...prev.estimates, newEstimate] }));
+    void dataService.estimates.createWithItems(newEstimate, [
+      ...(newEstimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+      ...(newEstimate.sections || []).flatMap(section => section.lineItems || []),
+    ]).catch(() => undefined);
     return id;
   };
 
@@ -1182,6 +1216,16 @@ const approveChangeOrder = (id: string) => {
         estimates: prev.estimates.map(e => e.id === id ? { ...e, ...updates, ...totals, updatedAt: new Date().toISOString() } : e),
       };
     });
+    const existing = data.estimates.find(e => e.id === id);
+    if (existing) {
+      const merged = { ...existing, ...updates };
+      const totals = calculateEstimateTotals(merged);
+      const updated = { ...merged, ...totals, updatedAt: new Date().toISOString() };
+      void dataService.estimates.updateWithItems(id, updated, [
+        ...(updated.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+        ...(updated.sections || []).flatMap(section => section.lineItems || []),
+      ]).catch(() => undefined);
+    }
   };
 
   const duplicateEstimate = (id: string) => {
@@ -1221,6 +1265,7 @@ const approveChangeOrder = (id: string) => {
 
   const deleteEstimate = (id: string) => {
     setData(prev => ({ ...prev, estimates: prev.estimates.filter(e => e.id !== id) }));
+    void dataService.estimates.delete(id).catch(() => undefined);
   };
 
   const convertEstimateToJob = (estimateId: string, options?: { startDate?: string; dueDate?: string; copyLineItems?: boolean; copyPricing?: boolean; copyNotes?: boolean }) => {
@@ -1247,6 +1292,7 @@ const approveChangeOrder = (id: string) => {
     });
     
     updateEstimate(estimateId, { status: 'converted', convertedToJobId: jobId });
+    void dataService.jobs.copyEstimateItemsToJob(jobId, estimateId).catch(() => undefined);
     (estimate.clientAllowances || []).forEach(allowance => {
       addAllowance({
         ...allowance,

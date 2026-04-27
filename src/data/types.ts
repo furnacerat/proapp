@@ -232,7 +232,7 @@ export type LineItemQuantityMode = 'fixed' | 'user_required' | 'calculated' | 'o
 
 export interface EstimateLineItem {
   id: string;
-  sourceType?: 'manual' | 'priceBook' | 'assembly' | 'template';
+  sourceType?: 'manual' | 'priceBook' | 'assembly' | 'template' | 'smartScope';
   sourceId?: string;
   originTemplateId?: string;
   originAssemblyId?: string;

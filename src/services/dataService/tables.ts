@@ -3,6 +3,7 @@ export const TABLES = {
   estimates: 'estimates',
   estimateItems: 'estimate_items',
   jobs: 'jobs',
+  jobItems: 'job_items',
   tasks: 'tasks',
   expenses: 'expenses',
   invoices: 'invoices',
@@ -21,4 +22,3 @@ export const TABLES = {
   notes: 'notes',
   activityLog: 'activity_log',
 } as const;
-

@@ -7,14 +7,42 @@ type MigrationKey = keyof typeof TABLES;
 const collectionFromData = (data: AppData, key: MigrationKey): RecordWithId[] => {
   if (key === 'estimateItems') {
     return data.estimates.flatMap(estimate =>
-      (estimate.sections || []).flatMap(section =>
-        section.lineItems.map(item => ({
-          ...item,
-          estimateId: estimate.id,
-          customerId: estimate.customerId,
-        })),
-      ),
+      [
+        ...(estimate.sections || []).flatMap(section => section.lineItems || []),
+        ...(estimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+      ].map(item => ({
+        ...item,
+        estimateId: estimate.id,
+        customerId: estimate.customerId,
+      })),
     ) as RecordWithId[];
+  }
+
+  if (key === 'jobItems') {
+    return data.jobs.flatMap(job => {
+      const estimate = job.estimateId ? data.estimates.find(item => item.id === job.estimateId) : undefined;
+      if (!estimate) return [];
+      const estimateItems = [
+        ...(estimate.sections || []).flatMap(section => section.lineItems || []),
+        ...(estimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+      ];
+      return estimateItems.map(item => ({
+        id: `${job.id}-${item.id}`,
+        jobId: job.id,
+        estimateItemId: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        type: item.type || (item.isLabor ? 'labor' : 'other'),
+        quantity: item.quantity,
+        unit: item.unit,
+        estimatedCost: item.costTotal ?? item.total ?? 0,
+        actualCost: 0,
+        status: 'planned',
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+      }));
+    }) as RecordWithId[];
   }
 
   if (key === 'shoppingListItems') {
@@ -75,4 +103,3 @@ export const importLocalDataToSupabase = async (data: AppData) => {
     await upsertSupabaseRecords(TABLES[key], collectionFromData(data, key));
   }
 };
-
