@@ -9684,11 +9684,11 @@ body {
 }
 
 .time-table tr {
-  transition: transform 0.18s ease;
+  transition: none;
 }
 
 .time-table tbody tr:hover {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .time-table tr.is-overtime td {
@@ -9717,10 +9717,6 @@ body {
   margin-top: 6px;
   color: var(--text-muted);
   font-size: 0.74rem;
-}
-
-.time-table tbody tr:hover .time-row-detail {
-  display: block;
 }
 
 .time-inline-pair {
@@ -10502,6 +10498,7 @@ body {
   color: #d8e6f5;
   border-top-color: rgba(148, 163, 184, 0.2);
   border-bottom-color: rgba(148, 163, 184, 0.2);
+  transition: background 0.16s ease, border-color 0.16s ease;
 }
 
 .time-table td:first-child {
@@ -10537,6 +10534,10 @@ body {
 
 .time-row-detail {
   margin-top: 9px;
+}
+
+.time-table tbody tr:hover .time-row-detail {
+  display: none;
 }
 
 .time-inline-pair {
