@@ -67,8 +67,16 @@ export interface Material {
   category: string;
   unit: string;
   unitPrice: number;
+  basePrice?: number;
   supplier?: string;
   sku?: string;
+  modelNumber?: string;
+  productUrl?: string;
+  lastUpdated?: string;
+  pricingSource?: 'manual' | 'serpapi' | 'rainforest' | 'apify' | 'cache' | 'estimated';
+  pricingVerified?: boolean;
+  priceEstimateOnly?: boolean;
+  preferredStoreLocation?: string;
   isActive: boolean;
 }
 
@@ -258,6 +266,10 @@ export interface EstimateLineItem {
     unitPrice?: number;
     name?: string;
     updatedAt?: string;
+    pricingSource?: string;
+    pricingVerified?: boolean;
+    priceEstimateOnly?: boolean;
+    productUrl?: string;
   };
   isOptional?: boolean;
   isExcluded?: boolean;

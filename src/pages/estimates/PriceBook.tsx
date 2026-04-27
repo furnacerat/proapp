@@ -7,9 +7,18 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
 import {
   Plus, Edit, Trash2, Hammer, Package, DollarSign, Search, Filter,
-  Clock, TrendingUp, Zap, ChevronRight, Boxes, Users, AlertTriangle,
+  Clock, TrendingUp, Zap, ChevronRight, Boxes, Users, AlertTriangle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import type { LaborRate, Material } from '../../data/types';
+import {
+  applyPricingResult,
+  fetchLatestMaterialPrice,
+  getPriceAgeDays,
+  getPricingPreferences,
+  isPriceOutdated,
+  savePricingPreferences,
+  type PricingPreferences,
+} from '../../utils/pricing';
 
 type PriceTab = 'all' | 'labor' | 'materials' | 'equipment' | 'subcontractors';
 type SelectedPriceItem =
@@ -42,6 +51,8 @@ export function PriceBook() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<'labor' | 'material'>('labor');
   const [selectedItem, setSelectedItem] = useState<SelectedPriceItem>(laborRates[0] ? { type: 'labor', item: laborRates[0] } : null);
+  const [pricingPrefs, setPricingPrefs] = useState<PricingPreferences>(() => getPricingPreferences());
+  const [updatingPrices, setUpdatingPrices] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -58,6 +69,9 @@ export function PriceBook() {
     unitPrice: '0',
     supplier: '',
     sku: '',
+    modelNumber: '',
+    productUrl: '',
+    lastUpdated: '',
     isActive: true,
   });
 
@@ -113,8 +127,16 @@ export function PriceBook() {
       category: materialForm.category,
       unit: materialForm.unit,
       unitPrice: parseFloat(materialForm.unitPrice) || 0,
+      basePrice: editingMaterial?.basePrice ?? (parseFloat(materialForm.unitPrice) || 0),
       supplier: materialForm.supplier,
       sku: materialForm.sku,
+      modelNumber: materialForm.modelNumber,
+      productUrl: materialForm.productUrl,
+      lastUpdated: materialForm.lastUpdated || editingMaterial?.lastUpdated,
+      pricingSource: editingMaterial?.pricingSource || 'manual' as const,
+      pricingVerified: editingMaterial?.pricingVerified || false,
+      priceEstimateOnly: editingMaterial?.priceEstimateOnly || false,
+      preferredStoreLocation: pricingPrefs.preferredStoreLocation,
       isActive: materialForm.isActive,
     };
 
@@ -130,7 +152,7 @@ export function PriceBook() {
 
     setShowMaterialModal(false);
     setEditingMaterial(null);
-    setMaterialForm({ name: '', category: '', unit: 'ea', unitPrice: '0', supplier: '', sku: '', isActive: true });
+    setMaterialForm({ name: '', category: '', unit: 'ea', unitPrice: '0', supplier: '', sku: '', modelNumber: '', productUrl: '', lastUpdated: '', isActive: true });
   };
 
   const handleEditMaterial = (material: Material) => {
@@ -142,6 +164,9 @@ export function PriceBook() {
       unitPrice: material.unitPrice.toString(),
       supplier: material.supplier || '',
       sku: material.sku || '',
+      modelNumber: material.modelNumber || '',
+      productUrl: material.productUrl || '',
+      lastUpdated: material.lastUpdated || '',
       isActive: material.isActive,
     });
     setShowMaterialModal(true);
@@ -237,6 +262,43 @@ export function PriceBook() {
     showToast('Starter labor rates imported');
   };
 
+  const savePrefs = (updates: Partial<PricingPreferences>) => {
+    const next = { ...pricingPrefs, ...updates };
+    setPricingPrefs(next);
+    savePricingPreferences(next);
+  };
+
+  const updateMaterialPrice = async (material: Material, force = true) => {
+    setUpdatingPrices(prev => [...prev, material.id]);
+    try {
+      const result = await fetchLatestMaterialPrice(material, pricingPrefs, force);
+      const updates = applyPricingResult(material, result);
+      updateMaterial(material.id, updates);
+      if (selectedItem?.type === 'material' && selectedItem.item.id === material.id) {
+        setSelectedItem({ type: 'material', item: { ...material, ...updates } });
+      }
+      showToast(result.estimateOnly ? 'Estimated pricing refreshed' : 'Live pricing updated');
+    } catch {
+      showToast('Pricing update failed', 'error');
+    } finally {
+      setUpdatingPrices(prev => prev.filter(id => id !== material.id));
+    }
+  };
+
+  const updateAllMaterialPricing = async () => {
+    const targets = pricingPrefs.autoRefreshWeekly
+      ? filteredMaterials.filter(material => isPriceOutdated(material, 7))
+      : filteredMaterials;
+    if (targets.length === 0) {
+      showToast('All visible prices are current');
+      return;
+    }
+    for (const material of targets.slice(0, 20)) {
+      await updateMaterialPrice(material, !pricingPrefs.autoRefreshWeekly);
+    }
+    showToast(`Pricing checked for ${Math.min(targets.length, 20)} items`);
+  };
+
   return (
     <div className="pricebook-page">
       <div className="pricebook-shell">
@@ -252,6 +314,7 @@ export function PriceBook() {
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search labor, materials, trades..." />
             </div>
             <button className={`pricebook-filter-btn ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}><Filter size={17} /> Filter</button>
+            <button className="pricebook-filter-btn" onClick={updateAllMaterialPricing}><RefreshCw size={17} /> Update Pricing</button>
             <button className="pricebook-primary-btn" onClick={() => activeTab === 'materials' || activeTab === 'equipment' ? setShowMaterialModal(true) : setShowModal(true)}>
               <Plus size={18} /> {activeTab === 'materials' || activeTab === 'equipment' ? 'Add Item' : 'Add Rate'}
             </button>
@@ -266,12 +329,24 @@ export function PriceBook() {
         </div>
 
         {showFilters && (
-          <div className="pricebook-tabs">
-            {tabs.map(tab => (
-              <button key={tab.id} className={`pricebook-tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>
-                {tab.label}<span>{tab.count}</span>
-              </button>
-            ))}
+          <div className="pricebook-filter-stack">
+            <div className="pricebook-tabs">
+              {tabs.map(tab => (
+                <button key={tab.id} className={`pricebook-tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>
+                  {tab.label}<span>{tab.count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="pricebook-pricing-controls">
+              <select value={pricingPrefs.provider} onChange={e => savePrefs({ provider: e.target.value as PricingPreferences['provider'] })}>
+                <option value="serpapi">SerpApi</option>
+                <option value="rainforest">Rainforest API</option>
+                <option value="apify">Apify Scraper</option>
+              </select>
+              <input value={pricingPrefs.preferredSupplier} onChange={e => savePrefs({ preferredSupplier: e.target.value })} placeholder="Preferred supplier" />
+              <input value={pricingPrefs.preferredStoreLocation} onChange={e => savePrefs({ preferredStoreLocation: e.target.value })} placeholder="Store location" />
+              <label><input type="checkbox" checked={pricingPrefs.autoRefreshWeekly} onChange={e => savePrefs({ autoRefreshWeekly: e.target.checked })} /> Weekly auto-refresh</label>
+            </div>
           </div>
         )}
 
@@ -320,18 +395,24 @@ export function PriceBook() {
 
               {showMaterialTable && (
                 <div className="pricebook-table-card">
-                  <div className="pricebook-material-head">
-                    <span>Item</span><span>Category</span><span>Unit</span><span>Unit Price</span><span>Supplier</span><span>Actions</span>
+                  <div className="pricebook-material-head pricebook-live-material-head">
+                    <span>Item</span><span>Category</span><span>Unit</span><span>Unit Price</span><span>Supplier</span><span>Last Updated</span><span>Actions</span>
                   </div>
                   <div className="pricebook-table-body">
                     {tableMaterials.map(material => (
-                      <button key={material.id} className={`pricebook-row pricebook-material-row ${selectedItem?.type === 'material' && selectedItem.item.id === material.id ? 'selected' : ''}`} onClick={() => setSelectedItem({ type: 'material', item: material })}>
+                      <button key={material.id} className={`pricebook-row pricebook-material-row pricebook-live-material-row ${selectedItem?.type === 'material' && selectedItem.item.id === material.id ? 'selected' : ''}`} onClick={() => setSelectedItem({ type: 'material', item: material })}>
                         <span className="pricebook-row-main"><span className="pricebook-thumb"><Boxes size={18} /></span><strong>{material.name}</strong></span>
                         <span><em className="pricebook-badge">{material.category || 'Material'}</em></span>
                         <span>{material.unit}</span>
                         <span>{formatCurrency(material.unitPrice)}</span>
                         <span>{material.supplier || '-'}</span>
+                        <span>
+                          <em className={`pricebook-price-status ${isPriceOutdated(material) ? 'outdated' : material.priceEstimateOnly ? 'estimate' : 'fresh'}`}>
+                            {material.lastUpdated ? `${getPriceAgeDays(material.lastUpdated)}d ago` : 'No update'}
+                          </em>
+                        </span>
                         <span className="pricebook-row-actions" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => updateMaterialPrice(material)} disabled={updatingPrices.includes(material.id)} title="Update pricing"><RefreshCw size={14} /></button>
                           <button onClick={() => handleEditMaterial(material)}><Edit size={14} /></button>
                           <button onClick={() => openDelete('material', material.id)}><Trash2 size={14} /></button>
                         </span>
@@ -368,14 +449,24 @@ export function PriceBook() {
                         <div><span>Unit</span><strong>{selectedItem.item.unit}</strong></div>
                         <div><span>Supplier</span><strong>{selectedItem.item.supplier || '-'}</strong></div>
                         <div><span>Status</span><strong>{selectedItem.item.isActive ? 'Active' : 'Inactive'}</strong></div>
+                        <div><span>SKU / Model</span><strong>{selectedItem.item.sku || selectedItem.item.modelNumber || '-'}</strong></div>
+                        <div><span>Last updated</span><strong>{selectedItem.item.lastUpdated ? `${getPriceAgeDays(selectedItem.item.lastUpdated)} days ago` : 'Never'}</strong></div>
                       </>
                     )}
                   </div>
                   <div className="pricebook-detail-actions">
                     <button className="pricebook-secondary-btn" onClick={() => selectedItem.type === 'labor' ? handleEditRate(selectedItem.item) : handleEditMaterial(selectedItem.item)}><Edit size={16} /> Edit</button>
+                    {selectedItem.type === 'material' && <button className="pricebook-secondary-btn" onClick={() => updateMaterialPrice(selectedItem.item)}><RefreshCw size={16} /> Update Pricing</button>}
+                    {selectedItem.type === 'material' && selectedItem.item.productUrl && <a className="pricebook-secondary-btn" href={selectedItem.item.productUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Product</a>}
                     <button className="pricebook-danger-btn" onClick={() => openDelete(selectedItem.type === 'labor' ? 'labor' : 'material', selectedItem.item.id)}><Trash2 size={16} /> Delete</button>
                     <Link to="/estimates/new" className="pricebook-primary-btn"><Plus size={16} /> Apply to Estimate</Link>
                   </div>
+                  {selectedItem.type === 'material' && isPriceOutdated(selectedItem.item) && (
+                    <div className="pricebook-warning"><AlertTriangle size={16} /> Price outdated. Refresh before using this item in a new estimate.</div>
+                  )}
+                  {selectedItem.type === 'material' && selectedItem.item.priceEstimateOnly && (
+                    <div className="pricebook-warning"><AlertTriangle size={16} /> Price estimate only. Verify with supplier before sending final pricing.</div>
+                  )}
                   {selectedItem.type === 'labor' && selectedItem.item.hourlyRate < Math.max(45, avgRate * 0.8) && (
                     <div className="pricebook-warning"><AlertTriangle size={16} /> This role may be underpriced. Consider increasing the base rate or reviewing markup.</div>
                   )}
@@ -450,6 +541,20 @@ export function PriceBook() {
           <div className="form-group">
             <label className="form-label">Supplier</label>
             <input className="form-input" value={materialForm.supplier} onChange={e => setMaterialForm({...materialForm, supplier: e.target.value})} />
+          </div>
+          <div className="grid-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">SKU</label>
+              <input className="form-input" value={materialForm.sku} onChange={e => setMaterialForm({...materialForm, sku: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Model Number</label>
+              <input className="form-input" value={materialForm.modelNumber} onChange={e => setMaterialForm({...materialForm, modelNumber: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Product URL</label>
+            <input className="form-input" value={materialForm.productUrl} onChange={e => setMaterialForm({...materialForm, productUrl: e.target.value})} placeholder="https://..." />
           </div>
           <div className="form-group">
             <label className="flex items-center gap-2">

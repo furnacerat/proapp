@@ -7,6 +7,7 @@ import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, Estima
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
 import { getEstimateSuggestions } from '../../utils/insights';
+import { getPriceAgeDays, isPriceOutdated } from '../../utils/pricing';
 import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
 import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
 import { renderEmailAll } from '../../utils/emailTemplates';
@@ -1050,7 +1051,16 @@ export function EstimateBuilder() {
       type: category,
       isLabor: false,
       linkedMaterialId: material.id,
-      priceBookSnapshot: { unitCost: material.unitPrice || 0, unitPrice: material.unitPrice || 0, name: material.name },
+      priceBookSnapshot: {
+        unitCost: material.unitPrice || 0,
+        unitPrice: material.unitPrice || 0,
+        name: material.name,
+        updatedAt: material.lastUpdated,
+        pricingSource: material.pricingSource,
+        pricingVerified: material.pricingVerified,
+        priceEstimateOnly: material.priceEstimateOnly,
+        productUrl: material.productUrl,
+      },
       total: material.unitPrice || 0,
     }, 'priceBook'));
   };
@@ -2221,6 +2231,12 @@ export function EstimateBuilder() {
                         <span>{material.category || 'Uncategorized'}</span>
                         {material.supplier && <span>{material.supplier}</span>}
                         {material.sku && <span>SKU {material.sku}</span>}
+                        {material.lastUpdated && <span>{getPriceAgeDays(material.lastUpdated)}d old</span>}
+                      </div>
+                      <div className="eb-livePriceBadges">
+                        {isPriceOutdated(material) && <em className="outdated">Price outdated</em>}
+                        {material.priceEstimateOnly && <em className="estimate">Price estimate only</em>}
+                        {material.pricingVerified && <em className="verified">Live price</em>}
                       </div>
                     </div>
                   </div>

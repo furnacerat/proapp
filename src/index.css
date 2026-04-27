@@ -4189,6 +4189,46 @@ body {
   border-radius: 18px;
 }
 
+.pricebook-filter-stack {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.pricebook-filter-stack .pricebook-tabs {
+  margin-bottom: 0;
+}
+
+.pricebook-pricing-controls {
+  display: grid;
+  grid-template-columns: 160px minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.2);
+}
+
+.pricebook-pricing-controls select,
+.pricebook-pricing-controls input {
+  min-height: 38px;
+  padding: 0 12px;
+  color: #e5edf7;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.pricebook-pricing-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #b6c4d8;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 .pricebook-tab {
   display: inline-flex;
   align-items: center;
@@ -4287,6 +4327,11 @@ body {
   grid-template-columns: minmax(150px, 1.5fr) minmax(86px, 0.75fr) minmax(58px, 0.45fr) minmax(82px, 0.65fr) minmax(86px, 0.65fr) 76px;
 }
 
+.pricebook-live-material-head,
+.pricebook-live-material-row {
+  grid-template-columns: minmax(170px, 1.45fr) minmax(84px, 0.7fr) minmax(54px, 0.4fr) minmax(82px, 0.58fr) minmax(90px, 0.65fr) minmax(92px, 0.62fr) 108px;
+}
+
 .pricebook-table-head,
 .pricebook-material-head {
   min-width: 680px;
@@ -4361,6 +4406,32 @@ body {
   font-weight: 800;
 }
 
+.pricebook-price-status {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #dbeafe;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+  background: rgba(37, 99, 235, 0.18);
+}
+
+.pricebook-price-status.outdated {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.34);
+}
+
+.pricebook-price-status.estimate {
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.3);
+}
+
+.pricebook-price-status.fresh {
+  color: #bbf7d0;
+  background: rgba(6, 78, 59, 0.3);
+}
+
 .pricebook-inline-input {
   width: 72px;
   padding: 7px 8px;
@@ -4389,6 +4460,11 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 10px;
   cursor: pointer;
+}
+
+.pricebook-row-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .pricebook-detail-panel {
@@ -4719,6 +4795,36 @@ body {
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 750;
+}
+
+.eb-livePriceBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.eb-livePriceBadges em {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.eb-livePriceBadges .outdated {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.34);
+}
+
+.eb-livePriceBadges .estimate {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.eb-livePriceBadges .verified {
+  color: #065f46;
+  background: #d1fae5;
 }
 
 .eb-assemblyOptionTotal,
@@ -6399,6 +6505,16 @@ body {
 .eb-assemblyOptionMeta span {
   color: #bfdbfe;
   background: rgba(37, 99, 235, 0.18);
+}
+
+.eb-livePriceBadges .estimate {
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.3);
+}
+
+.eb-livePriceBadges .verified {
+  color: #bbf7d0;
+  background: rgba(6, 78, 59, 0.3);
 }
 
 .eb-suggestionReason,
