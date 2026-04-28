@@ -70,13 +70,18 @@ export interface Material {
   currentPrice?: number;
   basePrice?: number;
   supplier?: string;
+  preferredSupplier?: string;
   sku?: string;
   modelNumber?: string;
   productUrl?: string;
+  matchedProductTitle?: string;
   lastUpdated?: string;
+  priceSource?: 'manual' | 'serpapi' | 'rainforest' | 'apify' | 'cache' | 'estimated';
   pricingSource?: 'manual' | 'serpapi' | 'rainforest' | 'apify' | 'cache' | 'estimated';
   pricingVerified?: boolean;
   priceEstimateOnly?: boolean;
+  matchConfidence?: number;
+  matchStatus?: 'unmatched' | 'suggested' | 'confirmed' | 'rejected';
   preferredStoreLocation?: string;
   isActive: boolean;
 }

@@ -10,7 +10,15 @@ import {
   Clock, TrendingUp, Zap, ChevronRight, Boxes, Users, AlertTriangle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import type { LaborRate, Material } from '../../data/types';
-import { lookupPricing, type PricingLookupResult } from '../../services/pricingLookupService';
+import { lookupPricing } from '../../services/pricingLookupService';
+import {
+  confirmedUpdates,
+  findPricingMatches,
+  rejectedUpdates,
+  scorePricingResult,
+  suggestionUpdates,
+  type ScoredPricingMatch,
+} from '../../utils/priceMatching';
 import {
   applyPricingResult,
   fetchLatestMaterialPrice,
@@ -55,8 +63,9 @@ export function PriceBook() {
   const [pricingPrefs, setPricingPrefs] = useState<PricingPreferences>(() => getPricingPreferences());
   const [updatingPrices, setUpdatingPrices] = useState<string[]>([]);
   const [lookupMaterial, setLookupMaterial] = useState<Material | null>(null);
-  const [lookupResults, setLookupResults] = useState<PricingLookupResult[]>([]);
+  const [lookupResults, setLookupResults] = useState<ScoredPricingMatch[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [autoMatchingIds, setAutoMatchingIds] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -137,9 +146,15 @@ export function PriceBook() {
       modelNumber: materialForm.modelNumber,
       productUrl: materialForm.productUrl,
       lastUpdated: materialForm.lastUpdated || editingMaterial?.lastUpdated,
+      preferredSupplier: editingMaterial?.preferredSupplier || materialForm.supplier,
+      matchedProductTitle: editingMaterial?.matchedProductTitle,
+      currentPrice: editingMaterial?.currentPrice ?? (parseFloat(materialForm.unitPrice) || 0),
+      priceSource: editingMaterial?.priceSource || editingMaterial?.pricingSource || 'manual' as const,
       pricingSource: editingMaterial?.pricingSource || 'manual' as const,
       pricingVerified: editingMaterial?.pricingVerified || false,
       priceEstimateOnly: editingMaterial?.priceEstimateOnly || false,
+      matchConfidence: editingMaterial?.matchConfidence,
+      matchStatus: editingMaterial?.matchStatus || 'unmatched' as const,
       preferredStoreLocation: pricingPrefs.preferredStoreLocation,
       isActive: materialForm.isActive,
     };
@@ -303,17 +318,67 @@ export function PriceBook() {
     showToast(`Pricing checked for ${Math.min(targets.length, 20)} items`);
   };
 
+  const setUpdatedMaterial = (material: Material, updates: Partial<Material>) => {
+    updateMaterial(material.id, updates);
+    const updatedMaterial = { ...material, ...updates };
+    if (selectedItem?.type === 'material' && selectedItem.item.id === material.id) {
+      setSelectedItem({ type: 'material', item: updatedMaterial });
+    }
+    if (lookupMaterial?.id === material.id) setLookupMaterial(updatedMaterial);
+  };
+
+  const autoMatchMaterial = async (material: Material, openReview = true) => {
+    if (material.matchStatus === 'confirmed') {
+      showToast('Confirmed matches are protected. Use Refresh Price to update pricing.', 'info');
+      return;
+    }
+    setAutoMatchingIds(prev => [...prev, material.id]);
+    try {
+      const matches = await findPricingMatches(material, pricingPrefs);
+      if (!matches.bestMatch) {
+        setUpdatedMaterial(material, { matchStatus: 'unmatched', matchConfidence: 0 });
+        showToast('No confident match found', 'warning');
+        return;
+      }
+      setUpdatedMaterial(material, suggestionUpdates(matches.bestMatch));
+      if (openReview) {
+        setLookupMaterial({ ...material, ...suggestionUpdates(matches.bestMatch) });
+        setLookupResults([matches.bestMatch, ...matches.alternativeMatches]);
+      }
+      showToast(`Suggested match found (${matches.bestMatch.confidence}% confidence)`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Auto match failed', 'error');
+    } finally {
+      setAutoMatchingIds(prev => prev.filter(id => id !== material.id));
+    }
+  };
+
+  const autoMatchUnmatchedItems = async () => {
+    const targets = filteredMaterials.filter(material => material.matchStatus !== 'confirmed').slice(0, 20);
+    if (targets.length === 0) {
+      showToast('No unmatched items to auto match');
+      return;
+    }
+    for (const material of targets) {
+      await autoMatchMaterial(material, false);
+    }
+    showToast(`Auto matched ${targets.length} item${targets.length === 1 ? '' : 's'} for review`);
+  };
+
   const lookupCurrentPrice = async (material: Material) => {
     setLookupMaterial(material);
     setLookupResults([]);
     setLookupLoading(true);
     try {
       const results = await lookupPricing({
-        query: material.sku || material.modelNumber || material.name,
+        query: material.sku || material.modelNumber || material.matchedProductTitle || material.name,
         supplier: pricingPrefs.preferredSupplier || material.supplier,
         location: pricingPrefs.preferredStoreLocation,
       });
-      setLookupResults(results);
+      const scored = results
+        .map(result => ({ ...result, confidence: scorePricingResult(material, result) }))
+        .sort((a, b) => b.confidence - a.confidence);
+      setLookupResults(scored);
       if (results.length === 0) showToast('No pricing matches found', 'warning');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Pricing lookup failed', 'error');
@@ -322,27 +387,77 @@ export function PriceBook() {
     }
   };
 
-  const applyLookupResult = (result: PricingLookupResult) => {
-    if (!lookupMaterial) return;
-    const updates: Partial<Material> = {
-      currentPrice: result.price,
-      unitPrice: result.price,
-      supplier: result.source || lookupMaterial.supplier,
-      productUrl: result.link || lookupMaterial.productUrl,
-      lastUpdated: new Date().toISOString(),
-      pricingSource: 'serpapi',
-      pricingVerified: true,
-      priceEstimateOnly: false,
-    };
-    updateMaterial(lookupMaterial.id, updates);
-    const updatedMaterial = { ...lookupMaterial, ...updates };
-    setLookupMaterial(updatedMaterial);
-    if (selectedItem?.type === 'material' && selectedItem.item.id === lookupMaterial.id) {
-      setSelectedItem({ type: 'material', item: updatedMaterial });
-    }
-    showToast('Material price updated');
+  const confirmMatch = (material: Material, result?: ScoredPricingMatch) => {
+    const updates = result
+      ? confirmedUpdates(result)
+      : {
+          unitPrice: material.currentPrice ?? material.unitPrice,
+          currentPrice: material.currentPrice ?? material.unitPrice,
+          lastUpdated: new Date().toISOString(),
+          matchStatus: 'confirmed' as const,
+          pricingVerified: true,
+          priceEstimateOnly: false,
+        };
+    setUpdatedMaterial(material, updates);
     setLookupResults([]);
     setLookupMaterial(null);
+    showToast('Match confirmed');
+  };
+
+  const rejectMatch = (material: Material) => {
+    setUpdatedMaterial(material, rejectedUpdates());
+    setLookupResults([]);
+    setLookupMaterial(null);
+    showToast('Match rejected');
+  };
+
+  const refreshConfirmedPrice = async (material: Material) => {
+    if (material.matchStatus !== 'confirmed') {
+      await autoMatchMaterial(material);
+      return;
+    }
+    setUpdatingPrices(prev => [...prev, material.id]);
+    try {
+      const results = await lookupPricing({
+        query: material.sku || material.modelNumber || material.matchedProductTitle || material.name,
+        supplier: material.preferredSupplier || pricingPrefs.preferredSupplier || material.supplier,
+        location: pricingPrefs.preferredStoreLocation,
+      });
+      const scored = results
+        .map(result => ({ ...result, confidence: scorePricingResult(material, result) }))
+        .sort((a, b) => {
+          const aSame = material.productUrl && a.link === material.productUrl ? 1 : 0;
+          const bSame = material.productUrl && b.link === material.productUrl ? 1 : 0;
+          return bSame - aSame || b.confidence - a.confidence;
+        });
+      const match = scored[0];
+      if (!match) {
+        showToast('No refreshed price found', 'warning');
+        return;
+      }
+      const updates: Partial<Material> = {
+        currentPrice: match.price,
+        unitPrice: match.price,
+        supplier: match.source || material.supplier,
+        lastUpdated: new Date().toISOString(),
+        priceSource: 'serpapi',
+        pricingSource: 'serpapi',
+        pricingVerified: true,
+        priceEstimateOnly: false,
+        matchConfidence: match.confidence,
+      };
+      setUpdatedMaterial(material, updates);
+      showToast('Confirmed match price refreshed');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Refresh failed', 'error');
+    } finally {
+      setUpdatingPrices(prev => prev.filter(id => id !== material.id));
+    }
+  };
+
+  const applyLookupResult = (result: ScoredPricingMatch) => {
+    if (!lookupMaterial) return;
+    confirmMatch(lookupMaterial, result);
   };
 
   return (
@@ -361,6 +476,7 @@ export function PriceBook() {
             </div>
             <button className={`pricebook-filter-btn ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}><Filter size={17} /> Filter</button>
             <button className="pricebook-filter-btn" onClick={updateAllMaterialPricing}><RefreshCw size={17} /> Update Pricing</button>
+            <button className="pricebook-filter-btn" onClick={autoMatchUnmatchedItems}><Zap size={17} /> Auto Match Unmatched Items</button>
             <button className="pricebook-primary-btn" onClick={() => activeTab === 'materials' || activeTab === 'equipment' ? setShowMaterialModal(true) : setShowModal(true)}>
               <Plus size={18} /> {activeTab === 'materials' || activeTab === 'equipment' ? 'Add Item' : 'Add Rate'}
             </button>
@@ -458,8 +574,8 @@ export function PriceBook() {
                           </em>
                         </span>
                         <span className="pricebook-row-actions" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => updateMaterialPrice(material)} disabled={updatingPrices.includes(material.id)} title="Update pricing"><RefreshCw size={14} /></button>
-                          <button onClick={() => lookupCurrentPrice(material)} title="Lookup current price">Lookup Current Price</button>
+                          <button onClick={() => autoMatchMaterial(material)} disabled={autoMatchingIds.includes(material.id)} title="Auto match product">Auto Match</button>
+                          <button onClick={() => refreshConfirmedPrice(material)} disabled={updatingPrices.includes(material.id)} title="Refresh price"><RefreshCw size={14} /> Refresh Price</button>
                           <button onClick={() => handleEditMaterial(material)}><Edit size={14} /></button>
                           <button onClick={() => openDelete('material', material.id)}><Trash2 size={14} /></button>
                         </span>
@@ -495,6 +611,7 @@ export function PriceBook() {
                         <div><span>Unit price</span><strong>{formatCurrency(selectedItem.item.currentPrice ?? selectedItem.item.unitPrice)}</strong></div>
                         <div><span>Unit</span><strong>{selectedItem.item.unit}</strong></div>
                         <div><span>Supplier</span><strong>{selectedItem.item.supplier || '-'}</strong></div>
+                        <div><span>Match</span><strong>{selectedItem.item.matchStatus || 'unmatched'}{selectedItem.item.matchConfidence !== undefined ? ` (${selectedItem.item.matchConfidence}%)` : ''}</strong></div>
                         <div><span>Status</span><strong>{selectedItem.item.isActive ? 'Active' : 'Inactive'}</strong></div>
                         <div><span>SKU / Model</span><strong>{selectedItem.item.sku || selectedItem.item.modelNumber || '-'}</strong></div>
                         <div><span>Last updated</span><strong>{selectedItem.item.lastUpdated ? `${getPriceAgeDays(selectedItem.item.lastUpdated)} days ago` : 'Never'}</strong></div>
@@ -503,7 +620,8 @@ export function PriceBook() {
                   </div>
                   <div className="pricebook-detail-actions">
                     <button className="pricebook-secondary-btn" onClick={() => selectedItem.type === 'labor' ? handleEditRate(selectedItem.item) : handleEditMaterial(selectedItem.item)}><Edit size={16} /> Edit</button>
-                    {selectedItem.type === 'material' && <button className="pricebook-secondary-btn" onClick={() => lookupCurrentPrice(selectedItem.item)}><RefreshCw size={16} /> Lookup Current Price</button>}
+                    {selectedItem.type === 'material' && <button className="pricebook-secondary-btn" onClick={() => autoMatchMaterial(selectedItem.item)}><Zap size={16} /> Auto Match</button>}
+                    {selectedItem.type === 'material' && <button className="pricebook-secondary-btn" onClick={() => refreshConfirmedPrice(selectedItem.item)}><RefreshCw size={16} /> Refresh Price</button>}
                     {selectedItem.type === 'material' && selectedItem.item.productUrl && <a className="pricebook-secondary-btn" href={selectedItem.item.productUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Product</a>}
                     <button className="pricebook-danger-btn" onClick={() => openDelete(selectedItem.type === 'labor' ? 'labor' : 'material', selectedItem.item.id)}><Trash2 size={16} /> Delete</button>
                     <Link to="/estimates/new" className="pricebook-primary-btn"><Plus size={16} /> Apply to Estimate</Link>
@@ -513,6 +631,14 @@ export function PriceBook() {
                   )}
                   {selectedItem.type === 'material' && selectedItem.item.priceEstimateOnly && (
                     <div className="pricebook-warning"><AlertTriangle size={16} /> Price estimate only. Verify with supplier before sending final pricing.</div>
+                  )}
+                  {selectedItem.type === 'material' && selectedItem.item.matchStatus === 'suggested' && (
+                    <div className="pricebook-warning">
+                      <AlertTriangle size={16} /> Suggested match: {selectedItem.item.matchedProductTitle || 'Review match'} ({selectedItem.item.matchConfidence || 0}% confidence)
+                      <button className="btn btn-sm btn-primary" onClick={() => confirmMatch(selectedItem.item)}>Confirm Match</button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => lookupCurrentPrice(selectedItem.item)}>View Alternatives</button>
+                      <button className="btn btn-sm btn-danger" onClick={() => rejectMatch(selectedItem.item)}>Reject</button>
+                    </div>
                   )}
                   {selectedItem.type === 'labor' && selectedItem.item.hourlyRate < Math.max(45, avgRate * 0.8) && (
                     <div className="pricebook-warning"><AlertTriangle size={16} /> This role may be underpriced. Consider increasing the base rate or reviewing markup.</div>
@@ -620,7 +746,7 @@ export function PriceBook() {
         <div className="space-y-4">
           <div>
             <h3 className="card-title">{lookupMaterial?.name}</h3>
-            <p className="text-sm text-muted">Select a product result to update this Price Book item.</p>
+            <p className="text-sm text-muted">Review suggested matches before changing this Price Book item.</p>
           </div>
           {lookupLoading ? (
             <div className="card"><div className="card-body">Searching current prices...</div></div>
@@ -636,14 +762,20 @@ export function PriceBook() {
                   </span>
                   <span>{result.source || 'Unknown source'}</span>
                   <span>{result.displayPrice || formatCurrency(result.price)}</span>
+                  <span>{result.confidence}% confidence</span>
                   <span>{result.rating ? `${result.rating} stars` : '-'}</span>
                   <span>{result.reviews ? `${result.reviews} reviews` : '-'}</span>
                   <span className="pricebook-row-actions">
                     {result.link && <a href={result.link} target="_blank" rel="noreferrer" title="Open product"><ExternalLink size={14} /></a>}
-                    <button onClick={() => applyLookupResult(result)}>Use this price</button>
+                    <button onClick={() => applyLookupResult(result)}>Confirm Match</button>
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+          {lookupMaterial && !lookupLoading && (
+            <div className="modal-footer" style={{ padding: 0, borderTop: 'none' }}>
+              <button className="btn btn-secondary" onClick={() => rejectMatch(lookupMaterial)}>Reject</button>
             </div>
           )}
         </div>

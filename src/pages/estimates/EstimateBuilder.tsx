@@ -12,6 +12,7 @@ import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
 import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
 import { renderEmailAll } from '../../utils/emailTemplates';
 import { lookupPricing, type PricingLookupResult } from '../../services/pricingLookupService';
+import { scorePricingResult } from '../../utils/priceMatching';
 import {
   Plus, Trash2, Save, Send, ArrowLeft, Copy, FileText, Printer,
   Package, Clock, DollarSign, ChevronDown, ChevronUp,
@@ -166,7 +167,7 @@ const getGuidedQuestions = (projectTypeValue: string): GuidedQuestion[] => {
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, jobs, expenses, timeEntries, addCustomer, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob, sendEmail, addTemplate, updateTemplate, addAssembly, updateAssembly } = useApp();
+  const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, jobs, expenses, timeEntries, addCustomer, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob, sendEmail, addTemplate, updateTemplate, addAssembly, updateAssembly, updateMaterial } = useApp();
   const { showToast } = useToast();
 
   const isNew = id === 'new';
@@ -227,6 +228,7 @@ export function EstimateBuilder() {
   });
   const [itemPriceResults, setItemPriceResults] = useState<PricingLookupResult[]>([]);
   const [itemPriceLookupLoading, setItemPriceLookupLoading] = useState(false);
+  const [refreshingMaterialIds, setRefreshingMaterialIds] = useState<string[]>([]);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -1061,6 +1063,7 @@ export function EstimateBuilder() {
         ? 'subcontractor'
         : 'material';
 
+    const currentPrice = material.currentPrice ?? material.unitPrice ?? 0;
     addPriceLineItem(normalizeLineItem({
       id: crypto.randomUUID(),
       sourceType: 'priceBook',
@@ -1069,15 +1072,15 @@ export function EstimateBuilder() {
       description: material.description || material.supplier || material.category,
       quantity: 1,
       unit: material.unit || 'ea',
-      unitCost: material.unitPrice || 0,
-      unitPrice: material.unitPrice || 0,
+      unitCost: currentPrice,
+      unitPrice: currentPrice,
       category,
       type: category,
       isLabor: false,
       linkedMaterialId: material.id,
       priceBookSnapshot: {
-        unitCost: material.unitPrice || 0,
-        unitPrice: material.unitPrice || 0,
+        unitCost: currentPrice,
+        unitPrice: currentPrice,
         name: material.name,
         updatedAt: material.lastUpdated,
         pricingSource: material.pricingSource,
@@ -1085,8 +1088,40 @@ export function EstimateBuilder() {
         priceEstimateOnly: material.priceEstimateOnly,
         productUrl: material.productUrl,
       },
-      total: material.unitPrice || 0,
+      total: currentPrice,
     }, 'priceBook'));
+  };
+
+  const refreshPriceBookMaterial = async (material: Material) => {
+    setRefreshingMaterialIds(prev => [...prev, material.id]);
+    try {
+      const results = await lookupPricing({
+        query: material.sku || material.modelNumber || material.matchedProductTitle || material.name,
+        supplier: material.preferredSupplier || material.supplier,
+      });
+      const match = results
+        .map(result => ({ ...result, confidence: scorePricingResult(material, result) }))
+        .sort((a, b) => b.confidence - a.confidence)[0];
+      if (!match) {
+        showToast('No current price found', 'warning');
+        return;
+      }
+      updateMaterial(material.id, {
+        currentPrice: match.price,
+        unitPrice: match.price,
+        supplier: match.source || material.supplier,
+        lastUpdated: new Date().toISOString(),
+        priceSource: 'serpapi',
+        pricingSource: 'serpapi',
+        pricingVerified: true,
+        priceEstimateOnly: false,
+      });
+      showToast('Price Book item refreshed');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Refresh failed', 'error');
+    } finally {
+      setRefreshingMaterialIds(prev => prev.filter(id => id !== material.id));
+    }
   };
 
   const handleSelectLaborRate = (rate: LaborRate) => {
@@ -2290,7 +2325,8 @@ export function EstimateBuilder() {
                         <span>{material.category || 'Uncategorized'}</span>
                         {material.supplier && <span>{material.supplier}</span>}
                         {material.sku && <span>SKU {material.sku}</span>}
-                        {material.lastUpdated && <span>{getPriceAgeDays(material.lastUpdated)}d old</span>}
+                        {material.lastUpdated && <span>price updated {getPriceAgeDays(material.lastUpdated)} days ago</span>}
+                        {material.lastUpdated && getPriceAgeDays(material.lastUpdated) > 14 && <span>Price may be outdated</span>}
                       </div>
                       <div className="eb-livePriceBadges">
                         {isPriceOutdated(material) && <em className="outdated">Price outdated</em>}
@@ -2300,8 +2336,19 @@ export function EstimateBuilder() {
                     </div>
                   </div>
                   <div className="eb-priceOptionTotal">
-                    <span>{formatCurrency(material.unitPrice)}</span>
+                    <span>{formatCurrency(material.currentPrice ?? material.unitPrice)}</span>
                     <small>/{material.unit || 'ea'}</small>
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation();
+                        refreshPriceBookMaterial(material);
+                      }}
+                      disabled={refreshingMaterialIds.includes(material.id)}
+                    >
+                      Refresh before adding
+                    </button>
                   </div>
                 </button>
               ))}

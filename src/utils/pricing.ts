@@ -138,6 +138,7 @@ export const applyPricingResult = (material: Material, result: PricingResult): P
   modelNumber: result.modelNumber || material.modelNumber,
   productUrl: result.productUrl || material.productUrl,
   lastUpdated: result.fetchedAt,
+  priceSource: result.source,
   pricingSource: result.source,
   pricingVerified: result.verified,
   priceEstimateOnly: result.estimateOnly,
