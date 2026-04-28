@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/common/Toast';
+import { ProtectedApp } from './components/auth/ProtectedApp';
 import { Layout } from './components/layout/Layout';
 import { DailyCommandCenter } from './pages/DailyCommandCenter';
 import { Dashboard } from './pages/Dashboard';
@@ -25,11 +27,12 @@ import { Suppliers } from './pages/estimates/Suppliers';
 import { MaterialOrders } from './pages/estimates/MaterialOrders';
 import { Settings } from './pages/Settings';
 import { Customers } from './pages/Customers';
+import { AuthPage } from './pages/auth/AuthPage';
 import './index.css';
 
-function App() {
+function AppRoutes() {
   return (
-    <BrowserRouter>
+    <ProtectedApp>
       <AppProvider>
         <ToastProvider>
           <Layout>
@@ -62,6 +65,21 @@ function App() {
           </Layout>
         </ToastProvider>
       </AppProvider>
+    </ProtectedApp>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<AuthPage mode="login" />} />
+          <Route path="/signup" element={<AuthPage mode="signup" />} />
+          <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
+          <Route path="/*" element={<AppRoutes />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

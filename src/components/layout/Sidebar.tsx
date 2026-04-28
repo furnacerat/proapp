@@ -11,6 +11,7 @@ import {
   Calendar,
   BarChart3,
   Calculator,
+  LogOut,
   Package,
   Copy,
   DollarSign,
@@ -21,6 +22,8 @@ import {
   ShoppingCart,
   SunMedium,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { dataService } from '../../services/dataService';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -28,6 +31,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const { user, signOut } = useAuth();
+
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
@@ -138,6 +143,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </NavLink>
         </div>
       </nav>
+      <div className="sidebar-account">
+        <div className="sidebar-account-meta">
+          <span className="storage-pill">{dataService.mode === 'supabase' ? 'Supabase' : 'Local'}</span>
+          <strong>{user?.email || 'Local workspace'}</strong>
+        </div>
+        {dataService.mode === 'supabase' && user && (
+          <button className="sidebar-logout" onClick={() => void signOut()} title="Log out">
+            <LogOut size={18} />
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

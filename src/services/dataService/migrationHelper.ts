@@ -1,5 +1,5 @@
 import type { AppData } from '../../data/types';
-import { getLocalAppData, upsertSupabaseRecords, type RecordWithId } from './baseService';
+import { getDataServiceUserId, getLocalAppData, upsertSupabaseRecords, type RecordWithId } from './baseService';
 import { TABLES } from './tables';
 
 type MigrationKey = keyof typeof TABLES;
@@ -130,7 +130,8 @@ export const previewLocalMigration = (data: AppData = getLocalAppData() as AppDa
 };
 
 export const importLocalDataToSupabase = async (data: AppData) => {
+  const userId = getDataServiceUserId();
   for (const key of Object.keys(TABLES) as MigrationKey[]) {
-    await upsertSupabaseRecords(TABLES[key], collectionFromData(data, key));
+    await upsertSupabaseRecords(TABLES[key], collectionFromData(data, key).map(record => ({ ...record, userId })));
   }
 };

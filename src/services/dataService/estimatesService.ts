@@ -2,6 +2,7 @@ import type { Estimate, EstimateLineItem, EstimateSection } from '../../data/typ
 import { supabase } from '../../lib/supabase';
 import {
   createCollectionService,
+  getDataServiceUserId,
   getLocalAppData,
   saveLocalAppData,
   toSupabaseRow,
@@ -110,8 +111,8 @@ export const estimatesService = {
 
     if (mode === 'supabase' && supabase) {
       const [{ data: customer }, { data: convertedJob }] = await Promise.all([
-        normalized.customerId ? supabase.from(TABLES.customers).select('id,payload').eq('id', normalized.customerId).maybeSingle() : Promise.resolve({ data: null }),
-        supabase.from(TABLES.jobs).select('id,payload').eq('estimate_id', normalized.id).maybeSingle(),
+        normalized.customerId ? supabase.from(TABLES.customers).select('id,payload').eq('id', normalized.customerId).eq('user_id', getDataServiceUserId()).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from(TABLES.jobs).select('id,payload').eq('estimate_id', normalized.id).eq('user_id', getDataServiceUserId()).maybeSingle(),
       ]);
       return {
         ...normalized,
@@ -141,7 +142,7 @@ export const estimatesService = {
 
   async getItems(estimateId: string, mode: StorageMode = getStorageMode()): Promise<EstimateLineItem[]> {
     if (mode === 'supabase' && supabase) {
-      const { data, error } = await supabase.from(TABLES.estimateItems).select('id,payload').eq('estimate_id', estimateId).order('created_at');
+      const { data, error } = await supabase.from(TABLES.estimateItems).select('id,payload').eq('estimate_id', estimateId).eq('user_id', getDataServiceUserId()).order('created_at');
       if (error) throw error;
       return fromSupabaseRows<EstimateLineItem>(data).map(normalizeEstimateItem);
     }
@@ -168,7 +169,7 @@ export const estimatesService = {
 
   async updateItem(itemId: string, data: Partial<EstimateLineItem>, mode: StorageMode = getStorageMode()): Promise<EstimateLineItem | null> {
     if (mode === 'supabase' && supabase) {
-      const { data: row, error } = await supabase.from(TABLES.estimateItems).select('id,payload,estimate_id').eq('id', itemId).maybeSingle();
+      const { data: row, error } = await supabase.from(TABLES.estimateItems).select('id,payload,estimate_id').eq('id', itemId).eq('user_id', getDataServiceUserId()).maybeSingle();
       if (error) throw error;
       if (!row) return null;
       const updated = normalizeEstimateItem({ ...row.payload, ...data, id: itemId });
@@ -200,7 +201,7 @@ export const estimatesService = {
 
   async deleteItem(itemId: string, mode: StorageMode = getStorageMode()): Promise<void> {
     if (mode === 'supabase' && supabase) {
-      const { error } = await supabase.from(TABLES.estimateItems).delete().eq('id', itemId);
+      const { error } = await supabase.from(TABLES.estimateItems).delete().eq('id', itemId).eq('user_id', getDataServiceUserId());
       if (error) throw error;
       return;
     }
@@ -230,7 +231,7 @@ export const estimatesService = {
     const estimate = await this.update(estimateId, estimateData, mode);
     if (!estimate) return null;
     if (mode === 'supabase' && supabase) {
-      await supabase.from(TABLES.estimateItems).delete().eq('estimate_id', estimateId);
+      await supabase.from(TABLES.estimateItems).delete().eq('estimate_id', estimateId).eq('user_id', getDataServiceUserId());
       for (const item of items) await this.addItem(estimateId, item, mode);
     }
     return estimate;

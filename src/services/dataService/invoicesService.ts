@@ -1,6 +1,6 @@
 import type { Invoice, InvoiceItem, Payment } from '../../data/types';
 import { supabase } from '../../lib/supabase';
-import { createCollectionService, fromSupabaseRows, getLocalAppData, upsertSupabaseRecords } from './baseService';
+import { createCollectionService, fromSupabaseRows, getDataServiceUserId, getLocalAppData, upsertSupabaseRecords } from './baseService';
 import { getStorageMode, type StorageMode } from './config';
 import { jobsService } from './jobsService';
 import { estimatesService } from './estimatesService';
@@ -96,7 +96,7 @@ export const invoicesService = {
 
   async getItems(invoiceId: string, mode: StorageMode = getStorageMode()): Promise<InvoiceItem[]> {
     if (mode === 'supabase' && supabase) {
-      const { data, error } = await supabase.from(TABLES.invoiceItems).select('id,payload').eq('invoice_id', invoiceId).order('created_at');
+      const { data, error } = await supabase.from(TABLES.invoiceItems).select('id,payload').eq('invoice_id', invoiceId).eq('user_id', getDataServiceUserId()).order('created_at');
       if (error) throw error;
       return fromSupabaseRows<InvoiceItem>(data).map(item => normalizeInvoiceItem({ ...item, invoiceId }));
     }
@@ -118,7 +118,7 @@ export const invoicesService = {
     const invoice = await this.update(invoiceId, invoiceData, mode);
     if (!invoice) return null;
     if (mode === 'supabase' && supabase) {
-      await supabase.from(TABLES.invoiceItems).delete().eq('invoice_id', invoiceId);
+      await supabase.from(TABLES.invoiceItems).delete().eq('invoice_id', invoiceId).eq('user_id', getDataServiceUserId());
       await upsertSupabaseRecords(TABLES.invoiceItems, items.map(item => normalizeInvoiceItem({ ...item, invoiceId })));
     }
     return invoice;

@@ -6,6 +6,13 @@ export type RecordWithId = { id: string; [key: string]: any };
 export type LocalCollectionKey = keyof AppData;
 
 const now = () => new Date().toISOString();
+let currentUserId: string | null = null;
+
+export const setDataServiceUserId = (userId: string | null) => {
+  currentUserId = userId;
+};
+
+export const getDataServiceUserId = () => currentUserId;
 
 export const getLocalAppData = (): AppData | null => {
   try {
@@ -27,6 +34,13 @@ const requireSupabase = () => {
   return supabase;
 };
 
+const requireSupabaseUserId = () => {
+  if (!currentUserId) {
+    throw new Error('Please log in to use Supabase storage.');
+  }
+  return currentUserId;
+};
+
 const updateLocalCollection = <T extends RecordWithId>(
   key: LocalCollectionKey,
   updater: (items: T[]) => T[],
@@ -38,11 +52,11 @@ const updateLocalCollection = <T extends RecordWithId>(
 
 export const toSupabaseRow = (record: RecordWithId) => ({
   id: String(record.id),
-  payload: record,
+  payload: currentUserId && !record.userId && !record.user_id ? { ...record, userId: currentUserId } : record,
   name: record.name || record.title || record.invoiceNumber || record.poNumber || record.number || null,
   title: record.title || record.name || null,
   status: record.status || null,
-  user_id: record.userId || record.user_id || null,
+  user_id: record.userId || record.user_id || currentUserId,
   customer_id: record.customerId || record.customer_id || null,
   estimate_id: record.estimateId || record.estimate_id || null,
   job_id: record.jobId || record.job_id || null,
@@ -113,6 +127,7 @@ export const fromSupabaseRows = <T extends RecordWithId>(rows: any[] | null): T[
 export const upsertSupabaseRecords = async (table: string, records: RecordWithId[]) => {
   if (!records.length) return;
   const client = requireSupabase();
+  requireSupabaseUserId();
   const { error } = await client.from(table).upsert(records.map(toSupabaseRow), { onConflict: 'id' });
   if (error) throw error;
 };
@@ -125,7 +140,8 @@ export const createCollectionService = <T extends RecordWithId>(
     if (mode === 'supabase') {
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
-      const { data, error } = await client.from(table).select('id,payload').order('updated_at', { ascending: false });
+      const userId = requireSupabaseUserId();
+      const { data, error } = await client.from(table).select('id,payload').eq('user_id', userId).order('updated_at', { ascending: false });
       if (error) throw error;
       return fromSupabaseRows<T>(data);
     }
@@ -137,7 +153,8 @@ export const createCollectionService = <T extends RecordWithId>(
     if (mode === 'supabase') {
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
-      const { data, error } = await client.from(table).select('id,payload').eq('id', id).maybeSingle();
+      const userId = requireSupabaseUserId();
+      const { data, error } = await client.from(table).select('id,payload').eq('id', id).eq('user_id', userId).maybeSingle();
       if (error) throw error;
       return data ? fromSupabaseRows<T>([data])[0] : null;
     }
@@ -173,7 +190,8 @@ export const createCollectionService = <T extends RecordWithId>(
     if (mode === 'supabase') {
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
-      const { error } = await client.from(table).delete().eq('id', id);
+      const userId = requireSupabaseUserId();
+      const { error } = await client.from(table).delete().eq('id', id).eq('user_id', userId);
       if (error) throw error;
       return;
     }
