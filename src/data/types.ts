@@ -67,6 +67,7 @@ export interface Material {
   category: string;
   unit: string;
   unitPrice: number;
+  currentPrice?: number;
   basePrice?: number;
   supplier?: string;
   sku?: string;

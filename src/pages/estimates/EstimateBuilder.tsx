@@ -11,6 +11,7 @@ import { getPriceAgeDays, isPriceOutdated } from '../../utils/pricing';
 import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
 import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
 import { renderEmailAll } from '../../utils/emailTemplates';
+import { lookupPricing, type PricingLookupResult } from '../../services/pricingLookupService';
 import {
   Plus, Trash2, Save, Send, ArrowLeft, Copy, FileText, Printer,
   Package, Clock, DollarSign, ChevronDown, ChevronUp,
@@ -224,6 +225,8 @@ export function EstimateBuilder() {
     clientVisible: true,
     notes: '',
   });
+  const [itemPriceResults, setItemPriceResults] = useState<PricingLookupResult[]>([]);
+  const [itemPriceLookupLoading, setItemPriceLookupLoading] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -438,6 +441,7 @@ export function EstimateBuilder() {
   const handleAddItemToSection = (sectionId: string) => {
     setEditingItem({ sectionId });
     setNewItemForm({ name: '', quantity: '1', unit: 'ea', unitPrice: '0', category: 'material', quantityMode: 'fixed', materialType: '', markupPercent: '', clientVisible: true, notes: '' });
+    setItemPriceResults([]);
     setShowAddItem(true);
   };
 
@@ -455,7 +459,27 @@ export function EstimateBuilder() {
       clientVisible: item.clientVisible !== false,
       notes: item.notes || '',
     });
+    setItemPriceResults([]);
     setShowAddItem(true);
+  };
+
+  const findCurrentItemPrice = async () => {
+    const query = newItemForm.name.trim() || newItemForm.materialType.trim();
+    if (!query) {
+      showToast('Enter an item name before searching prices', 'warning');
+      return;
+    }
+    setItemPriceLookupLoading(true);
+    setItemPriceResults([]);
+    try {
+      const results = await lookupPricing({ query });
+      setItemPriceResults(results);
+      if (results.length === 0) showToast('No pricing matches found', 'warning');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Pricing lookup failed', 'error');
+    } finally {
+      setItemPriceLookupLoading(false);
+    }
   };
 
   const handleDeleteItem = (sectionId: string, itemId: string) => {
@@ -1946,7 +1970,7 @@ export function EstimateBuilder() {
       </div>
 
       {/* Add Item Modal */}
-      <Modal isOpen={showAddItem} onClose={() => setShowAddItem(false)} title={editingItem?.item ? 'Edit Item' : 'Add Item'} size="sm">
+      <Modal isOpen={showAddItem} onClose={() => { setShowAddItem(false); setItemPriceResults([]); }} title={editingItem?.item ? 'Edit Item' : 'Add Item'} size="sm">
         <div className="eb-itemForm">
           <div className="form-group">
             <label className="form-label">Item Name</label>
@@ -1988,6 +2012,41 @@ export function EstimateBuilder() {
               </select>
             </div>
           </div>
+          {newItemForm.category === 'material' && (
+            <div className="form-group">
+              <button className="btn btn-secondary btn-sm" type="button" onClick={findCurrentItemPrice} disabled={itemPriceLookupLoading}>
+                <Search size={14} /> {itemPriceLookupLoading ? 'Searching...' : 'Find Current Price'}
+              </button>
+            </div>
+          )}
+          {itemPriceResults.length > 0 && (
+            <div className="space-y-2">
+              {itemPriceResults.slice(0, 4).map((result, index) => (
+                <div className="card" key={`${result.link}-${index}`} style={{ padding: 10 }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <strong>{result.title}</strong>
+                      <div className="text-sm text-muted">{result.source || 'Unknown source'} - {result.displayPrice || formatCurrency(result.price)}</div>
+                    </div>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      type="button"
+                      onClick={() => {
+                        setNewItemForm({
+                          ...newItemForm,
+                          unitPrice: String(result.price),
+                          notes: [newItemForm.notes, `Price selected from ${result.source || 'SerpApi'}: ${result.title}`].filter(Boolean).join('\n'),
+                        });
+                        showToast('Current price applied to this line item');
+                      }}
+                    >
+                      Use Price
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Material Type</label>

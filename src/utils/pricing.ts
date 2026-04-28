@@ -1,4 +1,5 @@
 import type { Material } from '../data/types';
+import { lookupPricing } from '../services/pricingLookupService';
 
 export type PricingProvider = 'serpapi' | 'rainforest' | 'apify';
 
@@ -97,41 +98,28 @@ export async function fetchLatestMaterialPrice(material: Material, prefs = getPr
     return { ...cached, source: 'cache' };
   }
 
-  // Frontend-safe integration point: configure a proxy endpoint in localStorage if API keys
-  // live server-side. Without that endpoint, use an estimate-only fallback.
-  const proxyUrl = localStorage.getItem('buildops_pricing_proxy_url');
-  if (proxyUrl) {
-    try {
-      const response = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: prefs.provider,
-          query: material.sku || material.modelNumber || material.name,
-          supplier: prefs.preferredSupplier || material.supplier,
-          location: prefs.preferredStoreLocation,
-          productUrl: material.productUrl,
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const result: PricingResult = {
-          price: Number(data.price ?? material.unitPrice ?? 0),
-          supplier: data.supplier || prefs.preferredSupplier || material.supplier || 'External source',
-          sku: data.sku || material.sku,
-          modelNumber: data.modelNumber || material.modelNumber,
-          productUrl: data.productUrl || material.productUrl,
-          source: prefs.provider,
-          verified: true,
-          estimateOnly: false,
-          fetchedAt: new Date().toISOString(),
-        };
-        cache[key] = result;
-        writeCache(cache);
-        return result;
-      }
-    } catch {
-      // Fall through to estimated pricing.
+  if (prefs.provider === 'serpapi') {
+    const results = await lookupPricing({
+      query: material.sku || material.modelNumber || material.name,
+      supplier: prefs.preferredSupplier || material.supplier,
+      location: prefs.preferredStoreLocation,
+    });
+    const match = results[0];
+    if (match) {
+      const result: PricingResult = {
+        price: Number(match.price ?? material.unitPrice ?? 0),
+        supplier: match.source || prefs.preferredSupplier || material.supplier || 'External source',
+        sku: material.sku,
+        modelNumber: material.modelNumber,
+        productUrl: match.link || material.productUrl,
+        source: 'serpapi',
+        verified: true,
+        estimateOnly: false,
+        fetchedAt: new Date().toISOString(),
+      };
+      cache[key] = result;
+      writeCache(cache);
+      return result;
     }
   }
 
@@ -143,6 +131,7 @@ export async function fetchLatestMaterialPrice(material: Material, prefs = getPr
 
 export const applyPricingResult = (material: Material, result: PricingResult): Partial<Material> => ({
   basePrice: material.basePrice ?? material.unitPrice,
+  currentPrice: result.price,
   unitPrice: result.price,
   supplier: result.supplier,
   sku: result.sku || material.sku,

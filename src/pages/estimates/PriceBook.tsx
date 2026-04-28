@@ -10,6 +10,7 @@ import {
   Clock, TrendingUp, Zap, ChevronRight, Boxes, Users, AlertTriangle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import type { LaborRate, Material } from '../../data/types';
+import { lookupPricing, type PricingLookupResult } from '../../services/pricingLookupService';
 import {
   applyPricingResult,
   fetchLatestMaterialPrice,
@@ -53,6 +54,9 @@ export function PriceBook() {
   const [selectedItem, setSelectedItem] = useState<SelectedPriceItem>(laborRates[0] ? { type: 'labor', item: laborRates[0] } : null);
   const [pricingPrefs, setPricingPrefs] = useState<PricingPreferences>(() => getPricingPreferences());
   const [updatingPrices, setUpdatingPrices] = useState<string[]>([]);
+  const [lookupMaterial, setLookupMaterial] = useState<Material | null>(null);
+  const [lookupResults, setLookupResults] = useState<PricingLookupResult[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -299,6 +303,48 @@ export function PriceBook() {
     showToast(`Pricing checked for ${Math.min(targets.length, 20)} items`);
   };
 
+  const lookupCurrentPrice = async (material: Material) => {
+    setLookupMaterial(material);
+    setLookupResults([]);
+    setLookupLoading(true);
+    try {
+      const results = await lookupPricing({
+        query: material.sku || material.modelNumber || material.name,
+        supplier: pricingPrefs.preferredSupplier || material.supplier,
+        location: pricingPrefs.preferredStoreLocation,
+      });
+      setLookupResults(results);
+      if (results.length === 0) showToast('No pricing matches found', 'warning');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Pricing lookup failed', 'error');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const applyLookupResult = (result: PricingLookupResult) => {
+    if (!lookupMaterial) return;
+    const updates: Partial<Material> = {
+      currentPrice: result.price,
+      unitPrice: result.price,
+      supplier: result.source || lookupMaterial.supplier,
+      productUrl: result.link || lookupMaterial.productUrl,
+      lastUpdated: new Date().toISOString(),
+      pricingSource: 'serpapi',
+      pricingVerified: true,
+      priceEstimateOnly: false,
+    };
+    updateMaterial(lookupMaterial.id, updates);
+    const updatedMaterial = { ...lookupMaterial, ...updates };
+    setLookupMaterial(updatedMaterial);
+    if (selectedItem?.type === 'material' && selectedItem.item.id === lookupMaterial.id) {
+      setSelectedItem({ type: 'material', item: updatedMaterial });
+    }
+    showToast('Material price updated');
+    setLookupResults([]);
+    setLookupMaterial(null);
+  };
+
   return (
     <div className="pricebook-page">
       <div className="pricebook-shell">
@@ -413,6 +459,7 @@ export function PriceBook() {
                         </span>
                         <span className="pricebook-row-actions" onClick={e => e.stopPropagation()}>
                           <button onClick={() => updateMaterialPrice(material)} disabled={updatingPrices.includes(material.id)} title="Update pricing"><RefreshCw size={14} /></button>
+                          <button onClick={() => lookupCurrentPrice(material)} title="Lookup current price">Lookup Current Price</button>
                           <button onClick={() => handleEditMaterial(material)}><Edit size={14} /></button>
                           <button onClick={() => openDelete('material', material.id)}><Trash2 size={14} /></button>
                         </span>
@@ -445,7 +492,7 @@ export function PriceBook() {
                       </>
                     ) : (
                       <>
-                        <div><span>Unit price</span><strong>{formatCurrency(selectedItem.item.unitPrice)}</strong></div>
+                        <div><span>Unit price</span><strong>{formatCurrency(selectedItem.item.currentPrice ?? selectedItem.item.unitPrice)}</strong></div>
                         <div><span>Unit</span><strong>{selectedItem.item.unit}</strong></div>
                         <div><span>Supplier</span><strong>{selectedItem.item.supplier || '-'}</strong></div>
                         <div><span>Status</span><strong>{selectedItem.item.isActive ? 'Active' : 'Inactive'}</strong></div>
@@ -456,7 +503,7 @@ export function PriceBook() {
                   </div>
                   <div className="pricebook-detail-actions">
                     <button className="pricebook-secondary-btn" onClick={() => selectedItem.type === 'labor' ? handleEditRate(selectedItem.item) : handleEditMaterial(selectedItem.item)}><Edit size={16} /> Edit</button>
-                    {selectedItem.type === 'material' && <button className="pricebook-secondary-btn" onClick={() => updateMaterialPrice(selectedItem.item)}><RefreshCw size={16} /> Update Pricing</button>}
+                    {selectedItem.type === 'material' && <button className="pricebook-secondary-btn" onClick={() => lookupCurrentPrice(selectedItem.item)}><RefreshCw size={16} /> Lookup Current Price</button>}
                     {selectedItem.type === 'material' && selectedItem.item.productUrl && <a className="pricebook-secondary-btn" href={selectedItem.item.productUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Product</a>}
                     <button className="pricebook-danger-btn" onClick={() => openDelete(selectedItem.type === 'labor' ? 'labor' : 'material', selectedItem.item.id)}><Trash2 size={16} /> Delete</button>
                     <Link to="/estimates/new" className="pricebook-primary-btn"><Plus size={16} /> Apply to Estimate</Link>
@@ -566,6 +613,39 @@ export function PriceBook() {
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
           <button className="btn btn-secondary" onClick={() => { setShowMaterialModal(false); setEditingMaterial(null); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSaveMaterial}>{editingMaterial ? 'Update' : 'Create'} Material</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!lookupMaterial} onClose={() => { setLookupMaterial(null); setLookupResults([]); }} title="Current Price Lookup" size="lg">
+        <div className="space-y-4">
+          <div>
+            <h3 className="card-title">{lookupMaterial?.name}</h3>
+            <p className="text-sm text-muted">Select a product result to update this Price Book item.</p>
+          </div>
+          {lookupLoading ? (
+            <div className="card"><div className="card-body">Searching current prices...</div></div>
+          ) : lookupResults.length === 0 ? (
+            <div className="card"><div className="card-body text-muted">No matching products yet.</div></div>
+          ) : (
+            <div className="pricebook-table-body">
+              {lookupResults.map((result, index) => (
+                <div className="pricebook-row pricebook-material-row pricebook-live-material-row" key={`${result.link}-${index}`}>
+                  <span className="pricebook-row-main">
+                    {result.thumbnail ? <img src={result.thumbnail} alt="" style={{ width: 42, height: 42, objectFit: 'cover', borderRadius: 8 }} /> : <span className="pricebook-thumb"><Boxes size={18} /></span>}
+                    <strong>{result.title}</strong>
+                  </span>
+                  <span>{result.source || 'Unknown source'}</span>
+                  <span>{result.displayPrice || formatCurrency(result.price)}</span>
+                  <span>{result.rating ? `${result.rating} stars` : '-'}</span>
+                  <span>{result.reviews ? `${result.reviews} reviews` : '-'}</span>
+                  <span className="pricebook-row-actions">
+                    {result.link && <a href={result.link} target="_blank" rel="noreferrer" title="Open product"><ExternalLink size={14} /></a>}
+                    <button onClick={() => applyLookupResult(result)}>Use this price</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </Modal>
 
