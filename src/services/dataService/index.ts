@@ -8,6 +8,7 @@ import { jobsService } from './jobsService';
 import { tasksService } from './tasksService';
 import { expensesService } from './expensesService';
 import { invoicesService } from './invoicesService';
+import { paymentsService } from './paymentsService';
 import { timeEntriesService } from './timeEntriesService';
 import { shoppingListsService } from './shoppingListsService';
 import { ordersService } from './ordersService';
@@ -31,6 +32,7 @@ export const dataService = {
   tasks: tasksService,
   expenses: expensesService,
   invoices: invoicesService,
+  payments: paymentsService,
   timeEntries: timeEntriesService,
   shoppingLists: shoppingListsService,
   orders: ordersService,
@@ -43,6 +45,10 @@ export const dataService = {
     await upsertSupabaseRecords(TABLES.customers, data.customers);
     await upsertSupabaseRecords(TABLES.estimates, data.estimates);
     await upsertSupabaseRecords(TABLES.jobs, data.jobs);
+    await upsertSupabaseRecords(TABLES.expenses, data.expenses);
+    await upsertSupabaseRecords(TABLES.timeEntries, data.timeEntries);
+    await upsertSupabaseRecords(TABLES.invoices, data.invoices);
+    await upsertSupabaseRecords(TABLES.payments, data.payments);
   },
 };
 

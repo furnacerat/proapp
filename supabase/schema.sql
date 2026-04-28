@@ -10,9 +10,11 @@ create table if not exists public.customers (
   estimate_item_id text null,
   job_id text null,
   task_id text null,
+  worker_id text null,
   invoice_id text null,
   supplier_id text null,
   allowance_id text null,
+  receipt_id text null,
   source_type text null,
   source_id text null,
   project_type text null,
@@ -30,6 +32,7 @@ create table if not exists public.customers (
   quantity numeric null,
   unit text null,
   unit_cost numeric null,
+  unit_price numeric null,
   markup_percent numeric null,
   cost_total numeric null,
   price_total numeric null,
@@ -40,6 +43,27 @@ create table if not exists public.customers (
   estimated_total numeric null,
   actual_cost numeric null,
   estimated_cost numeric null,
+  vendor text null,
+  amount numeric null,
+  date date null,
+  due_date date null,
+  payment_date date null,
+  method text null,
+  reimbursable boolean null,
+  subtotal numeric null,
+  tax numeric null,
+  total numeric null,
+  paid_amount numeric null,
+  balance_due numeric null,
+  invoice_number text null,
+  worker_name text null,
+  start_time text null,
+  end_time text null,
+  hours numeric null,
+  overtime_hours numeric null,
+  hourly_rate numeric null,
+  overtime_rate numeric null,
+  labor_cost numeric null,
   notes text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -52,6 +76,7 @@ create table if not exists public.job_items (like public.customers including all
 create table if not exists public.tasks (like public.customers including all);
 create table if not exists public.expenses (like public.customers including all);
 create table if not exists public.invoices (like public.customers including all);
+create table if not exists public.invoice_items (like public.customers including all);
 create table if not exists public.payments (like public.customers including all);
 create table if not exists public.time_entries (like public.customers including all);
 create table if not exists public.shopping_lists (like public.customers including all);
@@ -75,6 +100,7 @@ alter table public.job_items add column if not exists title text;
 alter table public.tasks add column if not exists title text;
 alter table public.expenses add column if not exists title text;
 alter table public.invoices add column if not exists title text;
+alter table public.invoice_items add column if not exists title text;
 alter table public.payments add column if not exists title text;
 alter table public.time_entries add column if not exists title text;
 alter table public.shopping_lists add column if not exists title text;
@@ -90,6 +116,47 @@ alter table public.job_photos add column if not exists title text;
 alter table public.notes add column if not exists title text;
 alter table public.activity_log add column if not exists title text;
 
+alter table public.expenses add column if not exists vendor text;
+alter table public.expenses add column if not exists amount numeric;
+alter table public.expenses add column if not exists date date;
+alter table public.expenses add column if not exists reimbursable boolean;
+alter table public.expenses add column if not exists receipt_id text;
+
+alter table public.time_entries add column if not exists worker_id text;
+alter table public.time_entries add column if not exists worker_name text;
+alter table public.time_entries add column if not exists date date;
+alter table public.time_entries add column if not exists start_time text;
+alter table public.time_entries add column if not exists end_time text;
+alter table public.time_entries add column if not exists hours numeric;
+alter table public.time_entries add column if not exists overtime_hours numeric;
+alter table public.time_entries add column if not exists hourly_rate numeric;
+alter table public.time_entries add column if not exists overtime_rate numeric;
+alter table public.time_entries add column if not exists labor_cost numeric;
+
+alter table public.invoices add column if not exists invoice_number text;
+alter table public.invoices add column if not exists subtotal numeric;
+alter table public.invoices add column if not exists tax numeric;
+alter table public.invoices add column if not exists total numeric;
+alter table public.invoices add column if not exists paid_amount numeric;
+alter table public.invoices add column if not exists balance_due numeric;
+alter table public.invoices add column if not exists amount numeric;
+alter table public.invoices add column if not exists due_date date;
+
+alter table public.invoice_items add column if not exists invoice_id text;
+alter table public.invoice_items add column if not exists quantity numeric;
+alter table public.invoice_items add column if not exists unit text;
+alter table public.invoice_items add column if not exists unit_price numeric;
+alter table public.invoice_items add column if not exists total numeric;
+alter table public.invoice_items add column if not exists source_type text;
+alter table public.invoice_items add column if not exists source_id text;
+
+alter table public.payments add column if not exists invoice_id text;
+alter table public.payments add column if not exists job_id text;
+alter table public.payments add column if not exists customer_id text;
+alter table public.payments add column if not exists amount numeric;
+alter table public.payments add column if not exists payment_date date;
+alter table public.payments add column if not exists method text;
+
 create index if not exists customers_customer_id_idx on public.customers (customer_id);
 create index if not exists estimates_customer_id_idx on public.estimates (customer_id);
 create index if not exists estimate_items_estimate_id_idx on public.estimate_items (estimate_id);
@@ -103,6 +170,7 @@ create index if not exists tasks_job_id_idx on public.tasks (job_id);
 create index if not exists expenses_job_id_idx on public.expenses (job_id);
 create index if not exists invoices_customer_id_idx on public.invoices (customer_id);
 create index if not exists invoices_job_id_idx on public.invoices (job_id);
+create index if not exists invoice_items_invoice_id_idx on public.invoice_items (invoice_id);
 create index if not exists payments_invoice_id_idx on public.payments (invoice_id);
 create index if not exists time_entries_job_id_idx on public.time_entries (job_id);
 create index if not exists shopping_lists_job_id_idx on public.shopping_lists (job_id);

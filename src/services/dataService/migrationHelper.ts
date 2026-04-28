@@ -45,6 +45,37 @@ const collectionFromData = (data: AppData, key: MigrationKey): RecordWithId[] =>
     }) as RecordWithId[];
   }
 
+  if (key === 'invoiceItems') {
+    return data.invoices.flatMap(invoice => {
+      const items = ((invoice as any).items || []) as RecordWithId[];
+      if (items.length) {
+        return items.map(item => ({
+          ...item,
+          invoiceId: invoice.id,
+          jobId: invoice.jobId,
+          customerId: invoice.customerId,
+        }));
+      }
+      return [{
+        id: `${invoice.id}-summary`,
+        invoiceId: invoice.id,
+        jobId: invoice.jobId,
+        customerId: invoice.customerId,
+        estimateId: invoice.estimateId,
+        name: invoice.invoiceNumber || 'Invoice total',
+        description: invoice.notes,
+        quantity: 1,
+        unit: 'ea',
+        unitPrice: (invoice as any).total ?? invoice.amount,
+        total: (invoice as any).total ?? invoice.amount,
+        sourceType: 'invoice',
+        sourceId: invoice.id,
+        createdAt: invoice.createdAt,
+        updatedAt: (invoice as any).updatedAt || invoice.createdAt,
+      }];
+    }) as RecordWithId[];
+  }
+
   if (key === 'shoppingListItems') {
     return (data.shoppingLists || []).flatMap(list =>
       (list.items || []).map(item => ({

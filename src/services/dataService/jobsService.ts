@@ -166,7 +166,9 @@ export const jobsService = {
     const job = await base.getById(jobId, mode);
     if (!job) return null;
     const labor = appData?.timeEntries.filter(entry => entry.jobId === jobId).reduce((sum, entry) => sum + entry.laborCost, 0) || 0;
-    const expenses = appData?.expenses.filter(expense => expense.jobId === jobId).reduce((sum, expense) => sum + expense.amount, 0) || 0;
+    const expenses = appData?.expenses
+      .filter(expense => expense.jobId === jobId && expense.sourceType !== 'time_entry' && (expense.expenseType !== 'allowance' || expense.reimbursable === true || (expense as any).affectsContractorCost === true))
+      .reduce((sum, expense) => sum + expense.amount, 0) || 0;
     const actualCost = labor + expenses;
     return this.update(jobId, { actualCost } as Partial<Job>, mode);
   },

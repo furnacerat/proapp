@@ -9,13 +9,13 @@ export type TaskAssignmentRole = 'worker' | 'owner' | 'office';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type ExpenseCategory = 'materials' | 'permits' | 'dump_fees' | 'fuel' | 'rental' | 'subcontractor' | 'equipment' | 'misc';
 export type ExpenseSource = 'manual' | 'shopping_list' | 'order' | 'time_entry' | 'allowance' | 'receipt';
-export type ExpenseType = 'material' | 'labor' | 'equipment' | 'permit' | 'fuel' | 'rental' | 'subcontractor' | 'allowance';
+export type ExpenseType = 'material' | 'labor' | 'equipment' | 'permit' | 'fuel' | 'rental' | 'subcontractor' | 'allowance' | 'other';
 export type ExpenseCostTreatment = 'contractor_cost' | 'allowance' | 'reimbursable';
-export type ExpenseSourceType = 'manual' | 'shopping_list' | 'material_order' | 'time_entry' | 'allowance' | 'receipt';
+export type ExpenseSourceType = 'manual' | 'shopping_list' | 'material_order' | 'time_entry' | 'allowance' | 'receipt' | 'invoice';
 export type PaymentSource = 'company_card' | 'cash' | 'check' | 'finance' | 'credit' | 'other';
-export type InvoiceType = 'deposit' | 'progress' | 'final' | 'change_order';
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue';
-export type PaymentMethod = 'cash' | 'check' | 'ach' | 'card' | 'other';
+export type InvoiceType = 'deposit' | 'progress' | 'final' | 'change_order' | 'allowance_overage';
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'partially_paid' | 'overdue' | 'cancelled';
+export type PaymentMethod = 'cash' | 'check' | 'ach' | 'card' | 'transfer' | 'other';
 export type ChangeOrderStatus = 'pending' | 'approved' | 'rejected';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertType = 'task_overdue' | 'job_overdue' | 'invoice_overdue' | 'budget_warning' | 'payment_due';
@@ -431,14 +431,20 @@ export interface TimeEntry {
   jobId: string;
   workerId: string;
   taskId?: string;
+  workerName?: string;
   date: string;
   startTime: string;
   endTime?: string;
   totalHours: number;
+  hours?: number;
   overtime: boolean;
+  overtimeHours?: number;
+  hourlyRate?: number;
+  overtimeRate?: number;
   laborCost: number;
   notes?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Expense {
@@ -455,10 +461,12 @@ export interface Expense {
   costTreatment?: ExpenseCostTreatment;
   reimbursable?: boolean;
   allowanceId?: string;
+  receiptId?: string;
   paymentSource?: PaymentSource;
   notes?: string;
   receipt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Task {
@@ -490,11 +498,17 @@ export interface Invoice {
   estimateId?: string;
   jobId: string;
   amount: number;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  paidAmount?: number;
+  balanceDue?: number;
   type: InvoiceType;
   dueDate: string;
   status: InvoiceStatus;
   notes?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Payment {
@@ -504,10 +518,27 @@ export interface Payment {
   jobId?: string;
   amount: number;
   date: string;
+  paymentDate?: string;
   method?: PaymentMethod;
   checkNumber?: string;
   notes?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface InvoiceItem {
+  id: string;
+  invoiceId: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit?: string;
+  unitPrice: number;
+  total: number;
+  sourceType?: string;
+  sourceId?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Note {
@@ -906,7 +937,9 @@ export const INVOICE_STATUSES: { value: InvoiceStatus; label: string }[] = [
   { value: 'sent', label: 'Sent' },
   { value: 'paid', label: 'Paid' },
   { value: 'partial', label: 'Partial' },
+  { value: 'partially_paid', label: 'Partially Paid' },
   { value: 'overdue', label: 'Overdue' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
@@ -914,6 +947,7 @@ export const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
   { value: 'progress', label: 'Progress Payment' },
   { value: 'final', label: 'Final Payment' },
   { value: 'change_order', label: 'Change Order' },
+  { value: 'allowance_overage', label: 'Allowance Overage' },
 ];
 
 export const CHANGE_ORDER_STATUSES: { value: ChangeOrderStatus; label: string }[] = [

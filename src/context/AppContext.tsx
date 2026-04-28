@@ -230,7 +230,12 @@ const normalizeAppData = (raw: AppData): AppData => {
       assignmentRole: task.assignmentRole || (task.assignedTo ? 'worker' : 'office'),
       customerId: task.customerId || getCustomerIdForJob(task.jobId) || getCustomerIdForEstimate(task.estimateId),
     })),
-    timeEntries: data.timeEntries.map(entry => ({ ...entry })),
+    timeEntries: data.timeEntries.map(entry => ({
+      ...entry,
+      totalHours: entry.totalHours ?? entry.hours ?? 0,
+      hours: entry.hours ?? entry.totalHours ?? 0,
+      overtimeHours: entry.overtimeHours ?? (entry.overtime ? (entry.totalHours ?? entry.hours ?? 0) : 0),
+    })),
     expenses: data.expenses.map(expense => ({
       ...expense,
       sourceType: expense.sourceType || (expense.source === 'shopping_list' ? 'shopping_list' : expense.source === 'order' ? 'material_order' : expense.source === 'time_entry' ? 'time_entry' : expense.source === 'allowance' ? 'allowance' : 'manual'),
@@ -241,6 +246,10 @@ const normalizeAppData = (raw: AppData): AppData => {
       ...invoice,
       customerId: invoice.customerId || getCustomerIdForJob(invoice.jobId),
       estimateId: invoice.estimateId || jobById.get(invoice.jobId)?.estimateId,
+      subtotal: invoice.subtotal ?? invoice.amount,
+      total: invoice.total ?? invoice.amount,
+      paidAmount: invoice.paidAmount ?? data.payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0),
+      balanceDue: invoice.balanceDue ?? Math.max((invoice.total ?? invoice.amount) - data.payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0), 0),
     })),
     payments: data.payments.map(payment => {
       const invoice = invoiceById.get(payment.invoiceId);
@@ -298,14 +307,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataService.customers.getAll(),
       dataService.estimates.getAll(),
       dataService.jobs.getAll(),
+      dataService.expenses.getAll(),
+      dataService.timeEntries.getAll(),
+      dataService.invoices.getAll(),
+      dataService.payments.getAll(),
     ])
-      .then(([customers, estimates, jobs]) => {
+      .then(([customers, estimates, jobs, expenses, timeEntries, invoices, payments]) => {
         if (cancelled) return;
         setData(prev => ({
           ...prev,
           customers: customers.length ? customers : prev.customers,
           estimates: estimates.length ? estimates : prev.estimates,
           jobs: jobs.length ? jobs : prev.jobs,
+          expenses: expenses.length ? expenses : prev.expenses,
+          timeEntries: timeEntries.length ? timeEntries : prev.timeEntries,
+          invoices: invoices.length ? invoices : prev.invoices,
+          payments: payments.length ? payments : prev.payments,
         }));
       })
       .catch(error => {
@@ -514,19 +531,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({ ...prev, alerts: newAlerts }));
   };
 
+  const expenseAffectsJobCost = (expense: Expense) => {
+    if (expense.sourceType === 'time_entry') return false;
+    if (expense.expenseType !== 'allowance' && expense.costTreatment !== 'allowance') return true;
+    return expense.reimbursable === true || (expense as any).affectsContractorCost === true;
+  };
+
   const recalcJobCosts = (jobId: string) => {
     setData(prev => {
       const job = prev.jobs.find(j => j.id === jobId);
       if (!job) return prev;
       
       const jobEntries = prev.timeEntries.filter(t => t.jobId === jobId);
-      const jobExpenses = prev.expenses.filter(e => e.jobId === jobId);
+      const jobExpenses = prev.expenses.filter(e => e.jobId === jobId && expenseAffectsJobCost(e));
       const laborCost = jobEntries.reduce((sum, t) => sum + t.laborCost, 0);
       const expenseCost = jobExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const actualCost = laborCost + expenseCost;
       
-      const updatedJobs = prev.jobs.map(j => 
-        j.id === jobId ? { ...j, actualCost: laborCost + expenseCost, updatedAt: new Date().toISOString() } : j
+      const updatedJobs = prev.jobs.map(j =>
+        j.id === jobId ? { ...j, actualCost, updatedAt: new Date().toISOString() } : j
       );
+      void dataService.jobs.update(jobId, { actualCost } as Partial<Job>).catch(() => undefined);
       
       return { ...prev, jobs: updatedJobs };
     });
@@ -645,20 +670,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const worker = data.workers.find(w => w.id === entry.workerId);
     const hours = entry.totalHours;
     const rate = worker?.hourlyRate || 0;
-    const laborCost = hours * rate;
+    const overtimeHours = entry.overtimeHours ?? (entry.overtime ? hours : 0);
+    const regularHours = Math.max(hours - overtimeHours, 0);
+    const overtimeRate = entry.overtimeRate ?? rate * 1.5;
+    const laborCost = regularHours * rate + overtimeHours * overtimeRate;
+    const now = new Date().toISOString();
     
     const newEntry: TimeEntry = {
       ...entry,
       id: crypto.randomUUID(),
+      workerName: entry.workerName || worker?.name,
+      hours,
+      hourlyRate: entry.hourlyRate ?? rate,
+      overtimeRate,
+      overtimeHours,
       laborCost,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const laborExpense: Expense = {
+      id: `expense-time-${newEntry.id}`,
+      jobId: newEntry.jobId,
+      date: newEntry.date,
+      vendor: worker?.name || newEntry.workerName || 'Labor',
+      amount: laborCost,
+      category: 'misc',
+      source: 'time_entry',
+      sourceType: 'time_entry',
+      sourceId: newEntry.id,
+      expenseType: 'labor',
+      costTreatment: 'contractor_cost',
+      reimbursable: false,
+      notes: newEntry.notes ? `source: time_entry\n${newEntry.notes}` : 'source: time_entry',
+      createdAt: now,
+      updatedAt: now,
     };
     
     setData(prev => ({
       ...prev,
       timeEntries: [...prev.timeEntries, newEntry],
+      expenses: [...prev.expenses.filter(expense => expense.id !== laborExpense.id), laborExpense],
       tasks: entry.taskId ? prev.tasks.map(task => task.id === entry.taskId && task.status === 'open' ? { ...task, status: 'in_progress', updatedAt: new Date().toISOString() } : task) : prev.tasks,
     }));
+    void dataService.timeEntries.create(newEntry).catch(() => undefined);
+    void dataService.expenses.create(laborExpense).catch(() => undefined);
     recalcJobCosts(entry.jobId);
   };
 
@@ -674,16 +729,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const workerId = updates.workerId || entry.workerId;
         const worker = prev.workers.find(w => w.id === workerId);
         const hours = updates.totalHours ?? entry.totalHours;
-        laborCost = hours * (worker?.hourlyRate || 0);
+        const overtimeHours = updates.overtimeHours ?? (updates.overtime !== undefined ? (updates.overtime ? hours : 0) : entry.overtimeHours ?? (entry.overtime ? hours : 0));
+        const hourlyRate = updates.hourlyRate ?? worker?.hourlyRate ?? entry.hourlyRate ?? 0;
+        const overtimeRate = updates.overtimeRate ?? entry.overtimeRate ?? hourlyRate * 1.5;
+        laborCost = Math.max(hours - overtimeHours, 0) * hourlyRate + overtimeHours * overtimeRate;
       }
+      const updatedEntry = { ...entry, ...updates, totalHours: updates.totalHours ?? entry.totalHours, hours: updates.totalHours ?? updates.hours ?? entry.totalHours, laborCost, updatedAt: new Date().toISOString() };
+      const worker = prev.workers.find(w => w.id === updatedEntry.workerId);
+      const laborExpense: Expense = {
+        id: `expense-time-${updatedEntry.id}`,
+        jobId: updatedEntry.jobId,
+        date: updatedEntry.date,
+        vendor: worker?.name || updatedEntry.workerName || 'Labor',
+        amount: updatedEntry.laborCost,
+        category: 'misc',
+        source: 'time_entry',
+        sourceType: 'time_entry',
+        sourceId: updatedEntry.id,
+        expenseType: 'labor',
+        costTreatment: 'contractor_cost',
+        reimbursable: false,
+        notes: updatedEntry.notes ? `source: time_entry\n${updatedEntry.notes}` : 'source: time_entry',
+        createdAt: prev.expenses.find(expense => expense.id === `expense-time-${updatedEntry.id}`)?.createdAt || updatedEntry.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
       
       return {
         ...prev,
-        timeEntries: prev.timeEntries.map(t => 
-          t.id === id ? { ...t, ...updates, laborCost } : t
-        ),
+        timeEntries: prev.timeEntries.map(t => t.id === id ? updatedEntry : t),
+        expenses: [...prev.expenses.filter(expense => expense.id !== laborExpense.id), laborExpense],
       };
     });
+    void dataService.timeEntries.update(id, updates).catch(() => undefined);
+    if (dataService.mode === 'supabase' && currentEntry) {
+      const worker = data.workers.find(w => w.id === (updates.workerId || currentEntry.workerId));
+      const hours = updates.totalHours ?? currentEntry.totalHours;
+      const overtimeHours = updates.overtimeHours ?? (updates.overtime !== undefined ? (updates.overtime ? hours : 0) : currentEntry.overtimeHours ?? (currentEntry.overtime ? hours : 0));
+      const hourlyRate = updates.hourlyRate ?? worker?.hourlyRate ?? currentEntry.hourlyRate ?? 0;
+      const overtimeRate = updates.overtimeRate ?? currentEntry.overtimeRate ?? hourlyRate * 1.5;
+      const laborCost = Math.max(hours - overtimeHours, 0) * hourlyRate + overtimeHours * overtimeRate;
+      void dataService.expenses.create({
+        id: `expense-time-${id}`,
+        jobId: updates.jobId || currentEntry.jobId,
+        date: updates.date || currentEntry.date,
+        vendor: worker?.name || updates.workerName || currentEntry.workerName || 'Labor',
+        amount: laborCost,
+        category: 'misc',
+        source: 'time_entry',
+        sourceType: 'time_entry',
+        sourceId: id,
+        expenseType: 'labor',
+        costTreatment: 'contractor_cost',
+        reimbursable: false,
+        notes: updates.notes || currentEntry.notes ? `source: time_entry\n${updates.notes || currentEntry.notes || ''}` : 'source: time_entry',
+        createdAt: currentEntry.createdAt,
+        updatedAt: new Date().toISOString(),
+      }).catch(() => undefined);
+    }
     affectedJobIds.forEach(jobId => recalcJobCosts(jobId));
   };
 
@@ -692,7 +794,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({
       ...prev,
       timeEntries: prev.timeEntries.filter(t => t.id !== id),
+      expenses: prev.expenses.filter(expense => expense.sourceType !== 'time_entry' || expense.sourceId !== id),
     }));
+    void dataService.timeEntries.delete(id).catch(() => undefined);
+    void dataService.expenses.delete(`expense-time-${id}`).catch(() => undefined);
     if (entry) recalcJobCosts(entry.jobId);
   };
 
@@ -705,14 +810,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setData(prev => ({ ...prev, expenses: [...prev.expenses, newExpense] }));
+    void dataService.expenses.create(newExpense).catch(() => undefined);
     recalcJobCosts(expense.jobId);
   };
 
   const updateExpense = (id: string, updates: Partial<Expense>) => {
+    const currentExpense = data.expenses.find(e => e.id === id);
+    const affectedJobIds = Array.from(new Set([currentExpense?.jobId, updates.jobId].filter(Boolean) as string[]));
     setData(prev => ({
       ...prev,
-      expenses: prev.expenses.map(e => e.id === id ? { ...e, ...updates } : e),
+      expenses: prev.expenses.map(e => e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e),
     }));
+    void dataService.expenses.update(id, updates).catch(() => undefined);
+    affectedJobIds.forEach(jobId => recalcJobCosts(jobId));
   };
 
   const deleteExpense = (id: string) => {
@@ -721,6 +831,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       expenses: prev.expenses.filter(e => e.id !== id),
     }));
+    void dataService.expenses.delete(id).catch(() => undefined);
     if (expense) recalcJobCosts(expense.jobId);
   };
 
@@ -782,21 +893,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: new Date().toISOString(),
     };
     setData(prev => ({ ...prev, invoices: [...prev.invoices, newInvoice], tasks: [...prev.tasks, followUpTask] }));
+    void dataService.invoices.createWithItems(newInvoice, [{
+      invoiceId: newInvoice.id,
+      name: newInvoice.invoiceNumber,
+      description: newInvoice.notes,
+      quantity: 1,
+      unit: 'ea',
+      unitPrice: newInvoice.total ?? newInvoice.amount,
+      total: newInvoice.total ?? newInvoice.amount,
+      sourceType: 'invoice',
+      sourceId: newInvoice.id,
+    }]).catch(() => undefined);
+    void dataService.tasks.create(followUpTask).catch(() => undefined);
   };
 
   const updateInvoice = (id: string, updates: Partial<Invoice>) => {
     setData(prev => ({
       ...prev,
-      invoices: prev.invoices.map(i => i.id === id ? { ...i, ...updates } : i),
+      invoices: prev.invoices.map(i => i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i),
     }));
+    void dataService.invoices.update(id, updates).catch(() => undefined);
   };
 
   const deleteInvoice = (id: string) => {
+    const linkedPayments = data.payments.filter(payment => payment.invoiceId === id);
     setData(prev => ({
       ...prev,
       invoices: prev.invoices.filter(i => i.id !== id),
       payments: prev.payments.filter(p => p.invoiceId !== id),
     }));
+    void dataService.invoices.delete(id).catch(() => undefined);
+    linkedPayments.forEach(payment => void dataService.payments.delete(payment.id).catch(() => undefined));
   };
 
   const addPayment = (payment: Omit<Payment, 'id' | 'createdAt'>) => {
@@ -808,18 +935,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     };
+    const existingPayments = data.payments.filter(item => item.invoiceId === payment.invoiceId);
+    const paidAmount = existingPayments.reduce((sum, item) => sum + item.amount, 0) + newPayment.amount;
+    const invoiceTotal = invoice ? (invoice.total ?? invoice.amount) : 0;
+    const balanceDue = Math.max(invoiceTotal - paidAmount, 0);
+    const status: Invoice['status'] = balanceDue <= 0 && invoiceTotal > 0 ? 'paid' : paidAmount > 0 ? 'partially_paid' : invoice?.status || 'sent';
     setData(prev => ({
       ...prev,
       payments: [...prev.payments, newPayment],
+      invoices: prev.invoices.map(item => item.id === payment.invoiceId ? { ...item, paidAmount, balanceDue, status, updatedAt: new Date().toISOString() } : item),
       tasks: prev.tasks.map(task => task.invoiceId === payment.invoiceId && task.status !== 'done' ? { ...task, status: 'done', updatedAt: new Date().toISOString() } : task),
     }));
+    void dataService.invoices.recordPayment(newPayment.invoiceId, newPayment).catch(() => undefined);
   };
 
   const deletePayment = (id: string) => {
+    const payment = data.payments.find(item => item.id === id);
+    const invoice = payment ? data.invoices.find(item => item.id === payment.invoiceId) : undefined;
+    const remainingPaidAmount = payment && invoice
+      ? data.payments.filter(item => item.invoiceId === invoice.id && item.id !== id).reduce((sum, item) => sum + item.amount, 0)
+      : 0;
+    const remainingBalanceDue = invoice ? Math.max((invoice.total ?? invoice.amount) - remainingPaidAmount, 0) : 0;
+    const remainingStatus: Invoice['status'] = invoice
+      ? remainingBalanceDue <= 0 && (invoice.total ?? invoice.amount) > 0 ? 'paid' : remainingPaidAmount > 0 ? 'partially_paid' : 'sent'
+      : 'sent';
     setData(prev => ({
       ...prev,
       payments: prev.payments.filter(p => p.id !== id),
+      invoices: payment ? prev.invoices.map(invoice => {
+        if (invoice.id !== payment.invoiceId) return invoice;
+        return { ...invoice, paidAmount: remainingPaidAmount, balanceDue: remainingBalanceDue, status: remainingStatus, updatedAt: new Date().toISOString() };
+      }) : prev.invoices,
     }));
+    if (payment) {
+      void dataService.payments.delete(id).catch(() => undefined);
+      void dataService.invoices.update(payment.invoiceId, {
+        paidAmount: remainingPaidAmount,
+        balanceDue: remainingBalanceDue,
+        status: remainingStatus,
+      }).catch(() => undefined);
+    }
   };
 
   const addNote = (note: Omit<NoteType, 'id' | 'createdAt'>) => {
@@ -1553,7 +1708,7 @@ const approveChangeOrder = (id: string) => {
       const jobs = expense ? prev.jobs.map(job => {
         if (job.id !== expense.jobId) return job;
         const laborCost = prev.timeEntries.filter(entry => entry.jobId === job.id).reduce((sum, entry) => sum + entry.laborCost, 0);
-        const expenseCost = expenses.filter(item => item.jobId === job.id).reduce((sum, item) => sum + item.amount, 0);
+        const expenseCost = expenses.filter(item => item.jobId === job.id && expenseAffectsJobCost(item)).reduce((sum, item) => sum + item.amount, 0);
         return { ...job, actualCost: laborCost + expenseCost, updatedAt: new Date().toISOString() };
       }) : prev.jobs;
       return {
@@ -1653,7 +1808,7 @@ const approveChangeOrder = (id: string) => {
       };
       const expenses = reimbursableTotal > 0 ? [...prev.expenses, expense] : prev.expenses;
       const jobEntries = prev.timeEntries.filter(entry => entry.jobId === receipt.jobId);
-      const jobExpenses = expenses.filter(item => item.jobId === receipt.jobId);
+      const jobExpenses = expenses.filter(item => item.jobId === receipt.jobId && expenseAffectsJobCost(item));
       const actualCost = jobEntries.reduce((sum, entry) => sum + entry.laborCost, 0) + jobExpenses.reduce((sum, item) => sum + item.amount, 0);
       return {
         ...prev,
@@ -1742,7 +1897,7 @@ const approveChangeOrder = (id: string) => {
       const jobs = jobId ? prev.jobs.map(job => {
         if (job.id !== jobId) return job;
         const laborCost = prev.timeEntries.filter(entry => entry.jobId === jobId).reduce((sum, entry) => sum + entry.laborCost, 0);
-        const expenseCost = expenses.filter(expense => expense.jobId === jobId).reduce((sum, expense) => sum + expense.amount, 0);
+        const expenseCost = expenses.filter(expense => expense.jobId === jobId && expenseAffectsJobCost(expense)).reduce((sum, expense) => sum + expense.amount, 0);
         return { ...job, actualCost: laborCost + expenseCost, updatedAt: new Date().toISOString() };
       }) : prev.jobs;
       return { ...prev, allowances, expenses, jobs };

@@ -7,6 +7,7 @@ export const TABLES = {
   tasks: 'tasks',
   expenses: 'expenses',
   invoices: 'invoices',
+  invoiceItems: 'invoice_items',
   payments: 'payments',
   timeEntries: 'time_entries',
   shoppingLists: 'shopping_lists',
