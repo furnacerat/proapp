@@ -261,7 +261,7 @@ export function PriceBook() {
   ];
 
   const showLaborTable = activeTab === 'labor' || activeTab === 'all' || activeTab === 'subcontractors';
-  const showMaterialTable = activeTab === 'materials' || activeTab === 'equipment';
+  const showMaterialTable = activeTab === 'materials' || activeTab === 'equipment' || activeTab === 'all';
   const tableLabor = activeTab === 'subcontractors'
     ? filteredLabor.filter(rate => rate.trade.toLowerCase().includes('sub'))
     : filteredLabor;
@@ -270,6 +270,7 @@ export function PriceBook() {
     : filteredMaterials;
 
   const selectedUsage = selectedItem?.type === 'labor' ? laborUsage[selectedItem.item.id] || 0 : 0;
+  const hasPriceBookItems = laborRates.length + materials.length > 0;
 
   const importStarterRates = () => {
     [
@@ -477,9 +478,8 @@ export function PriceBook() {
             <button className={`pricebook-filter-btn ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}><Filter size={17} /> Filter</button>
             <button className="pricebook-filter-btn" onClick={updateAllMaterialPricing}><RefreshCw size={17} /> Update Pricing</button>
             <button className="pricebook-filter-btn" onClick={autoMatchUnmatchedItems}><Zap size={17} /> Auto Match Unmatched Items</button>
-            <button className="pricebook-primary-btn" onClick={() => activeTab === 'materials' || activeTab === 'equipment' ? setShowMaterialModal(true) : setShowModal(true)}>
-              <Plus size={18} /> {activeTab === 'materials' || activeTab === 'equipment' ? 'Add Item' : 'Add Rate'}
-            </button>
+            <button className="pricebook-secondary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> Add Rate</button>
+            <button className="pricebook-primary-btn" onClick={() => setShowMaterialModal(true)}><Plus size={18} /> Add Item</button>
           </div>
         </div>
 
@@ -512,13 +512,14 @@ export function PriceBook() {
           </div>
         )}
 
-        {laborRates.length === 0 ? (
+        {!hasPriceBookItems ? (
           <div className="pricebook-empty">
             <div className="pricebook-empty-icon"><Hammer size={42} /></div>
-            <h2>Set your labor rates to start building accurate estimates</h2>
-            <p>Create reusable labor roles and rates so every estimate starts with reliable pricing.</p>
+            <h2>Set up your price book to start building accurate estimates</h2>
+            <p>Create reusable labor rates and material items so every estimate starts with reliable pricing.</p>
             <div className="pricebook-empty-actions">
               <button className="pricebook-primary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> Add Labor Rate</button>
+              <button className="pricebook-primary-btn" onClick={() => setShowMaterialModal(true)}><Plus size={18} /> Add Item</button>
               <button className="pricebook-secondary-btn" onClick={importStarterRates}><Package size={18} /> Import Starter Rates</button>
             </div>
           </div>
@@ -574,10 +575,10 @@ export function PriceBook() {
                           </em>
                         </span>
                         <span className="pricebook-row-actions" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => autoMatchMaterial(material)} disabled={autoMatchingIds.includes(material.id)} title="Auto match product">Auto Match</button>
-                          <button onClick={() => refreshConfirmedPrice(material)} disabled={updatingPrices.includes(material.id)} title="Refresh price"><RefreshCw size={14} /> Refresh Price</button>
-                          <button onClick={() => handleEditMaterial(material)}><Edit size={14} /></button>
-                          <button onClick={() => openDelete('material', material.id)}><Trash2 size={14} /></button>
+                          <button onClick={() => autoMatchMaterial(material)} disabled={autoMatchingIds.includes(material.id)} title="Auto match product" aria-label={`Auto match ${material.name}`}><Zap size={14} /></button>
+                          <button onClick={() => refreshConfirmedPrice(material)} disabled={updatingPrices.includes(material.id)} title="Refresh price" aria-label={`Refresh price for ${material.name}`}><RefreshCw size={14} /></button>
+                          <button onClick={() => handleEditMaterial(material)} title="Edit item" aria-label={`Edit ${material.name}`}><Edit size={14} /></button>
+                          <button onClick={() => openDelete('material', material.id)} title="Delete item" aria-label={`Delete ${material.name}`}><Trash2 size={14} /></button>
                         </span>
                       </button>
                     ))}
