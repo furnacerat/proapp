@@ -6,6 +6,5 @@ export const getStorageMode = (): StorageMode => {
   const configured = import.meta.env.VITE_STORAGE_MODE;
   if (configured === 'supabase') return 'supabase';
   if (configured === 'local') return 'local';
-  return 'local';
+  return import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? 'supabase' : 'local';
 };
-
