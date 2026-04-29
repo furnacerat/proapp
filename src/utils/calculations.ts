@@ -1,5 +1,6 @@
 import { Job, TimeEntry, Expense, Worker, Invoice, Payment, Task } from '../data/types';
 import { formatCurrency } from './formatters';
+import { expenseAffectsJobCost } from './timeEntries';
 
 export function calculateProjectedProfit(job: Job): number {
   return job.contractAmount - job.actualCost;
@@ -25,12 +26,15 @@ export function getWorkerHours(workerId: string, timeEntries: TimeEntry[]): numb
 export function getWorkerOwed(workerId: string, workers: Worker[], timeEntries: TimeEntry[]): number {
   const worker = workers.find(w => w.id === workerId);
   if (!worker) return 0;
-  
-  const hours = getWorkerHours(workerId, timeEntries);
-  
-  if (worker.payType === 'hourly' && worker.hourlyRate) {
-    return hours * worker.hourlyRate;
+
+  const entries = timeEntries.filter(t => t.workerId === workerId);
+  if (entries.some(entry => entry.laborCost !== undefined)) {
+    return entries.reduce((sum, entry) => sum + entry.laborCost, 0);
   }
+  const hours = entries.reduce((sum, entry) => sum + entry.totalHours, 0);
+
+  if (worker.payType === 'hourly' && worker.hourlyRate) return hours * worker.hourlyRate;
+  if (worker.payType === 'flat' && worker.flatRate) return entries.length * worker.flatRate;
   return 0;
 }
 
@@ -42,7 +46,7 @@ export function getJobLaborCost(jobId: string, timeEntries: TimeEntry[]): number
 
 export function getJobExpenseTotal(jobId: string, expenses: Expense[]): number {
   return expenses
-    .filter(e => e.jobId === jobId)
+    .filter(e => e.jobId === jobId && expenseAffectsJobCost(e))
     .reduce((sum, e) => sum + e.amount, 0);
 }
 

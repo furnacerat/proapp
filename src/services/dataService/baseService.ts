@@ -112,7 +112,7 @@ export const toSupabaseRow = (record: RecordWithId) => ({
   start_time: record.startTime || record.start_time || null,
   end_time: record.endTime || record.end_time || null,
   hours: record.hours ?? record.totalHours ?? null,
-  overtime_hours: record.overtimeHours ?? (record.overtime ? record.totalHours : 0) ?? null,
+  overtime_hours: record.overtimeHours ?? (record.overtime ? Math.max((record.totalHours ?? record.hours ?? 0) - 8, 0) : 0) ?? null,
   hourly_rate: record.hourlyRate ?? null,
   overtime_rate: record.overtimeRate ?? null,
   labor_cost: record.laborCost ?? null,

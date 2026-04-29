@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { generateSmartNextActions } from '../utils/insights';
+import { expenseAffectsJobCost } from '../utils/timeEntries';
 import {
   AlertTriangle,
   ArrowRight,
@@ -124,7 +125,7 @@ export function DailyCommandCenter() {
   const completedTasksToday = tasks.filter(task => task.dueDate === today && task.status === 'done').length;
   const dailyCompletion = Math.min(100, Math.round(((completedActionIds.length + completedTasksToday) / Math.max(actionTotal, 1)) * 100));
   const profitInMotion = activeJobs.reduce((sum, job) => {
-    const jobExpenses = expenses.filter(expense => expense.jobId === job.id).reduce((total, expense) => total + expense.amount, 0);
+    const jobExpenses = expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense)).reduce((total, expense) => total + expense.amount, 0);
     const labor = timeEntries.filter(entry => entry.jobId === job.id).reduce((total, entry) => total + entry.laborCost, 0);
     return sum + (job.contractAmount - jobExpenses - labor);
   }, 0);

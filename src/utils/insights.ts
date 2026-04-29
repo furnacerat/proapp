@@ -1,5 +1,6 @@
 import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance } from '../data/types';
 import { formatCurrency } from './formatters';
+import { expenseAffectsJobCost } from './timeEntries';
 
 export interface Insight {
   id: string;
@@ -61,7 +62,7 @@ function getPaidByInvoice(payments: Payment[]) {
 }
 
 function getActualJobCost(job: Job, expenses: Expense[], timeEntries: TimeEntry[]) {
-  const expenseTotal = expenses.filter(expense => expense.jobId === job.id).reduce((sum, expense) => sum + expense.amount, 0);
+  const expenseTotal = expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense)).reduce((sum, expense) => sum + expense.amount, 0);
   const laborTotal = timeEntries.filter(entry => entry.jobId === job.id).reduce((sum, entry) => sum + entry.laborCost, 0);
   return expenseTotal + laborTotal;
 }
@@ -135,7 +136,7 @@ export function generateSmartNextActions(
     .filter(job => job.status === 'active' || job.status === 'scheduled' || job.status === 'awaiting_materials')
     .forEach(job => {
       const jobTime = timeEntries.filter(entry => entry.jobId === job.id);
-      const jobExpenses = expenses.filter(expense => expense.jobId === job.id);
+      const jobExpenses = expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense));
       const lastActivity = [job.updatedAt, ...jobTime.map(entry => entry.date), ...jobExpenses.map(expense => expense.date)]
         .filter(Boolean)
         .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
@@ -395,7 +396,7 @@ export function getEstimateSuggestions(
   const matchingJobs = jobs.filter(job => job.type === projectType);
   const expenseCounts: Record<string, { count: number; total: number; category: EstimateLineCategory }> = {};
   matchingJobs.forEach(job => {
-    expenses.filter(expense => expense.jobId === job.id).forEach(expense => {
+    expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense)).forEach(expense => {
       const key = expense.category;
       if (!expenseCounts[key]) expenseCounts[key] = { count: 0, total: 0, category: 'material' };
       expenseCounts[key].count += 1;
@@ -474,7 +475,7 @@ export function generateInsights(
   jobs.forEach(job => {
     if (job.status !== 'active' && job.status !== 'completed') return;
     
-    const jobExpenses = expenses.filter(e => e.jobId === job.id);
+    const jobExpenses = expenses.filter(e => e.jobId === job.id && expenseAffectsJobCost(e));
     const jobTime = timeEntries.filter(t => t.jobId === job.id);
     
     const laborCost = jobTime.reduce((sum, t) => sum + t.laborCost, 0);
@@ -624,7 +625,7 @@ export function getJobInsights(job: Job, expenses: Expense[], timeEntries: TimeE
   const insights: Insight[] = [];
   
   const laborCost = timeEntries.reduce((sum, t) => sum + t.laborCost, 0);
-  const materialCost = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const materialCost = expenses.filter(expenseAffectsJobCost).reduce((sum, e) => sum + e.amount, 0);
   const actualCost = laborCost + materialCost;
   const profit = job.contractAmount - actualCost;
   const margin = job.contractAmount > 0 ? (profit / job.contractAmount) * 100 : 0;
@@ -738,7 +739,7 @@ export function getKPIS(
 
   const totalHours = timeEntries.reduce((sum, t) => sum + t.totalHours, 0);
   const laborCost = timeEntries.reduce((sum, t) => sum + t.laborCost, 0);
-  const materialCost = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const materialCost = expenses.filter(expenseAffectsJobCost).reduce((sum, e) => sum + e.amount, 0);
 
   return {
     totalJobs: jobs.length,

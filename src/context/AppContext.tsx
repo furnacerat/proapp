@@ -4,6 +4,7 @@ import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
 import { canViewOwnerFinancials, sanitizeAppDataForRole } from '../auth/rbac';
+import { calculateTimeEntryLaborCost, expenseAffectsJobCost, getTimeEntryOvertimeHours, timeEntryCostFields } from '../utils/timeEntries';
 
 interface DataServiceStatus {
   mode: 'local' | 'supabase';
@@ -268,12 +269,14 @@ const normalizeAppData = (raw: AppData): AppData => {
       assignmentRole: task.assignmentRole || (task.assignedTo ? 'worker' : 'office'),
       customerId: task.customerId || getCustomerIdForJob(task.jobId) || getCustomerIdForEstimate(task.estimateId),
     })),
-    timeEntries: data.timeEntries.map(entry => ({
-      ...entry,
-      totalHours: entry.totalHours ?? entry.hours ?? 0,
-      hours: entry.hours ?? entry.totalHours ?? 0,
-      overtimeHours: entry.overtimeHours ?? (entry.overtime ? (entry.totalHours ?? entry.hours ?? 0) : 0),
-    })),
+    timeEntries: data.timeEntries.map(entry => {
+      const worker = data.workers.find(item => item.id === entry.workerId);
+      const costFields = timeEntryCostFields(entry, worker);
+      return {
+        ...entry,
+        ...costFields,
+      };
+    }),
     expenses: data.expenses.map(expense => ({
       ...expense,
       sourceType: expense.sourceType || (expense.source === 'shopping_list' ? 'shopping_list' : expense.source === 'order' ? 'material_order' : expense.source === 'time_entry' ? 'time_entry' : expense.source === 'allowance' ? 'allowance' : 'manual'),
@@ -576,12 +579,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({ ...prev, alerts: newAlerts }));
   };
 
-  const expenseAffectsJobCost = (expense: Expense) => {
-    if (expense.sourceType === 'time_entry') return false;
-    if (expense.expenseType !== 'allowance' && expense.costTreatment !== 'allowance') return true;
-    return expense.reimbursable === true || (expense as any).affectsContractorCost === true;
-  };
-
   const recalcJobCosts = (jobId: string) => {
     setData(prev => {
       const job = prev.jobs.find(j => j.id === jobId);
@@ -713,23 +710,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addTimeEntry = (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'laborCost'>) => {
     const worker = data.workers.find(w => w.id === entry.workerId);
-    const hours = entry.totalHours;
-    const rate = worker?.hourlyRate || 0;
-    const overtimeHours = entry.overtimeHours ?? (entry.overtime ? hours : 0);
-    const regularHours = Math.max(hours - overtimeHours, 0);
-    const overtimeRate = entry.overtimeRate ?? rate * 1.5;
-    const laborCost = regularHours * rate + overtimeHours * overtimeRate;
+    const costFields = timeEntryCostFields(entry, worker);
     const now = new Date().toISOString();
     
     const newEntry: TimeEntry = {
       ...entry,
       id: crypto.randomUUID(),
       workerName: entry.workerName || worker?.name,
-      hours,
-      hourlyRate: entry.hourlyRate ?? rate,
-      overtimeRate,
-      overtimeHours,
-      laborCost,
+      ...costFields,
       createdAt: now,
       updatedAt: now,
     };
@@ -738,7 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       jobId: newEntry.jobId,
       date: newEntry.date,
       vendor: worker?.name || newEntry.workerName || 'Labor',
-      amount: laborCost,
+      amount: newEntry.laborCost,
       category: 'misc',
       source: 'time_entry',
       sourceType: 'time_entry',
@@ -770,16 +758,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!entry) return prev;
       
       let laborCost = entry.laborCost;
-      if (updates.totalHours !== undefined || updates.workerId !== undefined) {
+      if (
+        updates.totalHours !== undefined ||
+        updates.hours !== undefined ||
+        updates.workerId !== undefined ||
+        updates.overtime !== undefined ||
+        updates.overtimeHours !== undefined ||
+        updates.hourlyRate !== undefined ||
+        updates.overtimeRate !== undefined
+      ) {
         const workerId = updates.workerId || entry.workerId;
         const worker = prev.workers.find(w => w.id === workerId);
-        const hours = updates.totalHours ?? entry.totalHours;
-        const overtimeHours = updates.overtimeHours ?? (updates.overtime !== undefined ? (updates.overtime ? hours : 0) : entry.overtimeHours ?? (entry.overtime ? hours : 0));
-        const hourlyRate = updates.hourlyRate ?? worker?.hourlyRate ?? entry.hourlyRate ?? 0;
-        const overtimeRate = updates.overtimeRate ?? entry.overtimeRate ?? hourlyRate * 1.5;
-        laborCost = Math.max(hours - overtimeHours, 0) * hourlyRate + overtimeHours * overtimeRate;
+        laborCost = calculateTimeEntryLaborCost({ ...entry, ...updates }, worker);
       }
-      const updatedEntry = { ...entry, ...updates, totalHours: updates.totalHours ?? entry.totalHours, hours: updates.totalHours ?? updates.hours ?? entry.totalHours, laborCost, updatedAt: new Date().toISOString() };
+      const totalHours = updates.totalHours ?? entry.totalHours;
+      const updatedEntry = {
+        ...entry,
+        ...updates,
+        totalHours,
+        hours: updates.totalHours ?? updates.hours ?? entry.totalHours,
+        overtimeHours: getTimeEntryOvertimeHours({ ...entry, ...updates, totalHours }, totalHours),
+        laborCost,
+        updatedAt: new Date().toISOString(),
+      };
       const worker = prev.workers.find(w => w.id === updatedEntry.workerId);
       const laborExpense: Expense = {
         id: `expense-time-${updatedEntry.id}`,
@@ -808,11 +809,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void dataService.timeEntries.update(id, updates).catch(() => undefined);
     if (dataService.mode === 'supabase' && currentEntry) {
       const worker = data.workers.find(w => w.id === (updates.workerId || currentEntry.workerId));
-      const hours = updates.totalHours ?? currentEntry.totalHours;
-      const overtimeHours = updates.overtimeHours ?? (updates.overtime !== undefined ? (updates.overtime ? hours : 0) : currentEntry.overtimeHours ?? (currentEntry.overtime ? hours : 0));
-      const hourlyRate = updates.hourlyRate ?? worker?.hourlyRate ?? currentEntry.hourlyRate ?? 0;
-      const overtimeRate = updates.overtimeRate ?? currentEntry.overtimeRate ?? hourlyRate * 1.5;
-      const laborCost = Math.max(hours - overtimeHours, 0) * hourlyRate + overtimeHours * overtimeRate;
+      const laborCost = calculateTimeEntryLaborCost({ ...currentEntry, ...updates }, worker);
       void dataService.expenses.create({
         id: `expense-time-${id}`,
         jobId: updates.jobId || currentEntry.jobId,
@@ -1271,7 +1268,7 @@ const approveChangeOrder = (id: string) => {
 
   const getJobExpenseTotal = (jobId: string) => 
     !canSeeOwnerFinancials ? 0 :
-    data.expenses.filter(e => e.jobId === jobId).reduce((sum, e) => sum + e.amount, 0);
+    data.expenses.filter(e => e.jobId === jobId && expenseAffectsJobCost(e)).reduce((sum, e) => sum + e.amount, 0);
 
   const getJobChangeOrderTotal = (jobId: string) => 
     data.changeOrders.filter(co => co.jobId === jobId && co.status === 'approved').reduce((sum, co) => sum + co.amount, 0);
