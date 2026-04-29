@@ -1,4 +1,9 @@
 -- Workspace RLS patch.
+-- If this script errors with "cannot change return type of existing function",
+-- the Supabase SQL Editor is still running an older pasted script. Clear the
+-- editor completely and paste this current file. This file intentionally does
+-- not create or replace any functions.
+--
 -- Run this after supabase/schema.sql, phase4_auth_patch.sql, and rbac_profiles.sql.
 -- It lets owners/admins see and manage shared operational rows created by team
 -- members while keeping normal users limited by role and app scoping.
