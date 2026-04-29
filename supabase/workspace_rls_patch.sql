@@ -2,32 +2,9 @@
 -- Run this after supabase/schema.sql, phase4_auth_patch.sql, and rbac_profiles.sql.
 -- It lets owners/admins see and manage shared operational rows created by team
 -- members while keeping normal users limited by role and app scoping.
-
-create or replace function public.current_app_role()
-returns text
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    (select role from public.profiles where user_id = auth.uid() and active = true),
-    'crew'
-  );
-$$;
-
-create or replace function public.current_profile_active()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    (select active from public.profiles where user_id = auth.uid()),
-    false
-  );
-$$;
+--
+-- This patch expects public.current_app_role() and
+-- public.current_profile_active() to already exist from rbac_profiles.sql.
 
 -- Non-owner users need to discover the active owner user_id so the app can ask
 -- for owner-owned workspace rows where their role allows it.
