@@ -86,7 +86,7 @@ export const toSupabaseRow = (record: RecordWithId) => ({
   estimate_id: record.estimateId || record.estimate_id || null,
   job_id: record.jobId || record.job_id || null,
   task_id: record.taskId || record.task_id || null,
-  worker_id: record.workerId || record.worker_id || null,
+  worker_id: record.workerId || record.assignedTo || record.worker_id || null,
   invoice_id: record.invoiceId || record.invoice_id || null,
   supplier_id: record.supplierId || record.supplier_id || null,
   allowance_id: record.allowanceId || record.allowance_id || null,
