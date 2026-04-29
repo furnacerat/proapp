@@ -30,6 +30,21 @@ const friendlyAuthError = (message?: string) => {
   return message || 'Something went wrong. Please try again.';
 };
 
+const loadOwnerUserId = async (currentUser: User, role: UserRole) => {
+  if (!supabase) return currentUser.id;
+  if (role === 'owner') return currentUser.id;
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('user_id')
+    .eq('role', 'owner')
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle();
+
+  return data?.user_id || currentUser.id;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -40,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (dataService.mode !== 'supabase' || !supabase || !nextUser) {
       setProfile(null);
       dataService.setRole('owner');
+      dataService.setOwnerUserId(null);
       return;
     }
 
@@ -69,10 +85,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         job_title: nextUser.user_metadata?.job_title || '',
         active: true,
       });
+      dataService.setOwnerUserId(await loadOwnerUserId(nextUser, fallbackRole));
       return;
     }
 
     dataService.setRole(data.role);
+    dataService.setOwnerUserId(await loadOwnerUserId(nextUser, data.role));
     setProfile({
       id: data.id,
       user_id: data.user_id,
@@ -88,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (dataService.mode !== 'supabase' || !supabase) {
       dataService.setUserId(null);
       dataService.setRole('owner');
+      dataService.setOwnerUserId(null);
       setLoading(false);
       return;
     }
@@ -151,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (supabase) await supabase.auth.signOut();
       dataService.setUserId(null);
       dataService.setRole('owner');
+      dataService.setOwnerUserId(null);
     },
     async resetPassword(email) {
       if (!supabase) return { error: 'Supabase is not configured.' };

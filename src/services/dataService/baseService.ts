@@ -9,9 +9,11 @@ export type LocalCollectionKey = keyof AppData;
 const now = () => new Date().toISOString();
 let currentUserId: string | null = null;
 let currentUserRole: UserRole = 'owner';
+let ownerUserIdCache: string | null | undefined;
 
 export const setDataServiceUserId = (userId: string | null) => {
   currentUserId = userId;
+  ownerUserIdCache = undefined;
 };
 
 export const setDataServiceRole = (role: UserRole) => {
@@ -19,6 +21,23 @@ export const setDataServiceRole = (role: UserRole) => {
 };
 
 export const getDataServiceUserId = () => currentUserId;
+
+export const setDataServiceOwnerUserId = (userId: string | null) => {
+  ownerUserIdCache = userId;
+};
+
+export const getVisibleSupabaseUserIds = () => {
+  const userId = requireSupabaseUserId();
+  if (currentUserRole === 'owner' || currentUserRole === 'admin') return null;
+  return Array.from(new Set([userId, ownerUserIdCache].filter(Boolean))) as string[];
+};
+
+export const applyVisibleUserFilter = (query: any): any => {
+  const visibleUserIds = getVisibleSupabaseUserIds();
+  if (!visibleUserIds) return query;
+  if (visibleUserIds.length === 1) return query.eq('user_id', visibleUserIds[0]);
+  return query.in('user_id', visibleUserIds);
+};
 
 export const getLocalAppData = (): AppData | null => {
   try {
@@ -149,8 +168,9 @@ export const createCollectionService = <T extends RecordWithId>(
       }
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
-      const userId = requireSupabaseUserId();
-      const { data, error } = await client.from(table).select('id,payload').eq('user_id', userId).order('updated_at', { ascending: false });
+      requireSupabaseUserId();
+      const query = applyVisibleUserFilter(client.from(table).select('id,payload'));
+      const { data, error } = await query.order('updated_at', { ascending: false });
       if (error) throw error;
       return fromSupabaseRows<T>(data);
     }
@@ -162,8 +182,9 @@ export const createCollectionService = <T extends RecordWithId>(
     if (mode === 'supabase') {
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
-      const userId = requireSupabaseUserId();
-      const { data, error } = await client.from(table).select('id,payload').eq('id', id).eq('user_id', userId).maybeSingle();
+      requireSupabaseUserId();
+      const query = applyVisibleUserFilter(client.from(table).select('id,payload').eq('id', id));
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return data ? fromSupabaseRows<T>([data])[0] : null;
     }
@@ -199,8 +220,9 @@ export const createCollectionService = <T extends RecordWithId>(
     if (mode === 'supabase') {
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
-      const userId = requireSupabaseUserId();
-      const { error } = await client.from(table).delete().eq('id', id).eq('user_id', userId);
+      requireSupabaseUserId();
+      const query = applyVisibleUserFilter(client.from(table).delete().eq('id', id));
+      const { error } = await query;
       if (error) throw error;
       return;
     }

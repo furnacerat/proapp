@@ -2,8 +2,8 @@ import type { EstimateLineItem, Job } from '../../data/types';
 import { supabase } from '../../lib/supabase';
 import {
   createCollectionService,
+  applyVisibleUserFilter,
   fromSupabaseRows,
-  getDataServiceUserId,
   getLocalAppData,
   upsertSupabaseRecords,
   type RecordWithId,
@@ -84,8 +84,8 @@ export const jobsService = {
 
     if (mode === 'supabase' && supabase) {
       const [{ data: customer }, { data: estimate }] = await Promise.all([
-        normalized.customerId ? supabase.from(TABLES.customers).select('id,payload').eq('id', normalized.customerId).eq('user_id', getDataServiceUserId()).maybeSingle() : Promise.resolve({ data: null }),
-        normalized.estimateId ? supabase.from(TABLES.estimates).select('id,payload').eq('id', normalized.estimateId).eq('user_id', getDataServiceUserId()).maybeSingle() : Promise.resolve({ data: null }),
+        normalized.customerId ? applyVisibleUserFilter(supabase.from(TABLES.customers).select('id,payload').eq('id', normalized.customerId)).maybeSingle() : Promise.resolve({ data: null }),
+        normalized.estimateId ? applyVisibleUserFilter(supabase.from(TABLES.estimates).select('id,payload').eq('id', normalized.estimateId)).maybeSingle() : Promise.resolve({ data: null }),
       ]);
       return {
         ...normalized,
@@ -115,7 +115,8 @@ export const jobsService = {
 
   async getItems(jobId: string, mode: StorageMode = getStorageMode()): Promise<JobItem[]> {
     if (mode === 'supabase' && supabase) {
-      const { data, error } = await supabase.from(TABLES.jobItems).select('id,payload').eq('job_id', jobId).eq('user_id', getDataServiceUserId()).order('created_at');
+      const query = applyVisibleUserFilter(supabase.from(TABLES.jobItems).select('id,payload').eq('job_id', jobId));
+      const { data, error } = await query.order('created_at');
       if (error) throw error;
       return fromSupabaseRows<RecordWithId>(data) as JobItem[];
     }
