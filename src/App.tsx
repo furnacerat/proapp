@@ -11,6 +11,7 @@ import { JobDetail } from './pages/JobDetail';
 import { Workers } from './pages/Workers';
 import { TimeEntries } from './pages/TimeEntries';
 import { Expenses } from './pages/Expenses';
+import { CompanyExpenses } from './pages/CompanyExpenses';
 import { ShoppingLists } from './pages/ShoppingLists';
 import { Tasks } from './pages/Tasks';
 import { Invoices } from './pages/Invoices';
@@ -78,6 +79,7 @@ function AppRoutes() {
               <Route path="/workers" element={<GuardedRoute><Workers /></GuardedRoute>} />
               <Route path="/time-entries" element={<GuardedRoute><TimeEntries /></GuardedRoute>} />
               <Route path="/expenses" element={<GuardedRoute><Expenses /></GuardedRoute>} />
+              <Route path="/company-expenses" element={<GuardedRoute><CompanyExpenses /></GuardedRoute>} />
               <Route path="/shopping-lists" element={<GuardedRoute><ShoppingLists /></GuardedRoute>} />
               <Route path="/tasks" element={<GuardedRoute><Tasks /></GuardedRoute>} />
               <Route path="/invoices" element={<GuardedRoute><Invoices /></GuardedRoute>} />

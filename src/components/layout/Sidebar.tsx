@@ -6,6 +6,7 @@ import {
   Users,
   Clock,
   Receipt,
+  CreditCard,
   CheckSquare,
   FileText,
   Calendar,
@@ -76,6 +77,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="nav-section">
           <div className="nav-section-title">Finance</div>
           {navLink('/expenses', <Receipt size={20} />, 'Expenses')}
+          {navLink('/company-expenses', <CreditCard size={20} />, 'Company Expenses')}
           {navLink('/invoices', <FileText size={20} />, 'Invoices')}
           {navLink('/settings', <Settings size={20} />, 'Settings')}
         </div>

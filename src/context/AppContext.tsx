@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
@@ -110,6 +110,9 @@ interface AppContextType {
   addExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => void;
   updateExpense: (id: string, updates: Partial<Expense>) => void;
   deleteExpense: (id: string) => void;
+  addCompanyExpense: (expense: Omit<CompanyExpense, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateCompanyExpense: (id: string, updates: Partial<CompanyExpense>) => void;
+  deleteCompanyExpense: (id: string) => void;
   
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -203,6 +206,7 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
   workers: Worker[];
   timeEntries: TimeEntry[];
   expenses: Expense[];
+  companyExpenses: CompanyExpense[];
   tasks: Task[];
   invoices: Invoice[];
   payments: Payment[];
@@ -247,6 +251,7 @@ const normalizeAppData = (raw: AppData): AppData => {
     shoppingLists: raw.shoppingLists || [],
     receipts: raw.receipts || [],
     allowances: raw.allowances || [],
+    companyExpenses: raw.companyExpenses || [],
   };
 
   const normalizedJobs = data.jobs.map(job => ({
@@ -875,6 +880,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
     void dataService.expenses.delete(id).catch(() => undefined);
     if (expense) recalcJobCosts(expense.jobId);
+  };
+
+  const addCompanyExpense = (expense: Omit<CompanyExpense, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    const newExpense: CompanyExpense = { ...expense, id, createdAt: now, updatedAt: now };
+    setData(prev => ({ ...prev, companyExpenses: [...(prev.companyExpenses || []), newExpense] }));
+    return id;
+  };
+
+  const updateCompanyExpense = (id: string, updates: Partial<CompanyExpense>) => {
+    setData(prev => ({
+      ...prev,
+      companyExpenses: (prev.companyExpenses || []).map(expense =>
+        expense.id === id ? { ...expense, ...updates, updatedAt: new Date().toISOString() } : expense
+      ),
+    }));
+  };
+
+  const deleteCompanyExpense = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      companyExpenses: (prev.companyExpenses || []).filter(expense => expense.id !== id),
+    }));
   };
 
   const addTask = (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -2023,6 +2052,9 @@ const approveChangeOrder = (id: string) => {
       addExpense,
       updateExpense,
       deleteExpense,
+      addCompanyExpense,
+      updateCompanyExpense,
+      deleteCompanyExpense,
       addTask,
       updateTask,
       deleteTask,
@@ -2066,6 +2098,7 @@ const approveChangeOrder = (id: string) => {
       workers: visibleData.workers,
       timeEntries: visibleData.timeEntries,
       expenses: visibleData.expenses,
+      companyExpenses: visibleData.companyExpenses || [],
       tasks: visibleData.tasks,
       invoices: visibleData.invoices,
       payments: visibleData.payments,

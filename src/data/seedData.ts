@@ -15,6 +15,7 @@ export const initialData: AppData = {
   jobs: [],
   timeEntries: [],
   expenses: [],
+  companyExpenses: [],
   tasks: [],
   invoices: [],
   payments: [],

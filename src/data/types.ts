@@ -13,6 +13,8 @@ export type ExpenseType = 'material' | 'labor' | 'equipment' | 'permit' | 'fuel'
 export type ExpenseCostTreatment = 'contractor_cost' | 'allowance' | 'reimbursable';
 export type ExpenseSourceType = 'manual' | 'shopping_list' | 'material_order' | 'time_entry' | 'allowance' | 'receipt' | 'invoice';
 export type PaymentSource = 'company_card' | 'cash' | 'check' | 'finance' | 'credit' | 'other';
+export type CompanyExpenseCategory = 'credit_card' | 'truck_payment' | 'insurance' | 'rent' | 'utilities' | 'software' | 'taxes' | 'loan' | 'payroll' | 'other';
+export type CompanyExpenseStatus = 'upcoming' | 'paid' | 'overdue';
 export type InvoiceType = 'deposit' | 'progress' | 'final' | 'change_order' | 'allowance_overage';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'partially_paid' | 'overdue' | 'cancelled';
 export type PaymentMethod = 'cash' | 'check' | 'ach' | 'card' | 'transfer' | 'other';
@@ -469,6 +471,24 @@ export interface Expense {
   updatedAt?: string;
 }
 
+export interface CompanyExpense {
+  id: string;
+  name: string;
+  vendor: string;
+  category: CompanyExpenseCategory;
+  amount: number;
+  dueDate: string;
+  paidDate?: string;
+  status: CompanyExpenseStatus;
+  recurring: boolean;
+  frequency?: 'weekly' | 'monthly' | 'quarterly' | 'annually';
+  paymentMethod?: string;
+  accountLast4?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -853,6 +873,7 @@ export interface AppData {
   jobs: Job[];
   timeEntries: TimeEntry[];
   expenses: Expense[];
+  companyExpenses?: CompanyExpense[];
   tasks: Task[];
   invoices: Invoice[];
   payments: Payment[];

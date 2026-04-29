@@ -12,7 +12,7 @@ export interface UserProfile {
   active: boolean;
 }
 
-const ownerOnlyRoutes = ['/settings', '/reports', '/expenses', '/invoices'];
+const ownerOnlyRoutes = ['/settings', '/reports', '/expenses', '/company-expenses', '/invoices'];
 const crewRoutes = ['/', '/jobs', '/tasks', '/schedule', '/shopping-lists', '/time-entries'];
 
 const routeAccess: Record<UserRole, string[]> = {
@@ -136,6 +136,7 @@ export const sanitizeAppDataForRole = (data: AppData, profile: UserProfile | nul
       materialOrders: [],
       allowances: [],
       receipts: [],
+      companyExpenses: [],
     };
   }
 
@@ -144,6 +145,7 @@ export const sanitizeAppDataForRole = (data: AppData, profile: UserProfile | nul
     workers: scoped.workers.map(redactWorkerPay),
     laborRates: [],
     expenses: [],
+    companyExpenses: [],
     invoices: [],
     payments: [],
     jobs: scoped.jobs.map(redactJobFinancials),
