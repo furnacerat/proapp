@@ -1,7 +1,7 @@
-import type { AppData } from '../../data/types';
+import type { Allowance, AppData, Note, Photo, Receipt, Worker } from '../../data/types';
 import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
 import { getStorageMode } from './config';
-import { getLocalAppData, saveLocalAppData, setDataServiceOwnerUserId, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
+import { createCollectionService, getDataServiceUserId, getLocalAppData, saveLocalAppData, setDataServiceOwnerUserId, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
 import { customersService } from './customersService';
 import { estimatesService } from './estimatesService';
 import { jobsService } from './jobsService';
@@ -13,8 +13,14 @@ import { timeEntriesService } from './timeEntriesService';
 import { shoppingListsService } from './shoppingListsService';
 import { ordersService } from './ordersService';
 import { suppliersService } from './suppliersService';
-import { importLocalDataToSupabase, previewLocalMigration } from './migrationHelper';
+import { collectionFromData, importLocalDataToSupabase, previewLocalMigration } from './migrationHelper';
 import { TABLES } from './tables';
+
+const workersService = createCollectionService<Worker>('workers', TABLES.workers);
+const receiptsService = createCollectionService<Receipt>('receipts', TABLES.receipts);
+const allowancesService = createCollectionService<Allowance>('allowances', TABLES.allowances);
+const notesService = createCollectionService<Note>('notes', TABLES.notes);
+const photosService = createCollectionService<Photo>('photos', TABLES.jobPhotos);
 
 export const dataService = {
   mode: getStorageMode(),
@@ -40,18 +46,25 @@ export const dataService = {
   shoppingLists: shoppingListsService,
   orders: ordersService,
   suppliers: suppliersService,
+  workers: workersService,
+  receipts: receiptsService,
+  allowances: allowancesService,
+  notes: notesService,
+  photos: photosService,
 
   previewLocalMigration,
   importLocalDataToSupabase,
 
   async syncCoreDataToSupabase(data: AppData): Promise<void> {
-    await upsertSupabaseRecords(TABLES.customers, data.customers);
-    await upsertSupabaseRecords(TABLES.estimates, data.estimates);
-    await upsertSupabaseRecords(TABLES.jobs, data.jobs);
-    await upsertSupabaseRecords(TABLES.expenses, data.expenses);
-    await upsertSupabaseRecords(TABLES.timeEntries, data.timeEntries);
-    await upsertSupabaseRecords(TABLES.invoices, data.invoices);
-    await upsertSupabaseRecords(TABLES.payments, data.payments);
+    await this.syncWorkspaceDataToSupabase(data);
+  },
+
+  async syncWorkspaceDataToSupabase(data: AppData): Promise<void> {
+    const userId = getDataServiceUserId();
+    for (const key of Object.keys(TABLES) as Array<keyof typeof TABLES>) {
+      const records = collectionFromData(data, key).map(record => ({ ...record, userId }));
+      await upsertSupabaseRecords(TABLES[key], records);
+    }
   },
 };
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
 import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
@@ -346,6 +346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     supabaseConfigured: dataService.isSupabaseConfigured,
     isSyncing: false,
   });
+  const supabaseInitialLoadComplete = useRef(dataService.mode !== 'supabase');
 
   useEffect(() => {
     dataService.local.saveAppData(data);
@@ -358,12 +359,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataService.customers.getAll(),
       dataService.estimates.getAll(),
       dataService.jobs.getAll(),
+      dataService.tasks.getAll(),
+      dataService.workers.getAll(),
       dataService.expenses.getAll(),
       dataService.timeEntries.getAll(),
       dataService.invoices.getAll(),
       dataService.payments.getAll(),
+      dataService.suppliers.getAll(),
+      dataService.orders.getAll(),
+      dataService.shoppingLists.getAll(),
+      dataService.receipts.getAll(),
+      dataService.allowances.getAll(),
+      dataService.notes.getAll(),
+      dataService.photos.getAll(),
     ])
-      .then(([customers, estimates, jobs, expenses, timeEntries, invoices, payments]) => {
+      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, notes, photos]) => {
         if (cancelled) return;
         setData(prev => {
           const loadedData = {
@@ -371,22 +381,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
             customers: customers.length ? customers : prev.customers,
             estimates: estimates.length ? estimates : prev.estimates,
             jobs: jobs.length ? jobs : prev.jobs,
+            tasks: tasks.length ? tasks : prev.tasks,
+            workers: workers.length ? workers : prev.workers,
             expenses: expenses.length ? expenses : prev.expenses,
             timeEntries: timeEntries.length ? timeEntries : prev.timeEntries,
             invoices: invoices.length ? invoices : prev.invoices,
             payments: payments.length ? payments : prev.payments,
+            suppliers: suppliers.length ? suppliers : prev.suppliers,
+            materialOrders: materialOrders.length ? materialOrders : prev.materialOrders,
+            shoppingLists: shoppingLists.length ? shoppingLists : prev.shoppingLists,
+            receipts: receipts.length ? receipts : prev.receipts,
+            allowances: allowances.length ? allowances : prev.allowances,
+            notes: notes.length ? notes : prev.notes,
+            photos: photos.length ? photos : prev.photos,
           };
           return looksLikeDemoData(loadedData) ? normalizeAppData(generateCompleteSeedData()) : loadedData;
         });
+        supabaseInitialLoadComplete.current = true;
       })
       .catch(error => {
         setDataServiceStatus(prev => ({
           ...prev,
           syncError: error instanceof Error ? error.message : 'Supabase load failed',
         }));
+        supabaseInitialLoadComplete.current = true;
       });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured || !supabaseInitialLoadComplete.current) return;
+    if (looksLikeDemoData(data)) return;
+    const timeout = window.setTimeout(() => {
+      void dataService.syncWorkspaceDataToSupabase(data)
+        .then(() => setDataServiceStatus(prev => ({ ...prev, lastSyncAt: new Date().toISOString(), syncError: undefined })))
+        .catch(error => setDataServiceStatus(prev => ({
+          ...prev,
+          syncError: error instanceof Error ? error.message : 'Supabase sync failed',
+        })));
+    }, 800);
+    return () => window.clearTimeout(timeout);
+  }, [data]);
 
   useEffect(() => {
     generateAlerts();

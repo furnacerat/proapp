@@ -4,7 +4,7 @@ import { TABLES } from './tables';
 
 type MigrationKey = keyof typeof TABLES;
 
-const collectionFromData = (data: AppData, key: MigrationKey): RecordWithId[] => {
+export const collectionFromData = (data: AppData, key: MigrationKey): RecordWithId[] => {
   if (key === 'estimateItems') {
     return data.estimates.flatMap(estimate =>
       [
