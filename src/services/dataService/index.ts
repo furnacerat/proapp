@@ -1,7 +1,7 @@
 import type { AppData } from '../../data/types';
 import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
 import { getStorageMode } from './config';
-import { getLocalAppData, saveLocalAppData, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
+import { getLocalAppData, saveLocalAppData, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
 import { customersService } from './customersService';
 import { estimatesService } from './estimatesService';
 import { jobsService } from './jobsService';
@@ -21,6 +21,7 @@ export const dataService = {
   isSupabaseConfigured,
   testConnection: testSupabaseConnection,
   setUserId: setDataServiceUserId,
+  setRole: setDataServiceRole,
 
   local: {
     getAppData: getLocalAppData,

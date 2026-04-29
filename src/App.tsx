@@ -28,7 +28,31 @@ import { MaterialOrders } from './pages/estimates/MaterialOrders';
 import { Settings } from './pages/Settings';
 import { Customers } from './pages/Customers';
 import { AuthPage } from './pages/auth/AuthPage';
+import { Team } from './pages/admin/Team';
+import { canAccessRoute, getDefaultRouteForRole } from './auth/rbac';
+import { useAuth } from './context/AuthContext';
 import './index.css';
+
+function AccessDenied() {
+  const { role } = useAuth();
+  return (
+    <div className="page-content">
+      <div className="empty-state">
+        <h3>Access restricted</h3>
+        <p>Your current role does not have access to this workspace area.</p>
+        <a className="btn btn-primary" href={getDefaultRouteForRole(role)}>Go to your workspace</a>
+      </div>
+    </div>
+  );
+}
+
+function GuardedRoute({ children }: { children: React.ReactNode }) {
+  const { role, profile } = useAuth();
+  const path = window.location.pathname;
+  if (profile?.active === false) return <AccessDenied />;
+  if (!canAccessRoute(role, path)) return <AccessDenied />;
+  return <>{children}</>;
+}
 
 function AppRoutes() {
   return (
@@ -37,30 +61,31 @@ function AppRoutes() {
         <ToastProvider>
           <Layout>
             <Routes>
-              <Route path="/" element={<DailyCommandCenter />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/jobs/:id" element={<JobDetail />} />
-              <Route path="/estimates" element={<EstimatesDashboard />} />
-              <Route path="/estimates/list" element={<EstimatesList />} />
-              <Route path="/estimates/new" element={<EstimateBuilder />} />
-              <Route path="/estimates/:id" element={<EstimateBuilder />} />
-              <Route path="/estimates/templates" element={<TemplatesLibrary />} />
-              <Route path="/estimates/assemblies" element={<AssembliesLibrary />} />
-              <Route path="/estimates/pricebook" element={<PriceBook />} />
-              <Route path="/estimates/:id/materials" element={<MaterialsList />} />
-              <Route path="/estimates/suppliers" element={<Suppliers />} />
-              <Route path="/estimates/orders" element={<MaterialOrders />} />
-              <Route path="/workers" element={<Workers />} />
-              <Route path="/time-entries" element={<TimeEntries />} />
-              <Route path="/expenses" element={<Expenses />} />
-              <Route path="/shopping-lists" element={<ShoppingLists />} />
-              <Route path="/tasks" element={<Tasks />} />
-              <Route path="/invoices" element={<Invoices />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/schedule" element={<Calendar />} />
-              <Route path="/reports" element={<Reports />} />
+              <Route path="/" element={<GuardedRoute><DailyCommandCenter /></GuardedRoute>} />
+              <Route path="/dashboard" element={<GuardedRoute><Dashboard /></GuardedRoute>} />
+              <Route path="/jobs" element={<GuardedRoute><Jobs /></GuardedRoute>} />
+              <Route path="/jobs/:id" element={<GuardedRoute><JobDetail /></GuardedRoute>} />
+              <Route path="/estimates" element={<GuardedRoute><EstimatesDashboard /></GuardedRoute>} />
+              <Route path="/estimates/list" element={<GuardedRoute><EstimatesList /></GuardedRoute>} />
+              <Route path="/estimates/new" element={<GuardedRoute><EstimateBuilder /></GuardedRoute>} />
+              <Route path="/estimates/:id" element={<GuardedRoute><EstimateBuilder /></GuardedRoute>} />
+              <Route path="/estimates/templates" element={<GuardedRoute><TemplatesLibrary /></GuardedRoute>} />
+              <Route path="/estimates/assemblies" element={<GuardedRoute><AssembliesLibrary /></GuardedRoute>} />
+              <Route path="/estimates/pricebook" element={<GuardedRoute><PriceBook /></GuardedRoute>} />
+              <Route path="/estimates/:id/materials" element={<GuardedRoute><MaterialsList /></GuardedRoute>} />
+              <Route path="/estimates/suppliers" element={<GuardedRoute><Suppliers /></GuardedRoute>} />
+              <Route path="/estimates/orders" element={<GuardedRoute><MaterialOrders /></GuardedRoute>} />
+              <Route path="/workers" element={<GuardedRoute><Workers /></GuardedRoute>} />
+              <Route path="/time-entries" element={<GuardedRoute><TimeEntries /></GuardedRoute>} />
+              <Route path="/expenses" element={<GuardedRoute><Expenses /></GuardedRoute>} />
+              <Route path="/shopping-lists" element={<GuardedRoute><ShoppingLists /></GuardedRoute>} />
+              <Route path="/tasks" element={<GuardedRoute><Tasks /></GuardedRoute>} />
+              <Route path="/invoices" element={<GuardedRoute><Invoices /></GuardedRoute>} />
+              <Route path="/customers" element={<GuardedRoute><Customers /></GuardedRoute>} />
+              <Route path="/settings" element={<GuardedRoute><Settings /></GuardedRoute>} />
+              <Route path="/admin/team" element={<GuardedRoute><Team /></GuardedRoute>} />
+              <Route path="/schedule" element={<GuardedRoute><Calendar /></GuardedRoute>} />
+              <Route path="/reports" element={<GuardedRoute><Reports /></GuardedRoute>} />
             </Routes>
           </Layout>
         </ToastProvider>

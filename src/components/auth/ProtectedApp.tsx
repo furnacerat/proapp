@@ -5,7 +5,7 @@ import { dataService } from '../../services/dataService';
 
 export function ProtectedApp({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   if (dataService.mode !== 'supabase') return <>{children}</>;
 
@@ -22,6 +22,17 @@ export function ProtectedApp({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (profile?.active === false) {
+    return (
+      <main className="auth-page">
+        <section className="auth-panel auth-panel-compact">
+          <p className="auth-eyebrow">Access disabled</p>
+          <h1>Your user profile is inactive.</h1>
+        </section>
+      </main>
+    );
   }
 
   return <>{children}</>;

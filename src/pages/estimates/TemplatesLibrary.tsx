@@ -350,7 +350,6 @@ export function TemplatesLibrary() {
             <p>Save reusable scopes, labor assumptions, materials, and markup so your next estimate starts with a strong baseline.</p>
             <div className="templates-empty-actions">
               <button className="templates-primary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> New Template</button>
-              <button className="templates-secondary-btn" onClick={handleAddStarter}><Copy size={18} /> Import Starter Templates</button>
             </div>
           </section>
         ) : (
@@ -359,11 +358,11 @@ export function TemplatesLibrary() {
               <div className="templates-insights">
                 <div>
                   <span><Wand2 size={16} /> Smart Suggestions</span>
-                  <strong>{mostUsedTemplate ? `Start with ${mostUsedTemplate.name}` : 'Import starter templates'}</strong>
-                  <p>{mostUsedTemplate ? 'This template has the strongest reuse profile for fast estimate starts.' : 'Starter templates give you reusable pricing structures immediately.'}</p>
+                  <strong>{mostUsedTemplate ? `Start with ${mostUsedTemplate.name}` : 'Create your first template'}</strong>
+                  <p>{mostUsedTemplate ? 'This template has the strongest reuse profile for fast estimate starts.' : 'Save a reusable scope, labor assumptions, and materials to speed up future estimates.'}</p>
                 </div>
-                <button onClick={() => mostUsedTemplate ? handleUseTemplate(mostUsedTemplate) : handleAddStarter()}>
-                  {mostUsedTemplate ? 'Use Suggested' : 'Import Starters'} <ChevronRight size={16} />
+                <button onClick={() => mostUsedTemplate ? handleUseTemplate(mostUsedTemplate) : setShowModal(true)}>
+                  {mostUsedTemplate ? 'Use Suggested' : 'New Template'} <ChevronRight size={16} />
                 </button>
               </div>
 

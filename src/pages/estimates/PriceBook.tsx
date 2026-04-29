@@ -520,7 +520,6 @@ export function PriceBook() {
             <div className="pricebook-empty-actions">
               <button className="pricebook-primary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> Add Labor Rate</button>
               <button className="pricebook-primary-btn" onClick={() => setShowMaterialModal(true)}><Plus size={18} /> Add Item</button>
-              <button className="pricebook-secondary-btn" onClick={importStarterRates}><Package size={18} /> Import Starter Rates</button>
             </div>
           </div>
         ) : (

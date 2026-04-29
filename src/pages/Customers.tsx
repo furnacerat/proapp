@@ -392,9 +392,6 @@ export function Customers() {
             <p>Customers connect estimates, jobs, invoices, and payments together.</p>
             <div className="customers-empty-actions">
               <button className="btn btn-primary" onClick={handleNewCustomer}><Plus size={18} /> Add Customer</button>
-              <button className="btn btn-secondary" onClick={() => showToast('Sample customer import is coming soon', 'info')}>
-                <Sparkles size={18} /> Import Sample Customers
-              </button>
             </div>
           </div>
         </div>
@@ -685,17 +682,17 @@ function CustomerForm({
       <div className="form-row form-row-2">
         <div className="form-group">
           <label className="form-label">Name *</label>
-          <input className="form-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="John Smith" />
+          <input className="form-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Customer name" />
         </div>
         <div className="form-group">
           <label className="form-label">Company</label>
-          <input className="form-input" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="ABC Corp" />
+          <input className="form-input" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="Company name" />
         </div>
       </div>
       <div className="form-row form-row-2">
         <div className="form-group">
           <label className="form-label">Email</label>
-          <input className="form-input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="john@email.com" />
+          <input className="form-input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="customer@example.com" />
         </div>
         <div className="form-group">
           <label className="form-label">Phone</label>

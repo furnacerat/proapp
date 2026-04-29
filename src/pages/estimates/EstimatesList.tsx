@@ -381,7 +381,7 @@ export function EstimatesList() {
       <Modal isOpen={showNewModal} onClose={() => setShowNewModal(false)} title="New Estimate" size="md">
         <div className="form-group">
           <label className="form-label">Estimate Name *</label>
-          <input className="form-input" value={newEstimate.name} onChange={e => setNewEstimate({ ...newEstimate, name: e.target.value })} placeholder="e.g., Smith Kitchen Remodel" />
+          <input className="form-input" value={newEstimate.name} onChange={e => setNewEstimate({ ...newEstimate, name: e.target.value })} placeholder="e.g., Kitchen Remodel" />
         </div>
         <div className="form-group">
           <label className="form-label">Customer *</label>

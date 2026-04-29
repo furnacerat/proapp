@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useMe
 import type { AppData, Job, Worker, TimeEntry, Expense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
+import { useAuth } from './AuthContext';
+import { canViewOwnerFinancials, sanitizeAppDataForRole } from '../auth/rbac';
 
 interface DataServiceStatus {
   mode: 'local' | 'supabase';
@@ -10,6 +12,42 @@ interface DataServiceStatus {
   lastSyncAt?: string;
   syncError?: string;
 }
+
+const looksLikeDemoData = (data: AppData) => {
+  const demoSignals = [
+    'john smith',
+    'mike johnson',
+    'sarah williams',
+    'tom brown',
+    'lisa davis',
+    'smith kitchen remodel',
+    'johnson house flip',
+    'williams new build',
+    'brown bathroom update',
+    'miller deck build',
+    'lead carpenter',
+    'skilled carpenter',
+    'demo labor',
+    'buildpro supply',
+    '2x4x8 stud',
+    'basic bathroom refresh',
+    'kitchen remodel standard',
+  ];
+
+  const haystack = [
+    ...(data.customers || []).map(item => `${item.name} ${item.company || ''} ${item.email || ''}`),
+    ...(data.jobs || []).map(item => `${item.name} ${item.customer || ''} ${item.address || ''}`),
+    ...(data.workers || []).map(item => `${item.name} ${item.email || ''}`),
+    ...(data.laborRates || []).map(item => `${item.name} ${item.trade || ''}`),
+    ...(data.materials || []).map(item => `${item.name} ${item.supplier || ''}`),
+    ...(data.suppliers || []).map(item => `${item.name} ${item.email || ''}`),
+    ...(data.assemblies || []).map(item => item.name),
+    ...(data.templates || []).map(item => item.name),
+    ...(data.jobTemplates || []).map(item => item.name),
+  ].join(' ').toLowerCase();
+
+  return demoSignals.some(signal => haystack.includes(signal));
+};
 
 interface AppContextType {
   data: AppData;
@@ -283,9 +321,13 @@ const normalizeAppData = (raw: AppData): AppData => {
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { profile, role } = useAuth();
   const [data, setData] = useState<AppData>(() => {
     const stored = dataService.local.getAppData();
     if (stored) {
+      if (looksLikeDemoData(stored)) {
+        return normalizeAppData(generateCompleteSeedData());
+      }
       return normalizeAppData(stored);
     }
     return normalizeAppData(generateCompleteSeedData());
@@ -314,16 +356,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ])
       .then(([customers, estimates, jobs, expenses, timeEntries, invoices, payments]) => {
         if (cancelled) return;
-        setData(prev => ({
-          ...prev,
-          customers: customers.length ? customers : prev.customers,
-          estimates: estimates.length ? estimates : prev.estimates,
-          jobs: jobs.length ? jobs : prev.jobs,
-          expenses: expenses.length ? expenses : prev.expenses,
-          timeEntries: timeEntries.length ? timeEntries : prev.timeEntries,
-          invoices: invoices.length ? invoices : prev.invoices,
-          payments: payments.length ? payments : prev.payments,
-        }));
+        setData(prev => {
+          const loadedData = {
+            ...prev,
+            customers: customers.length ? customers : prev.customers,
+            estimates: estimates.length ? estimates : prev.estimates,
+            jobs: jobs.length ? jobs : prev.jobs,
+            expenses: expenses.length ? expenses : prev.expenses,
+            timeEntries: timeEntries.length ? timeEntries : prev.timeEntries,
+            invoices: invoices.length ? invoices : prev.invoices,
+            payments: payments.length ? payments : prev.payments,
+          };
+          return looksLikeDemoData(loadedData) ? normalizeAppData(generateCompleteSeedData()) : loadedData;
+        });
       })
       .catch(error => {
         setDataServiceStatus(prev => ({
@@ -1221,9 +1266,11 @@ const approveChangeOrder = (id: string) => {
   };
 
   const getJobLaborCost = (jobId: string) => 
+    !canSeeOwnerFinancials ? 0 :
     data.timeEntries.filter(t => t.jobId === jobId).reduce((sum, t) => sum + t.laborCost, 0);
 
   const getJobExpenseTotal = (jobId: string) => 
+    !canSeeOwnerFinancials ? 0 :
     data.expenses.filter(e => e.jobId === jobId).reduce((sum, e) => sum + e.amount, 0);
 
   const getJobChangeOrderTotal = (jobId: string) => 
@@ -1234,6 +1281,7 @@ const approveChangeOrder = (id: string) => {
   };
 
   const getJobProfit = (jobId: string) => {
+    if (!canSeeOwnerFinancials) return { profit: 0, margin: 0 };
     const job = data.jobs.find(j => j.id === jobId);
     if (!job) return { profit: 0, margin: 0 };
     
@@ -1244,6 +1292,7 @@ const approveChangeOrder = (id: string) => {
   };
 
   const getJobBalance = (jobId: string) => {
+    if (!canSeeOwnerFinancials) return 0;
     const jobInvoices = data.invoices.filter(i => i.jobId === jobId);
     const invoiceIds = jobInvoices.map(i => i.id);
     const jobPayments = data.payments.filter(p => invoiceIds.includes(p.invoiceId));
@@ -1924,9 +1973,12 @@ const approveChangeOrder = (id: string) => {
     });
   };
 
+  const visibleData = useMemo(() => sanitizeAppDataForRole(data, profile), [data, profile]);
+  const canSeeOwnerFinancials = canViewOwnerFinancials(role);
+
   return (
     <AppContext.Provider value={{
-      data,
+      data: visibleData,
       setData,
       dataServiceStatus,
       syncCoreDataToSupabase,
@@ -2006,30 +2058,30 @@ const approveChangeOrder = (id: string) => {
       getCustomerById,
       getJobCustomer,
       getEstimateCustomer,
-      customers: data.customers,
-      estimates: data.estimates,
-      laborRates: data.laborRates,
-      materials: data.materials,
-      assemblies: data.assemblies,
-      templates: data.templates,
-      projectTypeTemplates: data.projectTypeTemplates,
-      jobs: data.jobs,
-      workers: data.workers,
-      timeEntries: data.timeEntries,
-      expenses: data.expenses,
-      tasks: data.tasks,
-      invoices: data.invoices,
-      payments: data.payments,
-      notes: data.notes,
-      photos: data.photos,
-      changeOrders: data.changeOrders,
-      jobTemplates: data.jobTemplates,
-      alerts: data.alerts,
-      timeline: data.timeline || [],
-      jobLogs: data.jobLogs || [],
-      punchLists: data.punchLists || [],
-      jobIssues: data.jobIssues || [],
-      fileAttachments: data.fileAttachments || [],
+      customers: visibleData.customers,
+      estimates: visibleData.estimates,
+      laborRates: visibleData.laborRates,
+      materials: visibleData.materials,
+      assemblies: visibleData.assemblies,
+      templates: visibleData.templates,
+      projectTypeTemplates: visibleData.projectTypeTemplates,
+      jobs: visibleData.jobs,
+      workers: visibleData.workers,
+      timeEntries: visibleData.timeEntries,
+      expenses: visibleData.expenses,
+      tasks: visibleData.tasks,
+      invoices: visibleData.invoices,
+      payments: visibleData.payments,
+      notes: visibleData.notes,
+      photos: visibleData.photos,
+      changeOrders: visibleData.changeOrders,
+      jobTemplates: visibleData.jobTemplates,
+      alerts: visibleData.alerts,
+      timeline: visibleData.timeline || [],
+      jobLogs: visibleData.jobLogs || [],
+      punchLists: visibleData.punchLists || [],
+      jobIssues: visibleData.jobIssues || [],
+      fileAttachments: visibleData.fileAttachments || [],
       addTimelineEntry,
       updateTimelineEntry,
       deleteTimelineEntry,
@@ -2045,8 +2097,8 @@ const approveChangeOrder = (id: string) => {
       addFileAttachment,
       updateFileAttachment,
       deleteFileAttachment,
-      suppliers: data.suppliers || [],
-      materialOrders: data.materialOrders || [],
+      suppliers: visibleData.suppliers || [],
+      materialOrders: visibleData.materialOrders || [],
       addSupplier,
       updateSupplier,
       deleteSupplier,
@@ -2060,15 +2112,15 @@ const approveChangeOrder = (id: string) => {
       updateShoppingListItem,
       deleteShoppingListItem,
       addShoppingReceipt,
-      shoppingLists: data.shoppingLists || [],
-      receipts: data.receipts || [],
+      shoppingLists: visibleData.shoppingLists || [],
+      receipts: visibleData.receipts || [],
       addAllowance,
       updateAllowance,
       deleteAllowance,
       addAllowanceSelection,
       updateAllowanceSelection,
       createAllowanceOverageChangeOrder,
-      allowances: data.allowances || [],
+      allowances: visibleData.allowances || [],
     }}>
       {children}
     </AppContext.Provider>

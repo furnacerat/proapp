@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
+import { canAccessRoute, roleLabels } from '../../auth/rbac';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -31,7 +32,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, role } = useAuth();
+  const canSee = (to: string) => canAccessRoute(role, to);
+  const navLink = (to: string, icon: React.ReactNode, label: string, end = false) => canSee(to) ? (
+    <NavLink to={to} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose} end={end}>
+      {icon}
+      <span>{label}</span>
+    </NavLink>
+  ) : null;
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
@@ -46,106 +54,50 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <nav className="sidebar-nav">
         <div className="nav-section">
           <div className="nav-section-title">Estimating</div>
-          <NavLink to="/estimates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose} end>
-            <Calculator size={20} />
-            <span>Dashboard</span>
-          </NavLink>
-          <NavLink to="/customers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <User size={20} />
-            <span>Customers</span>
-          </NavLink>
-          <NavLink to="/estimates/list" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <FileText size={20} />
-            <span>All Estimates</span>
-          </NavLink>
-          <NavLink to="/estimates/new" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <FilePlus size={20} />
-            <span>New Estimate</span>
-          </NavLink>
-          <NavLink to="/estimates/templates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Copy size={20} />
-            <span>Templates</span>
-          </NavLink>
-          <NavLink to="/estimates/assemblies" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Package size={20} />
-            <span>Assemblies</span>
-          </NavLink>
-          <NavLink to="/estimates/pricebook" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <DollarSign size={20} />
-            <span>Price Book</span>
-          </NavLink>
-          <NavLink to="/estimates/orders" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <ShoppingCart size={20} />
-            <span>Orders</span>
-          </NavLink>
-          <NavLink to="/estimates/suppliers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Truck size={20} />
-            <span>Suppliers</span>
-          </NavLink>
+          {navLink('/estimates', <Calculator size={20} />, 'Dashboard', true)}
+          {navLink('/customers', <User size={20} />, 'Customers')}
+          {navLink('/estimates/list', <FileText size={20} />, 'All Estimates')}
+          {navLink('/estimates/new', <FilePlus size={20} />, 'New Estimate')}
+          {navLink('/estimates/templates', <Copy size={20} />, 'Templates')}
+          {navLink('/estimates/assemblies', <Package size={20} />, 'Assemblies')}
+          {navLink('/estimates/pricebook', <DollarSign size={20} />, 'Price Book')}
+          {navLink('/estimates/orders', <ShoppingCart size={20} />, 'Orders')}
+          {navLink('/estimates/suppliers', <Truck size={20} />, 'Suppliers')}
         </div>
         <div className="nav-section">
           <div className="nav-section-title">Operations</div>
-          <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose} end>
-            <SunMedium size={20} />
-            <span>Today</span>
-          </NavLink>
-          <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <LayoutDashboard size={20} />
-            <span>Dashboard</span>
-          </NavLink>
-          <NavLink to="/jobs" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Briefcase size={20} />
-            <span>Jobs</span>
-          </NavLink>
-          <NavLink to="/workers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Users size={20} />
-            <span>Workers</span>
-          </NavLink>
-          <NavLink to="/time-entries" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Clock size={20} />
-            <span>Time Entries</span>
-          </NavLink>
-          <NavLink to="/shopping-lists" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <ShoppingCart size={20} />
-            <span>Shopping Lists</span>
-          </NavLink>
+          {navLink('/', <SunMedium size={20} />, 'Today', true)}
+          {navLink('/dashboard', <LayoutDashboard size={20} />, 'Dashboard')}
+          {navLink('/jobs', <Briefcase size={20} />, 'Jobs')}
+          {navLink('/workers', <Users size={20} />, 'Workers')}
+          {navLink('/time-entries', <Clock size={20} />, 'Time Entries')}
+          {navLink('/shopping-lists', <ShoppingCart size={20} />, 'Shopping Lists')}
         </div>
         <div className="nav-section">
           <div className="nav-section-title">Finance</div>
-          <NavLink to="/expenses" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Receipt size={20} />
-            <span>Expenses</span>
-          </NavLink>
-          <NavLink to="/invoices" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <FileText size={20} />
-            <span>Invoices</span>
-          </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Settings size={20} />
-            <span>Settings</span>
-          </NavLink>
+          {navLink('/expenses', <Receipt size={20} />, 'Expenses')}
+          {navLink('/invoices', <FileText size={20} />, 'Invoices')}
+          {navLink('/settings', <Settings size={20} />, 'Settings')}
         </div>
+        {(canSee('/admin/team')) && (
+          <div className="nav-section">
+            <div className="nav-section-title">Admin</div>
+            {navLink('/admin/team', <Users size={20} />, 'Team')}
+          </div>
+        )}
         <div className="nav-section">
           <div className="nav-section-title">Planning</div>
-          <NavLink to="/tasks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <CheckSquare size={20} />
-            <span>Tasks</span>
-          </NavLink>
-          <NavLink to="/schedule" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <Calendar size={20} />
-            <span>Schedule</span>
-          </NavLink>
+          {navLink('/tasks', <CheckSquare size={20} />, 'Tasks')}
+          {navLink('/schedule', <Calendar size={20} />, 'Schedule')}
         </div>
         <div className="nav-section">
-          <NavLink to="/reports" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-            <BarChart3 size={20} />
-            <span>Reports</span>
-          </NavLink>
+          {navLink('/reports', <BarChart3 size={20} />, 'Reports')}
         </div>
       </nav>
       <div className="sidebar-account">
         <div className="sidebar-account-meta">
           <span className="storage-pill">{dataService.mode === 'supabase' ? 'Supabase' : 'Local'}</span>
+          <span className="storage-pill">{roleLabels[role]}</span>
           <strong>{user?.email || 'Local workspace'}</strong>
         </div>
         {dataService.mode === 'supabase' && user && (

@@ -1,15 +1,21 @@
 import type { AppData } from '../../data/types';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { getStorageMode, STORAGE_KEY, type StorageMode } from './config';
+import type { UserRole } from '../../auth/rbac';
 
 export type RecordWithId = { id: string; [key: string]: any };
 export type LocalCollectionKey = keyof AppData;
 
 const now = () => new Date().toISOString();
 let currentUserId: string | null = null;
+let currentUserRole: UserRole = 'owner';
 
 export const setDataServiceUserId = (userId: string | null) => {
   currentUserId = userId;
+};
+
+export const setDataServiceRole = (role: UserRole) => {
+  currentUserRole = role;
 };
 
 export const getDataServiceUserId = () => currentUserId;
@@ -138,6 +144,9 @@ export const createCollectionService = <T extends RecordWithId>(
 ) => ({
   async getAll(mode: StorageMode = getStorageMode()): Promise<T[]> {
     if (mode === 'supabase') {
+      if (currentUserRole !== 'owner' && ['expenses', 'invoices', 'payments'].includes(table)) {
+        return [];
+      }
       if (!isSupabaseConfigured) throw new Error('Supabase storage mode is selected but env vars are missing.');
       const client = requireSupabase();
       const userId = requireSupabaseUserId();

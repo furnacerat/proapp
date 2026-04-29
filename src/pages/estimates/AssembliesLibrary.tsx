@@ -352,7 +352,6 @@ export function AssembliesLibrary() {
             <p>Create reusable bundles of labor and materials to speed up estimating.</p>
             <div className="assembly-empty-actions">
               <button className="assemblies-primary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> New Assembly</button>
-              <button className="assemblies-secondary-btn" onClick={handleAddStarter}><Package size={18} /> Import Starter Assemblies</button>
             </div>
           </div>
         ) : (
@@ -477,9 +476,9 @@ export function AssembliesLibrary() {
         {assemblies.length === 0 && (
           <div className="card mb-6">
             <div className="card-body text-center">
-              <p className="text-muted mb-4">No assemblies yet. Add starter assemblies to get going quickly.</p>
-              <button className="btn btn-primary" onClick={handleAddStarter}>
-                Add Starter Assemblies
+              <p className="text-muted mb-4">No assemblies yet. Create reusable cost assemblies for your estimates.</p>
+              <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                New Assembly
               </button>
             </div>
           </div>
