@@ -307,8 +307,10 @@ export function ShoppingLists() {
                         {rows.map(item => (
                           <div className={`shopping-item ${item.purchased ? 'done' : ''}`} key={item.id}>
                             <input type="checkbox" checked={item.purchased} onChange={event => updateShoppingListItem(selectedList.id, item.id, { purchased: event.target.checked })} />
-                            <div><strong>{item.name}</strong><span>{item.quantity} {item.unit} {item.supplierName ? `- ${item.supplierName}` : ''} {item.notes ? `- ${item.notes}` : ''}</span></div>
-                            {item.urgent && <b>Urgent</b>}
+                            <div className="shopping-item-info">
+                              <div className="shopping-item-title-row"><strong>{item.name}</strong>{item.urgent && <b>Urgent</b>}</div>
+                              <span>{item.quantity} {item.unit} {item.supplierName ? `- ${item.supplierName}` : ''} {item.notes ? `- ${item.notes}` : ''}</span>
+                            </div>
                             <input className="shopping-cost-input" type="number" value={item.actualCost ?? ''} placeholder={String(item.estimatedCost || '')} onChange={event => updateShoppingListItem(selectedList.id, item.id, { actualCost: event.target.value ? parseFloat(event.target.value) : undefined })} />
                             <select value={item.addOnStatus || 'included_expense'} onChange={event => updateShoppingListItem(selectedList.id, item.id, { addOnStatus: event.target.value as any })}>
                               <option value="included_expense">Included</option>
