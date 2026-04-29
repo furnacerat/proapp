@@ -1,9 +1,6 @@
--- Profile policy repair patch.
--- Run this after public.profiles has been backfilled.
---
--- Some databases may already have an older current_app_role() helper tied to
--- public.user_profiles. The app uses public.profiles, so these helpers use new
--- names and do not modify existing functions.
+-- RUN THIS FILE ONLY for the Team page.
+-- Clear the Supabase SQL Editor first, then paste this whole file.
+-- This does not touch the older current_app_role() function.
 
 create or replace function public.current_workspace_role()
 returns text
