@@ -1550,6 +1550,17 @@ body {
   border-radius: 14px;
 }
 
+.smart-toggle-row strong,
+.smart-toggle-row .font-bold,
+.smart-setting-tile strong {
+  color: var(--text-primary);
+}
+
+.smart-toggle-row .text-muted,
+.smart-setting-tile span {
+  color: var(--text-secondary);
+}
+
 .smart-toggle-row input {
   width: 44px;
   height: 24px;
@@ -1637,7 +1648,6 @@ body {
 
 .smart-setting-tile span {
   margin-top: 4px;
-  color: var(--text-secondary);
   font-size: 0.82rem;
 }
 
