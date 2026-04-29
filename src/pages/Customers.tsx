@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { dataService } from '../services/dataService';
 import type { Customer, Estimate, Invoice, Job } from '../data/types';
 import {
@@ -743,7 +743,7 @@ function getRecentActivity(summary: CustomerSummary) {
   const dates = [
     ...summary.estimates.map(estimate => ({ label: `Estimate updated: ${estimate.name}`, date: estimate.updatedAt })),
     ...summary.jobs.map(job => ({ label: `Job updated: ${job.name}`, date: job.updatedAt })),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  ].sort((a, b) => parseDateString(b.date).getTime() - parseDateString(a.date).getTime());
 
   return dates[0] ? `${dates[0].label} on ${formatDate(dates[0].date)}` : 'No recent activity yet';
 }

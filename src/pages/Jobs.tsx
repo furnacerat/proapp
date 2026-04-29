@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { JOB_STATUSES, JOB_TYPES } from '../data/types';
 import type { ExpenseCategory, Job, JobStatus, JobType, ShoppingListItemCategory } from '../data/types';
 import { useToast } from '../components/common/Toast';
@@ -119,7 +119,7 @@ export function Jobs() {
     const profitInfo = getJobProfit(job.id);
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const due = job.dueDate ? new Date(job.dueDate) : null;
+    const due = job.dueDate ? parseDateString(job.dueDate) : null;
     due?.setHours(0, 0, 0, 0);
     const isDelayed = !!due && due < now && !['completed', 'closed'].includes(job.status);
     const overBudget = job.estimatedCost > 0 && actualCost > job.estimatedCost;
@@ -161,7 +161,7 @@ export function Jobs() {
         const activeA = ['active', 'awaiting_materials', 'awaiting_payment'].includes(a.job.status) ? 0 : 1;
         const activeB = ['active', 'awaiting_materials', 'awaiting_payment'].includes(b.job.status) ? 0 : 1;
         if (activeA !== activeB) return activeA - activeB;
-        return new Date(a.job.dueDate || '2999-12-31').getTime() - new Date(b.job.dueDate || '2999-12-31').getTime();
+        return parseDateString(a.job.dueDate || '2999-12-31').getTime() - parseDateString(b.job.dueDate || '2999-12-31').getTime();
       });
   }, [jobSummaries, pipelineFilter, search, typeFilter]);
 

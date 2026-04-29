@@ -3,7 +3,7 @@ import { Invoice } from '../data/types'
 import { Job } from '../data/types'
 import { Payment } from '../data/types'
 import { BrandingSettings } from '../data/types'
-import { formatCurrency } from '../utils/formatters'
+import { formatCurrency, formatDate } from '../utils/formatters'
 
 type Props = {
   invoice: Invoice
@@ -102,7 +102,7 @@ const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => 
             <tbody>
               {payments.map((p, i) => (
                 <tr key={p.id}>
-                  <td style={{ padding: '4px 0', fontSize: 13, color: '#555' }}>{p.date ? new Date(p.date).toLocaleDateString() : ''}</td>
+                  <td style={{ padding: '4px 0', fontSize: 13, color: '#555' }}>{p.date ? formatDate(p.date) : ''}</td>
                   <td style={{ padding: '4px 0', fontSize: 13 }}>{formatCurrency(p.amount)}</td>
                   <td style={{ padding: '4px 0', fontSize: 13, color: '#777', textAlign: 'right' }}>{p.method}</td>
                 </tr>

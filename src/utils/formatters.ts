@@ -7,8 +7,17 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+export function parseDateString(dateString: string): Date {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+  return new Date(dateString);
+}
+
 export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseDateString(dateString);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -17,7 +26,7 @@ export function formatDate(dateString: string): string {
 }
 
 export function formatDateShort(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseDateString(dateString);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -37,7 +46,7 @@ export function formatHours(hours: number): string {
 }
 
 export function getDaysUntilDue(dueDate: string): number {
-  const due = new Date(dueDate);
+  const due = parseDateString(dueDate);
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   due.setHours(0, 0, 0, 0);

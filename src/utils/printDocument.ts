@@ -1,4 +1,5 @@
 import { PrintInvoiceData, PrintSettings, DEFAULT_PRINT_SETTINGS } from '../data/printTypes'
+import { formatDate } from './formatters'
 
 const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): string => {
   const { company, client, project, lineItems, payments, balanceDue, notes, paymentTerms } = data
@@ -26,7 +27,7 @@ const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): s
       <table style="width:100%;border-collapse:collapse;">
         ${payments.map(p => `
           <tr>
-            <td style="padding:4px 8px;font-size:12px;">${p.date ? new Date(p.date).toLocaleDateString() : ''}</td>
+            <td style="padding:4px 8px;font-size:12px;">${p.date ? formatDate(p.date) : ''}</td>
             <td style="padding:4px 8px;font-size:12px;text-align:right;">$${p.amount.toFixed(2)}</td>
             <td style="padding:4px 8px;font-size:12px;text-align:right;color:#777;">${p.method}</td>
           </tr>
@@ -232,7 +233,7 @@ const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): s
     ${data.dueDate ? `
     <div class="meta-group">
       <div class="meta-label">Due Date</div>
-      <div class="meta-value">${new Date(data.dueDate).toLocaleDateString()}</div>
+      <div class="meta-value">${formatDate(data.dueDate)}</div>
     </div>
     ` : ''}
     <div class="meta-group">

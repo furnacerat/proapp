@@ -20,7 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { INVOICE_TYPES, INVOICE_STATUSES } from '../data/types';
 import type { Invoice, InvoiceStatus, PaymentMethod } from '../data/types';
 import { useToast } from '../components/common/Toast';
@@ -76,7 +76,7 @@ export function Invoices() {
       const job = jobs.find(item => item.id === invoice.jobId);
       const paid = payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0);
       const balance = Math.max(0, invoice.amount - paid);
-      const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : now;
+      const dueDate = invoice.dueDate ? parseDateString(invoice.dueDate) : now;
       dueDate.setHours(0, 0, 0, 0);
       const daysPastDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
       const effectiveStatus: InvoiceStatus = balance <= 0 ? 'paid' : daysPastDue > 0 && invoice.status !== 'draft' ? 'overdue' : paid > 0 ? 'partial' : invoice.status;
@@ -95,7 +95,7 @@ export function Invoices() {
         daysPastDue,
         expectedPaid: job ? job.contractAmount * (progress / 100) : 0,
       };
-    }).sort((a, b) => new Date(a.dueDate || a.createdAt).getTime() - new Date(b.dueDate || b.createdAt).getTime());
+    }).sort((a, b) => parseDateString(a.dueDate || a.createdAt).getTime() - parseDateString(b.dueDate || b.createdAt).getTime());
   }, [invoices, jobs, payments, getJobProgress]);
 
   const filteredInvoices = useMemo(() => {
@@ -127,7 +127,7 @@ export function Invoices() {
   const overdueAmount = overdueInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
   const dueSoon = invoiceSummaries.filter(invoice => {
     if (invoice.balance <= 0 || invoice.effectiveStatus === 'overdue') return false;
-    const due = new Date(invoice.dueDate);
+    const due = parseDateString(invoice.dueDate);
     const now = new Date();
     const diff = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return diff >= 0 && diff <= 7;

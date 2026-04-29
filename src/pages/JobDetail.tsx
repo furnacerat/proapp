@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
+import { formatCurrency, formatDate, formatTime, parseDateString } from '../utils/formatters';
 import { getJobInsights } from '../utils/insights';
 import { JOB_STATUSES, EXPENSE_CATEGORIES, INVOICE_TYPES, CHANGE_ORDER_STATUSES, PHOTO_CATEGORIES, TASK_STATUSES, PRIORITIES, PunchListStatus, IssueStatus, IssueSeverity } from '../data/types';
 import type { JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, AllowanceCategory, AllowanceSelectionStatus } from '../data/types';
@@ -844,7 +844,7 @@ export function JobDetail() {
               <h4 className="font-medium mt-6 mb-4">Task Schedule</h4>
               <div className="space-y-2">
                 {jobTasks.map((task, i) => (
-                  <div key={task.id} className={`flex items-center justify-between p-3 rounded-lg ${task.status === 'done' ? 'bg-green-50' : task.dueDate && new Date(task.dueDate) < new Date() ? 'bg-red-50' : 'bg-gray-50'}`}>
+                  <div key={task.id} className={`flex items-center justify-between p-3 rounded-lg ${task.status === 'done' ? 'bg-green-50' : task.dueDate && parseDateString(task.dueDate) < new Date() ? 'bg-red-50' : 'bg-gray-50'}`}>
                     <div className="flex items-center gap-3">
                       <span className="text-muted">{i + 1}.</span>
                       <span className={task.status === 'done' ? 'line-through' : ''}>{task.title}</span>

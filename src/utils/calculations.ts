@@ -1,5 +1,5 @@
 import { Job, TimeEntry, Expense, Worker, Invoice, Payment, Task } from '../data/types';
-import { formatCurrency } from './formatters';
+import { formatCurrency, parseDateString } from './formatters';
 import { expenseAffectsJobCost } from './timeEntries';
 
 export function calculateProjectedProfit(job: Job): number {
@@ -61,7 +61,7 @@ export function getThisWeekExpenses(expenses: Expense[]): number {
   startOfWeek.setHours(0, 0, 0, 0);
   
   return expenses
-    .filter(e => new Date(e.date) >= startOfWeek)
+    .filter(e => parseDateString(e.date) >= startOfWeek)
     .reduce((sum, e) => sum + e.amount, 0);
 }
 
@@ -72,7 +72,7 @@ export function getThisWeekHours(timeEntries: TimeEntry[]): number {
   startOfWeek.setHours(0, 0, 0, 0);
   
   return timeEntries
-    .filter(e => new Date(e.date) >= startOfWeek)
+    .filter(e => parseDateString(e.date) >= startOfWeek)
     .reduce((sum, e) => sum + e.totalHours, 0);
 }
 
@@ -85,7 +85,7 @@ export function getThisWeekPayments(invoices: Invoice[], payments: Payment[]): n
   const invoiceIds = invoices.map(i => i.id);
   
   return payments
-    .filter(p => invoiceIds.includes(p.invoiceId) && new Date(p.date) >= startOfWeek)
+    .filter(p => invoiceIds.includes(p.invoiceId) && parseDateString(p.date) >= startOfWeek)
     .reduce((sum, p) => sum + p.amount, 0);
 }
 
@@ -115,7 +115,7 @@ export function getJobsDueSoon(jobs: Job[], days: number = 7): Job[] {
   const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
   
   return jobs.filter(j => {
-    const due = new Date(j.dueDate);
+    const due = parseDateString(j.dueDate);
     return due <= future && (j.status === 'active' || j.status === 'scheduled');
   });
 }
@@ -127,7 +127,7 @@ export function getOverdueTasks(tasks: Task[]): Task[] {
   return tasks.filter(t => {
     if (!t.dueDate) return false;
     if (t.status === 'done') return false;
-    return new Date(t.dueDate) < now;
+    return parseDateString(t.dueDate) < now;
   });
 }
 

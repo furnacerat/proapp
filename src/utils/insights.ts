@@ -1,5 +1,5 @@
 import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance } from '../data/types';
-import { formatCurrency } from './formatters';
+import { formatCurrency, parseDateString } from './formatters';
 import { expenseAffectsJobCost } from './timeEntries';
 
 export interface Insight {
@@ -50,7 +50,7 @@ const dayMs = 24 * 60 * 60 * 1000;
 
 function daysSince(date?: string) {
   if (!date) return 999;
-  return Math.floor((Date.now() - new Date(date).getTime()) / dayMs);
+  return Math.floor((Date.now() - parseDateString(date).getTime()) / dayMs);
 }
 
 function getPaidByInvoice(payments: Payment[]) {
@@ -118,7 +118,7 @@ export function generateSmartNextActions(
     .filter(invoice => invoice.status !== 'paid')
     .forEach(invoice => {
       const balance = invoice.amount - (paidByInvoice.get(invoice.id) || 0);
-      const daysPastDue = Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / dayMs);
+      const daysPastDue = Math.floor((Date.now() - parseDateString(invoice.dueDate).getTime()) / dayMs);
       if (balance > 0 && daysPastDue >= -3) {
         actions.push({
           id: `invoice-${invoice.id}`,
@@ -139,9 +139,9 @@ export function generateSmartNextActions(
       const jobExpenses = expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense));
       const lastActivity = [job.updatedAt, ...jobTime.map(entry => entry.date), ...jobExpenses.map(expense => expense.date)]
         .filter(Boolean)
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+        .sort((a, b) => parseDateString(b).getTime() - parseDateString(a).getTime())[0];
       const idleDays = daysSince(lastActivity);
-      const dueDays = Math.ceil((new Date(job.dueDate).getTime() - Date.now()) / dayMs);
+      const dueDays = Math.ceil((parseDateString(job.dueDate).getTime() - Date.now()) / dayMs);
       const actualCost = getActualJobCost(job, expenses, timeEntries);
       const budgetUsage = job.estimatedCost > 0 ? (actualCost / job.estimatedCost) * 100 : 0;
 
@@ -273,7 +273,7 @@ export function generateSmartNextActions(
       }
     });
 
-  const overdueTasks = tasks.filter(task => task.dueDate && task.status !== 'done' && new Date(task.dueDate) < new Date());
+  const overdueTasks = tasks.filter(task => task.dueDate && task.status !== 'done' && parseDateString(task.dueDate) < new Date());
   if (overdueTasks.length > 0) {
     actions.push({
       id: 'overdue-task-stack',
@@ -571,7 +571,7 @@ export function generateInsights(
 
   const overdueTasks = tasks.filter(t => {
     if (!t.dueDate || t.status === 'done') return false;
-    return new Date(t.dueDate) < now;
+    return parseDateString(t.dueDate) < now;
   });
 
   if (overdueTasks.length > 0) {
@@ -701,9 +701,9 @@ export function getWeeklySummary(
   startOfWeek.setDate(now.getDate() - now.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
 
-  const weekEntries = timeEntries.filter(t => new Date(t.date) >= startOfWeek);
-  const weekExpenses = expenses.filter(e => new Date(e.date) >= startOfWeek);
-  const weekPayments = payments.filter(p => new Date(p.date) >= startOfWeek);
+  const weekEntries = timeEntries.filter(t => parseDateString(t.date) >= startOfWeek);
+  const weekExpenses = expenses.filter(e => parseDateString(e.date) >= startOfWeek);
+  const weekPayments = payments.filter(p => parseDateString(p.date) >= startOfWeek);
 
   return {
     hours: weekEntries.reduce((sum, t) => sum + t.totalHours, 0),

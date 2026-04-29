@@ -1,5 +1,6 @@
 import React from 'react'
 import { PrintInvoiceData, PrintSettings, DEFAULT_PRINT_SETTINGS } from '../../data/printTypes'
+import { parseDateString } from '../../utils/formatters'
 
 interface Props {
   data: PrintInvoiceData
@@ -7,7 +8,7 @@ interface Props {
 }
 
 const fmt = (n: number) => `$${n.toFixed(2)}`
-const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
+const fmtDate = (d?: string) => d ? parseDateString(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
 
 export const InvoicePrintTemplate: React.FC<Props> = ({ data, settings = DEFAULT_PRINT_SETTINGS }) => {
   const { company, client, project, lineItems, payments, balanceDue, notes, paymentTerms } = data

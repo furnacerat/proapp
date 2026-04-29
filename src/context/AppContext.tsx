@@ -5,6 +5,7 @@ import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
 import { canViewOwnerFinancials, sanitizeAppDataForRole } from '../auth/rbac';
 import { calculateTimeEntryLaborCost, expenseAffectsJobCost, getTimeEntryOvertimeHours, timeEntryCostFields } from '../utils/timeEntries';
+import { parseDateString } from '../utils/formatters';
 
 interface DataServiceStatus {
   mode: 'local' | 'supabase';
@@ -485,7 +486,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     data.tasks.forEach(task => {
       if (task.dueDate && task.status !== 'done') {
-        const due = new Date(task.dueDate);
+        const due = parseDateString(task.dueDate);
         due.setHours(0, 0, 0, 0);
         if (due < now) {
           newAlerts.push({
@@ -505,7 +506,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     data.jobs.forEach(job => {
       if (job.status === 'active' && job.dueDate) {
-        const due = new Date(job.dueDate);
+        const due = parseDateString(job.dueDate);
         due.setHours(0, 0, 0, 0);
         const deadline = new Date(now);
         deadline.setDate(deadline.getDate() + 3);
@@ -539,7 +540,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     data.invoices.forEach(inv => {
       if (inv.status !== 'paid' && inv.dueDate) {
-        const due = new Date(inv.dueDate);
+        const due = parseDateString(inv.dueDate);
         due.setHours(0, 0, 0, 0);
         if (due < now) {
           newAlerts.push({

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { generateInsights, getWeeklySummary, getKPIS, generateSmartNextActions, getPerformanceInsights } from '../utils/insights';
 import { JOB_TYPES } from '../data/types';
 import { useToast } from '../components/common/Toast';
@@ -26,9 +26,9 @@ export function Dashboard() {
   const kpis = useMemo(() => getKPIS(jobs, expenses, timeEntries, invoices, payments), [jobs, expenses, timeEntries, invoices, payments]);
 
   const unreadAlerts = alerts.filter(a => !a.isRead);
-  const overdueTasks = tasks.filter(t => t.dueDate && t.status !== 'done' && new Date(t.dueDate) < new Date());
+  const overdueTasks = tasks.filter(t => t.dueDate && t.status !== 'done' && parseDateString(t.dueDate) < new Date());
   const highPriorityTasks = tasks.filter(t => t.status === 'open' && (t.priority === 'high' || t.priority === 'urgent'));
-  const jobsDueSoon = jobs.filter(j => j.status === 'active' && new Date(j.dueDate) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  const jobsDueSoon = jobs.filter(j => j.status === 'active' && parseDateString(j.dueDate) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
   const unpaidInvoices = invoices.filter(i => i.status !== 'paid');
   const today = new Date().toISOString().split('T')[0];
   const todayTasks = tasks.filter(t => t.dueDate === today && t.status !== 'done');

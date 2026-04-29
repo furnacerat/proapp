@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate, formatTime } from '../utils/formatters';
+import { formatCurrency, formatDate, formatTime, parseDateString } from '../utils/formatters';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
@@ -81,7 +81,7 @@ export function TimeEntries() {
   }, []);
 
   const filteredEntries = useMemo(() => {
-    let result = [...enrichedEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    let result = [...enrichedEntries].sort((a, b) => parseDateString(b.date).getTime() - parseDateString(a.date).getTime());
     const query = search.trim().toLowerCase();
 
     if (query) {
@@ -98,7 +98,7 @@ export function TimeEntries() {
 
     if (datePreset === 'this_week') {
       result = result.filter(entry => {
-        const date = new Date(entry.date);
+        const date = parseDateString(entry.date);
         return date >= weekRange.start && date <= weekRange.end;
       });
     }
@@ -107,7 +107,7 @@ export function TimeEntries() {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);
       cutoff.setHours(0, 0, 0, 0);
-      result = result.filter(entry => new Date(entry.date) >= cutoff);
+      result = result.filter(entry => parseDateString(entry.date) >= cutoff);
     }
 
     if (datePreset === 'overtime') result = result.filter(entry => entry.overtime);
@@ -119,7 +119,7 @@ export function TimeEntries() {
   const totalCost = filteredEntries.reduce((sum, entry) => sum + entry.laborCost, 0);
   const averageHoursPerJob = jobs.length > 0 ? enrichedEntries.reduce((sum, entry) => sum + entry.totalHours, 0) / Math.max(1, new Set(enrichedEntries.map(entry => entry.jobId)).size) : 0;
   const overtimeThisWeek = enrichedEntries
-    .filter(entry => entry.overtime && new Date(entry.date) >= weekRange.start && new Date(entry.date) <= weekRange.end)
+    .filter(entry => entry.overtime && parseDateString(entry.date) >= weekRange.start && parseDateString(entry.date) <= weekRange.end)
     .reduce((sum, entry) => sum + Math.max(0, entry.totalHours - 8), 0);
 
   const jobLaborSummaries = useMemo(() => {
@@ -150,7 +150,7 @@ export function TimeEntries() {
   const alerts = useMemo(() => {
     const highOvertimeWorkers = workers.map(worker => {
       const hours = enrichedEntries
-        .filter(entry => entry.workerId === worker.id && entry.overtime && new Date(entry.date) >= weekRange.start && new Date(entry.date) <= weekRange.end)
+        .filter(entry => entry.workerId === worker.id && entry.overtime && parseDateString(entry.date) >= weekRange.start && parseDateString(entry.date) <= weekRange.end)
         .reduce((sum, entry) => sum + Math.max(0, entry.totalHours - 8), 0);
       return { worker, hours };
     }).filter(item => item.hours >= 4);

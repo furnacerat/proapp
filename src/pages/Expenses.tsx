@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { EXPENSE_CATEGORIES } from '../data/types';
 import type { Expense, ExpenseCategory, ExpenseCostTreatment, ExpenseSource, ExpenseType, PaymentSource } from '../data/types';
 import { useToast } from '../components/common/Toast';
@@ -148,7 +148,7 @@ export function Expenses() {
         if (dateTo && expense.date > dateTo) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => parseDateString(b.date).getTime() - parseDateString(a.date).getTime());
   }, [enrichedExpenses, search, jobFilter, categoryFilter, sourceFilter, typeFilter, dateFrom, dateTo]);
 
   const visibleJobIds = new Set(filteredExpenses.map(expense => expense.jobId));
