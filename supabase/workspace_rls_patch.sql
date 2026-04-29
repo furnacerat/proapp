@@ -1,8 +1,7 @@
 -- Workspace RLS patch.
 -- If this script errors with "cannot change return type of existing function",
 -- the Supabase SQL Editor is still running an older pasted script. Clear the
--- editor completely and paste this current file. This file intentionally does
--- not create or replace any functions.
+-- editor completely and paste this current file.
 --
 -- Run this after supabase/schema.sql, phase4_auth_patch.sql, and rbac_profiles.sql.
 -- It lets owners/admins see and manage shared operational rows created by team
@@ -40,10 +39,14 @@ $$;
 -- Non-owner users need to discover the active owner user_id so the app can ask
 -- for owner-owned workspace rows where their role allows it.
 drop policy if exists "Active users read owner profiles" on public.profiles;
-create policy "Active users read owner profiles"
-  on public.profiles
+create policy "Active users read owner profiles" on public.profiles
   for select
-  using (active = true and role::text = 'owner' and public.current_workspace_profile_active());
+  to authenticated
+  using (
+    active = true
+    and role = 'owner'
+    and public.current_workspace_profile_active() = true
+  );
 
 -- Shared workspace tables: team members can continue managing their own rows,
 -- while owners/admins can read, update, and delete rows entered by anyone.

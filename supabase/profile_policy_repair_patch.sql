@@ -45,10 +45,14 @@ create policy "Owners and admins manage profiles"
   with check (public.current_workspace_role() in ('owner', 'admin'));
 
 drop policy if exists "Active users read owner profiles" on public.profiles;
-create policy "Active users read owner profiles"
-  on public.profiles
+create policy "Active users read owner profiles" on public.profiles
   for select
-  using (active = true and role::text = 'owner' and public.current_workspace_profile_active());
+  to authenticated
+  using (
+    active = true
+    and role = 'owner'
+    and public.current_workspace_profile_active() = true
+  );
 
 select user_id, email, display_name, role, active
 from public.profiles
