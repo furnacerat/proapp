@@ -9,6 +9,7 @@ export interface UserProfile {
   display_name?: string;
   email?: string;
   job_title?: string;
+  worker_id?: string | null;
   active: boolean;
 }
 
@@ -93,6 +94,7 @@ const redactPriceBookCostSettings = (material: Material): Material => ({
 });
 
 const findCrewWorkerId = (data: AppData, profile: UserProfile | null) => {
+  if (profile?.worker_id && data.workers.some(worker => worker.id === profile.worker_id)) return profile.worker_id;
   const email = profile?.email?.toLowerCase();
   return data.workers.find(worker =>
     (email && worker.email?.toLowerCase() === email) ||

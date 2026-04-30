@@ -10,6 +10,7 @@ create table if not exists public.profiles (
   display_name text,
   role text not null default 'crew',
   job_title text,
+  worker_id text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -103,6 +104,8 @@ begin
   return new;
 end;
 $$;
+
+alter table public.profiles add column if not exists worker_id text;
 
 drop trigger if exists on_auth_user_created_profile on auth.users;
 create trigger on_auth_user_created_profile

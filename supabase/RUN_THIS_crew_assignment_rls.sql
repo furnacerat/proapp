@@ -1,10 +1,18 @@
 -- RUN THIS FILE ONLY for crew assignment-specific RLS.
 -- Clear the Supabase SQL Editor first, then paste this whole file.
--- Crew assignment is matched by public.workers payload email == auth.email().
+-- Crew assignment is matched by profiles.worker_id first, then worker email as fallback.
 
 create or replace function public.current_workspace_role() returns text language sql stable security definer set search_path = public as $$ select coalesce((select role::text from public.profiles where user_id = auth.uid() and active = true), 'crew'); $$;
 
-create or replace function public.current_workspace_worker_ids() returns text[] language sql stable security definer set search_path = public as $$ select coalesce(array_agg(id::text), array[]::text[]) from public.workers where lower(coalesce(payload->>'email', '')) = lower(coalesce(auth.email(), '')); $$;
+alter table public.profiles add column if not exists worker_id text;
+
+update public.profiles as profiles
+set worker_id = workers.id
+from public.workers as workers
+where profiles.worker_id is null
+  and lower(coalesce(profiles.email, '')) = lower(coalesce(workers.payload->>'email', ''));
+
+create or replace function public.current_workspace_worker_ids() returns text[] language sql stable security definer set search_path = public as $$ select array_remove(array_cat(coalesce((select array_agg(worker_id::text) from public.profiles where user_id = auth.uid() and active = true and worker_id is not null), array[]::text[]), coalesce((select array_agg(id::text) from public.workers where lower(coalesce(payload->>'email', '')) = lower(coalesce(auth.email(), ''))), array[]::text[])), null); $$;
 
 create or replace function public.row_assigned_to_current_worker(row_payload jsonb, row_worker_id text) returns boolean language sql stable security definer set search_path = public as $$ select coalesce(row_worker_id, row_payload->>'workerId', row_payload->>'worker_id', row_payload->>'assignedTo') = any(public.current_workspace_worker_ids()); $$;
 

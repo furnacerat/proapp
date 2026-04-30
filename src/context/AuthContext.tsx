@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id,user_id,role,display_name,email,job_title,active')
+      .select('id,user_id,role,display_name,email,job_title,worker_id,active')
       .eq('user_id', nextUser.id)
       .maybeSingle();
 
@@ -83,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         display_name: nextUser.user_metadata?.display_name || nextUser.email || '',
         email: nextUser.email || '',
         job_title: nextUser.user_metadata?.job_title || '',
+        worker_id: undefined,
         active: true,
       });
       dataService.setOwnerUserId(await loadOwnerUserId(nextUser, fallbackRole));
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       display_name: data.display_name || data.email || nextUser.email || '',
       email: data.email || nextUser.email || '',
       job_title: data.job_title || '',
+      worker_id: data.worker_id || undefined,
       active: data.active !== false,
     });
   };

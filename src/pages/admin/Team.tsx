@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Mail, RefreshCw, Shield, UserPlus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { useToast } from '../../components/common/Toast';
 import { roleLabels, type UserProfile, type UserRole } from '../../auth/rbac';
 
@@ -9,6 +10,7 @@ const roles: UserRole[] = ['owner', 'admin', 'project_manager', 'estimator', 'cr
 
 export function Team() {
   const { role, refreshProfile } = useAuth();
+  const { workers } = useApp();
   const { showToast } = useToast();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,7 +24,7 @@ export function Team() {
     setLoading(true);
     const { data, error } = await supabase
       .from('profiles')
-      .select('id,user_id,email,display_name,job_title,role,active')
+      .select('id,user_id,email,display_name,job_title,worker_id,role,active')
       .order('email', { ascending: true });
     setLoading(false);
     if (error) {
@@ -127,6 +129,7 @@ export function Team() {
                   <th>Email</th>
                   <th>Display Name</th>
                   <th>Job Title</th>
+                  <th>Worker Link</th>
                   <th>Role</th>
                   <th>Status</th>
                 </tr>
@@ -140,6 +143,12 @@ export function Team() {
                     </td>
                     <td>
                       <input className="form-input" value={profile.job_title || ''} onChange={event => updateProfile(profile, { job_title: event.target.value })} />
+                    </td>
+                    <td>
+                      <select className="form-select" value={profile.worker_id || ''} onChange={event => updateProfile(profile, { worker_id: event.target.value || null })}>
+                        <option value="">None</option>
+                        {workers.map(worker => <option key={worker.id} value={worker.id}>{worker.name}{worker.email ? ` - ${worker.email}` : ''}</option>)}
+                      </select>
                     </td>
                     <td>
                       <select className="form-select" value={profile.role} onChange={event => updateProfile(profile, { role: event.target.value as UserRole })}>
@@ -156,7 +165,7 @@ export function Team() {
                 ))}
                 {sortedProfiles.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-center text-muted">No profiles found.</td>
+                    <td colSpan={6} className="text-center text-muted">No profiles found.</td>
                   </tr>
                 )}
               </tbody>
