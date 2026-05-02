@@ -1,4 +1,4 @@
-import type { AppData, ChangeOrder, Customer, Estimate, Invoice, Job, JobTimelineEntry, Note, Payment, Photo, PortalAccessToken } from '../data/types';
+import type { AppData, ChangeOrder, Customer, Estimate, Invoice, Job, JobTimelineEntry, Note, Payment, Photo, PortalAccessToken, SignatureRequest } from '../data/types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { dataService } from './dataService';
 
@@ -13,6 +13,7 @@ export interface PortalWorkspace {
   notes: Note[];
   photos: Photo[];
   timeline: JobTimelineEntry[];
+  signatureRequests: SignatureRequest[];
 }
 
 const encoder = new TextEncoder();
@@ -59,6 +60,9 @@ function localPortalData(data: AppData, access: PortalAccessToken): PortalWorksp
   const timeline = (data.timeline || []).filter(entry =>
     jobIds.has(entry.jobId) && ['update', 'photo', 'change_order', 'invoice', 'payment'].includes(entry.type),
   );
+  const signatureRequests = (data.signatureRequests || []).filter(request =>
+    request.customerId === customer.id && (!access.jobId || request.jobId === access.jobId),
+  );
 
   return {
     access,
@@ -71,6 +75,7 @@ function localPortalData(data: AppData, access: PortalAccessToken): PortalWorksp
     notes,
     photos,
     timeline,
+    signatureRequests,
   };
 }
 
@@ -86,7 +91,7 @@ export async function createPortalAccess(customer: Customer, jobId?: string) {
     email: customer.email,
     label: jobId ? 'Project portal' : 'Customer portal',
     active: true,
-    permissions: ['view', 'approve_estimates', 'approve_change_orders', 'view_invoices'],
+    permissions: ['view', 'approve_estimates', 'approve_change_orders', 'view_invoices', 'sign_documents'],
     createdAt: now,
     updatedAt: now,
   };
@@ -99,7 +104,7 @@ export async function getPortalWorkspace(token: string): Promise<PortalWorkspace
 
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase.rpc('get_customer_portal', { p_token: token });
-    if (!error && data) return data as PortalWorkspace;
+    if (!error && data) return { ...(data as PortalWorkspace), signatureRequests: (data as Partial<PortalWorkspace>).signatureRequests || [] };
   }
 
   const data = dataService.local.getAppData();
@@ -147,5 +152,46 @@ export async function approvePortalChangeOrder(token: string, changeOrderId: str
     changeOrders: data.changeOrders.map(order => order.id === changeOrderId && allowedJobIds.has(order.jobId)
       ? { ...order, status: 'approved', approvedAt: now, approvedBy: customerName, updatedAt: now } as ChangeOrder
       : order),
+  });
+}
+
+export async function signPortalDocument(token: string, requestId: string, signatureText: string, signatureDataUrl: string, signerName: string) {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.rpc('portal_sign_document', {
+      p_token: token,
+      p_request_id: requestId,
+      p_signature_text: signatureText,
+      p_signature_data_url: signatureDataUrl,
+      p_signer_name: signerName,
+    });
+    if (!error) return;
+  }
+
+  const data = dataService.local.getAppData();
+  if (!data) return;
+  const tokenHash = await sha256Hex(token);
+  const access = (data.portalTokens || []).find(item => item.tokenHash === tokenHash);
+  if (!access || !activeToken(access)) return;
+  const now = new Date().toISOString();
+  dataService.local.saveAppData({
+    ...data,
+    signatureRequests: (data.signatureRequests || []).map(request => {
+      if (request.id !== requestId || request.customerId !== access.customerId) return request;
+      if (access.jobId && request.jobId !== access.jobId) return request;
+      return {
+        ...request,
+        status: 'signed',
+        signatureText,
+        signatureDataUrl,
+        signerName,
+        viewedAt: request.viewedAt || now,
+        signedAt: now,
+        updatedAt: now,
+        auditTrail: [
+          ...(request.auditTrail || []),
+          { event: 'document_signed', timestamp: now, actor: signerName || 'Customer', details: 'Signed from customer portal' },
+        ],
+      } as SignatureRequest;
+    }),
   });
 }

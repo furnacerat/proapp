@@ -129,6 +129,7 @@ export const sanitizeAppDataForRole = (data: AppData, profile: UserProfile | nul
       punchLists: (data.punchLists || []).filter(item => assignedJobIds.has(item.jobId)),
       jobIssues: (data.jobIssues || []).filter(item => assignedJobIds.has(item.jobId)),
       fileAttachments: (data.fileAttachments || []).filter(item => assignedJobIds.has(item.jobId)),
+      signatureRequests: (data.signatureRequests || []).filter(item => item.jobId && assignedJobIds.has(item.jobId)),
       customers: [],
       estimates: [],
       assemblies: [],

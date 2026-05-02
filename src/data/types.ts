@@ -592,6 +592,45 @@ export interface ChangeOrder {
   updatedAt: string;
 }
 
+export type SignatureRequestStatus = 'draft' | 'sent' | 'viewed' | 'signed' | 'declined' | 'expired' | 'cancelled';
+export type SignatureDocumentType = 'estimate' | 'change_order' | 'contract' | 'invoice' | 'custom';
+
+export interface SignatureAuditEvent {
+  event: string;
+  timestamp: string;
+  actor?: string;
+  details?: string;
+}
+
+export interface SignatureRequest {
+  id: string;
+  customerId: string;
+  jobId?: string;
+  estimateId?: string;
+  changeOrderId?: string;
+  invoiceId?: string;
+  portalTokenId?: string;
+  title: string;
+  documentType: SignatureDocumentType;
+  status: SignatureRequestStatus;
+  signerName?: string;
+  signerEmail?: string;
+  signerPhone?: string;
+  message?: string;
+  documentTitle?: string;
+  documentBody: string;
+  signatureText?: string;
+  signatureDataUrl?: string;
+  signedAt?: string;
+  declinedAt?: string;
+  viewedAt?: string;
+  sentAt?: string;
+  expiresAt?: string;
+  auditTrail?: SignatureAuditEvent[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PortalAccessToken {
   id: string;
   tokenHash: string;
@@ -600,7 +639,7 @@ export interface PortalAccessToken {
   email?: string;
   label?: string;
   active: boolean;
-  permissions: ('view' | 'approve_estimates' | 'approve_change_orders' | 'view_invoices')[];
+  permissions: ('view' | 'approve_estimates' | 'approve_change_orders' | 'view_invoices' | 'sign_documents')[];
   expiresAt?: string;
   lastUsedAt?: string;
   createdAt: string;
@@ -901,6 +940,7 @@ export interface AppData {
   photos: Photo[];
   changeOrders: ChangeOrder[];
   portalTokens?: PortalAccessToken[];
+  signatureRequests?: SignatureRequest[];
   alerts: Alert[];
   timeline?: JobTimelineEntry[];
   jobLogs?: JobLog[];

@@ -7,7 +7,7 @@ import { Modal } from '../components/common/Modal';
 import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { dataService } from '../services/dataService';
 import { createPortalAccess } from '../services/portalService';
-import type { Customer, Estimate, Invoice, Job } from '../data/types';
+import type { Customer, Estimate, Invoice, Job, SignatureDocumentType } from '../data/types';
 import {
   Activity,
   BadgeDollarSign,
@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Edit,
   FilePlus2,
+  FileSignature,
   Filter,
   Link2,
   Mail,
@@ -32,7 +33,7 @@ import {
 } from 'lucide-react';
 
 type SegmentKey = 'all' | 'leads' | 'active' | 'past' | 'open_estimate' | 'balance_due';
-type DetailTab = 'overview' | 'estimates' | 'jobs' | 'invoices' | 'notes';
+type DetailTab = 'overview' | 'estimates' | 'jobs' | 'invoices' | 'documents' | 'notes';
 
 interface CustomerSummary {
   customer: Customer;
@@ -98,6 +99,8 @@ export function Customers() {
     convertEstimateToJob,
     getJobProgress,
     getJobProfit,
+    signatureRequests,
+    addSignatureRequest,
   } = useApp();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -113,9 +116,18 @@ export function Customers() {
   const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [portalLink, setPortalLink] = useState('');
+  const [signatureForm, setSignatureForm] = useState({
+    title: '',
+    documentType: 'contract' as SignatureDocumentType,
+    jobId: '',
+    documentBody: '',
+    message: '',
+    expiresAt: '',
+  });
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '', address: '', notes: ''
   });
@@ -193,6 +205,11 @@ export function Customers() {
 
   const selectedSummary = summaries.find(summary => summary.customer.id === selectedId) || filteredSummaries[0] || summaries[0];
   const selectedCustomer = selectedSummary?.customer;
+  const selectedSignatureRequests = useMemo(() => (
+    selectedCustomer
+      ? (signatureRequests || []).filter(request => request.customerId === selectedCustomer.id)
+      : []
+  ), [selectedCustomer, signatureRequests]);
 
   const kpis = useMemo(() => {
     const activeJobsCount = summaries.reduce((sum, summary) => sum + summary.activeJobs.length, 0);
@@ -354,6 +371,58 @@ export function Customers() {
       showToast('Customer portal link copied');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Could not create portal link', 'error');
+    }
+  };
+
+  const openSignatureRequest = () => {
+    if (!selectedCustomer) return;
+    const primaryJob = selectedSummary?.activeJobs[0] || selectedSummary?.jobs[0];
+    const defaultExpires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setSignatureForm({
+      title: `${selectedCustomer.name} document approval`,
+      documentType: 'contract',
+      jobId: primaryJob?.id || '',
+      documentBody: '',
+      message: 'Please review and sign this document from your customer portal.',
+      expiresAt: defaultExpires,
+    });
+    setShowSignatureModal(true);
+  };
+
+  const handleCreateSignatureRequest = async () => {
+    if (!selectedCustomer) return;
+    if (!signatureForm.title.trim() || !signatureForm.documentBody.trim()) {
+      showToast('Add a title and document text before sending', 'warning');
+      return;
+    }
+    try {
+      const { access, url } = await createPortalAccess(selectedCustomer, signatureForm.jobId || undefined);
+      setData(prev => ({ ...prev, portalTokens: [...(prev.portalTokens || []), access] }));
+      addSignatureRequest({
+        customerId: selectedCustomer.id,
+        jobId: signatureForm.jobId || undefined,
+        portalTokenId: access.id,
+        title: signatureForm.title.trim(),
+        documentTitle: signatureForm.title.trim(),
+        documentType: signatureForm.documentType,
+        documentBody: signatureForm.documentBody.trim(),
+        message: signatureForm.message.trim() || undefined,
+        signerName: selectedCustomer.name,
+        signerEmail: selectedCustomer.email,
+        signerPhone: selectedCustomer.phone,
+        sentAt: new Date().toISOString(),
+        expiresAt: signatureForm.expiresAt || undefined,
+        status: 'sent',
+      });
+      setPortalLink(url);
+      setActiveTab('documents');
+      setShowSignatureModal(false);
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url).catch(() => undefined);
+      }
+      showToast('Signature request created and portal link copied');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not create signature request', 'error');
     }
   };
 
@@ -533,6 +602,7 @@ export function Customers() {
                 <Link className="btn btn-secondary btn-sm" to="/jobs"><BriefcaseBusiness size={16} /> New Job</Link>
                 <Link className="btn btn-secondary btn-sm" to="/invoices"><Receipt size={16} /> Create Invoice</Link>
                 <button className="btn btn-secondary btn-sm" onClick={handleCreatePortalLink}><Link2 size={16} /> Portal Link</button>
+                <button className="btn btn-secondary btn-sm" onClick={openSignatureRequest}><FileSignature size={16} /> Request Signature</button>
                 <button className="btn btn-secondary btn-sm" onClick={logContact}><Phone size={16} /> Log Contact</button>
                 <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('notes')}><MessageSquarePlus size={16} /> Add Note</button>
               </div>
@@ -558,7 +628,7 @@ export function Customers() {
               </div>
 
               <div className="customer-tabs">
-                {(['overview', 'estimates', 'jobs', 'invoices', 'notes'] as DetailTab[]).map(tab => (
+                {(['overview', 'estimates', 'jobs', 'invoices', 'documents', 'notes'] as DetailTab[]).map(tab => (
                   <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>
                     {tab}
                   </button>
@@ -642,6 +712,22 @@ export function Customers() {
                   </RecordList>
                 )}
 
+                {activeTab === 'documents' && (
+                  <RecordList empty="No signature requests for this customer yet.">
+                    {selectedSignatureRequests.map(request => (
+                      <div className="customer-record" key={request.id}>
+                        <div>
+                          <div className="customer-record-title">{request.title}</div>
+                          <span>{request.documentType.replace('_', ' ')} {request.sentAt ? `sent ${formatDate(request.sentAt)}` : `created ${formatDate(request.createdAt)}`}</span>
+                        </div>
+                        <span className={`badge ${request.status === 'signed' ? 'badge-green' : request.status === 'sent' ? 'badge-blue' : 'badge-slate'}`}>{request.status}</span>
+                        <span className="customer-record-muted">{request.signedAt ? `Signed ${formatDate(request.signedAt)}` : request.expiresAt ? `Expires ${formatDate(request.expiresAt)}` : 'No expiry'}</span>
+                        <button className="btn btn-sm btn-secondary" onClick={openSignatureRequest}>New Request</button>
+                      </div>
+                    ))}
+                  </RecordList>
+                )}
+
                 {activeTab === 'notes' && (
                   <div className="customer-notes">
                     <div className="customer-note-composer">
@@ -681,6 +767,52 @@ export function Customers() {
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingCustomer ? 'Edit Customer' : 'New Customer'}>
         <CustomerForm form={form} setForm={setForm} onCancel={() => setShowModal(false)} onSave={handleSave} isEditing={!!editingCustomer} />
+      </Modal>
+
+      <Modal isOpen={showSignatureModal} onClose={() => setShowSignatureModal(false)} title="Request Signature" size="lg">
+        <div className="signature-request-form">
+          <div className="form-row form-row-2">
+            <div className="form-group">
+              <label className="form-label">Document title *</label>
+              <input className="form-input" value={signatureForm.title} onChange={event => setSignatureForm({ ...signatureForm, title: event.target.value })} placeholder="Contract, waiver, approval letter..." />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Document type</label>
+              <select className="form-select" value={signatureForm.documentType} onChange={event => setSignatureForm({ ...signatureForm, documentType: event.target.value as SignatureDocumentType })}>
+                <option value="contract">Contract</option>
+                <option value="estimate">Estimate</option>
+                <option value="change_order">Change order</option>
+                <option value="invoice">Invoice</option>
+                <option value="custom">Custom document</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-row form-row-2">
+            <div className="form-group">
+              <label className="form-label">Project</label>
+              <select className="form-select" value={signatureForm.jobId} onChange={event => setSignatureForm({ ...signatureForm, jobId: event.target.value })}>
+                <option value="">Customer-wide document</option>
+                {selectedSummary?.jobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Expires</label>
+              <input className="form-input" type="date" value={signatureForm.expiresAt} onChange={event => setSignatureForm({ ...signatureForm, expiresAt: event.target.value })} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Portal message</label>
+            <input className="form-input" value={signatureForm.message} onChange={event => setSignatureForm({ ...signatureForm, message: event.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Document text *</label>
+            <textarea className="form-textarea signature-document-editor" value={signatureForm.documentBody} onChange={event => setSignatureForm({ ...signatureForm, documentBody: event.target.value })} placeholder="Paste the agreement, authorization, or approval language the customer needs to sign." />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={() => setShowSignatureModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCreateSignatureRequest}><FileSignature size={16} /> Create Request</button>
+        </div>
       </Modal>
 
       <ConfirmDialog

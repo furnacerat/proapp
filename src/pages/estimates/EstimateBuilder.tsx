@@ -18,7 +18,7 @@ import {
   Package, Clock, DollarSign, ChevronDown, ChevronUp,
   Calculator, X, Eye, CheckSquare, Search, Zap, Briefcase,
   Users, Wrench, Truck, Home, Building, Building2, LayoutGrid,
-  EyeOff, RotateCcw, CheckCircle, Edit3, AlertTriangle
+  EyeOff, RotateCcw, CheckCircle, Edit3, AlertTriangle, Mail, MessageSquare
 } from 'lucide-react';
 
 const PROJECT_TYPES = [
@@ -233,6 +233,9 @@ export function EstimateBuilder() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendMethod, setSendMethod] = useState<'email' | 'sms'>('email');
+  const [isSendingEstimate, setIsSendingEstimate] = useState(false);
   const [quickCustomer, setQuickCustomer] = useState({ name: '', email: '', phone: '', address: '' });
   const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
   const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
@@ -1259,15 +1262,23 @@ export function EstimateBuilder() {
     setShowPrintPreview(true);
   };
 
-  const handleSend = async () => {
+  const handleOpenSend = () => {
     if (!estimate && isNew) {
       showToast('Create the estimate before sending', 'warning');
       return;
     }
+    setShowSendModal(true);
+  };
+
+  const handleSend = async () => {
     const current = buildCurrentEstimate();
     const currentCustomer = customers?.find(c => c.id === current.customerId);
-    if (!currentCustomer?.email) {
+    if (sendMethod === 'email' && !currentCustomer?.email) {
       showToast('Add a customer email before sending', 'warning');
+      return;
+    }
+    if (sendMethod === 'sms' && !currentCustomer?.phone) {
+      showToast('Add a customer phone number before texting', 'warning');
       return;
     }
 
@@ -1277,13 +1288,33 @@ export function EstimateBuilder() {
       customer: currentCustomer,
       totals: { total: formatCurrency(calculateTotals.total) },
     });
+
+    if (sendMethod === 'sms') {
+      const content = `${branding.brandName || 'Allens'}: Your estimate "${current.name}" is ready. Total: ${formatCurrency(calculateTotals.total)}.`;
+      const phone = String(currentCustomer?.phone || '').replace(/[^\d+]/g, '');
+      const bodySeparator = /iPad|iPhone|iPod/i.test(navigator.userAgent) ? '&' : '?';
+      window.location.href = `sms:${phone}${bodySeparator}body=${encodeURIComponent(content)}`;
+      showToast('Text app opened');
+      setShowSendModal(false);
+      return;
+    }
+
+    setIsSendingEstimate(true);
     const delivered = await sendEmail({
-      to: currentCustomer.email,
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
+        to: currentCustomer?.email || '',
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
     });
-    showToast(delivered ? 'Estimate sent' : 'Email draft opened');
+    setIsSendingEstimate(false);
+
+    if (delivered) {
+      updateEstimate(current.id, { status: 'sent' });
+      showToast('Estimate email sent');
+      setShowSendModal(false);
+    } else {
+      showToast('Email draft opened');
+    }
   };
 
   const badge = (status: string) => {
@@ -1531,7 +1562,7 @@ export function EstimateBuilder() {
           ) : (
             <>
               <button className="eb-actionBtn" onClick={handleOpenPrint}><Printer size={16} /><span>Print</span></button>
-              <button className="eb-actionBtn" onClick={handleSend}><Send size={16} /><span>Send</span></button>
+              <button className="eb-actionBtn" onClick={handleOpenSend}><Send size={16} /><span>Send</span></button>
             </>
           )}
         </div>
@@ -2203,6 +2234,34 @@ export function EstimateBuilder() {
               {filteredTemplates.length === 0 && <div className="eb-priceNoResults">No templates match your search.</div>}
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={showSendModal} onClose={() => setShowSendModal(false)} title="Send Estimate" size="sm">
+        <div className="space-y-4">
+          <div className="send-method-grid">
+            <button className={`send-method-card ${sendMethod === 'email' ? 'active' : ''}`} onClick={() => setSendMethod('email')}>
+              <Mail size={18} />
+              <span>Email</span>
+              <small>{customer?.email || 'No email on file'}</small>
+            </button>
+            <button className={`send-method-card ${sendMethod === 'sms' ? 'active' : ''}`} onClick={() => setSendMethod('sms')}>
+              <MessageSquare size={18} />
+              <span>Text</span>
+              <small>{customer?.phone || 'No phone on file'}</small>
+            </button>
+          </div>
+          <div className="send-preview">
+            {sendMethod === 'sms'
+              ? `${branding.brandName || 'Allens'}: Your estimate "${formData.name}" is ready. Total: ${formatCurrency(calculateTotals.total)}.`
+              : `Estimate email will be sent to ${customer?.email || 'the customer email on file'}.`}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={() => setShowSendModal(false)} disabled={isSendingEstimate}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSend} disabled={isSendingEstimate}>
+            {isSendingEstimate ? 'Sending...' : sendMethod === 'sms' ? 'Open Text App' : 'Send Email'}
+          </button>
         </div>
       </Modal>
 

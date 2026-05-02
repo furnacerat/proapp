@@ -28,5 +28,6 @@ export const TABLES = {
   notes: 'notes',
   changeOrders: 'change_orders',
   portalTokens: 'portal_tokens',
+  signatureRequests: 'signature_requests',
   activityLog: 'activity_log',
 } as const;

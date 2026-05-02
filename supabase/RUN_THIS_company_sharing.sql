@@ -26,6 +26,7 @@ alter table public.profiles add column if not exists company_id uuid null refere
 
 create table if not exists public.change_orders (like public.customers including all);
 create table if not exists public.portal_tokens (like public.customers including all);
+create table if not exists public.signature_requests (like public.customers including all);
 
 create or replace function public.is_company_member(target_company_id uuid)
 returns boolean
@@ -158,6 +159,7 @@ declare
     'notes',
     'change_orders',
     'portal_tokens',
+    'signature_requests',
     'activity_log'
   ];
 begin
@@ -357,6 +359,7 @@ declare
     'notes',
     'change_orders',
     'portal_tokens',
+    'signature_requests',
     'activity_log'
   ];
 begin

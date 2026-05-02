@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection, PortalAccessToken } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection, SignatureRequest } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
@@ -172,6 +172,9 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
   addFileAttachment: (file: Omit<FileAttachment, 'id' | 'createdAt'>) => void;
   updateFileAttachment: (id: string, updates: Partial<FileAttachment>) => void;
   deleteFileAttachment: (id: string) => void;
+  addSignatureRequest: (request: Omit<SignatureRequest, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'auditTrail'> & { status?: SignatureRequest['status']; auditTrail?: SignatureRequest['auditTrail'] }) => string;
+  updateSignatureRequest: (id: string, updates: Partial<SignatureRequest>) => void;
+  deleteSignatureRequest: (id: string) => void;
 
   addSupplier: (supplier: Omit<Supplier, 'id' | 'createdAt'>) => string;
   updateSupplier: (id: string, updates: Partial<Supplier>) => void;
@@ -237,6 +240,7 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
   punchLists: PunchListItem[];
   jobIssues: JobIssue[];
   fileAttachments: FileAttachment[];
+  signatureRequests: SignatureRequest[];
   suppliers: Supplier[];
   materialOrders: MaterialOrder[];
   shoppingLists: ShoppingList[];
@@ -252,6 +256,7 @@ const normalizeAppData = (raw: AppData): AppData => {
     photos: raw.photos || [],
     changeOrders: raw.changeOrders || [],
     portalTokens: raw.portalTokens || [],
+    signatureRequests: raw.signatureRequests || [],
     jobTemplates: raw.jobTemplates || [],
     alerts: raw.alerts || [],
     timeline: raw.timeline || [],
@@ -396,8 +401,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataService.photos.getAll(),
       optionalCollection(dataService.changeOrders.getAll()),
       optionalCollection(dataService.portalTokens.getAll()),
+      optionalCollection(dataService.signatureRequests.getAll()),
     ])
-      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos, changeOrders, portalTokens]) => {
+      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos, changeOrders, portalTokens, signatureRequests]) => {
         if (cancelled) return;
         setData(prev => {
           const localData = dataService.local.getAppData();
@@ -427,6 +433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             photos: mergeLoadedCollection(photos, prev.photos),
             changeOrders: changeOrders.length ? changeOrders : localFallback?.changeOrders || prev.changeOrders,
             portalTokens: portalTokens.length ? portalTokens : localFallback?.portalTokens || prev.portalTokens || [],
+            signatureRequests: signatureRequests.length ? signatureRequests : localFallback?.signatureRequests || prev.signatureRequests || [],
           };
           return normalizeAppData(loadedData);
         });
@@ -763,6 +770,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       punchLists: (prev.punchLists || []).filter(p => p.jobId !== id),
       jobIssues: (prev.jobIssues || []).filter(i => i.jobId !== id),
       fileAttachments: (prev.fileAttachments || []).filter(f => f.jobId !== id),
+      signatureRequests: (prev.signatureRequests || []).filter(request => request.jobId !== id),
     }));
     void dataService.jobs.delete(id).catch(() => undefined);
   };
@@ -1341,6 +1349,38 @@ const approveChangeOrder = (id: string) => {
       ...prev,
       fileAttachments: (prev.fileAttachments || []).filter(f => f.id !== id),
     }));
+  };
+
+  const addSignatureRequest = (request: Omit<SignatureRequest, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'auditTrail'> & { status?: SignatureRequest['status']; auditTrail?: SignatureRequest['auditTrail'] }) => {
+    const now = new Date().toISOString();
+    const newRequest: SignatureRequest = {
+      ...request,
+      id: crypto.randomUUID(),
+      status: request.status || 'sent',
+      auditTrail: request.auditTrail || [{ event: request.status === 'draft' ? 'draft_created' : 'request_sent', timestamp: now, actor: 'internal' }],
+      createdAt: now,
+      updatedAt: now,
+    };
+    setData(prev => ({ ...prev, signatureRequests: [...(prev.signatureRequests || []), newRequest] }));
+    void dataService.signatureRequests.create(newRequest).catch(() => undefined);
+    return newRequest.id;
+  };
+
+  const updateSignatureRequest = (id: string, updates: Partial<SignatureRequest>) => {
+    const updatedAt = new Date().toISOString();
+    setData(prev => ({
+      ...prev,
+      signatureRequests: (prev.signatureRequests || []).map(request => request.id === id ? { ...request, ...updates, updatedAt } : request),
+    }));
+    void dataService.signatureRequests.update(id, { ...updates, updatedAt }).catch(() => undefined);
+  };
+
+  const deleteSignatureRequest = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      signatureRequests: (prev.signatureRequests || []).filter(request => request.id !== id),
+    }));
+    void dataService.signatureRequests.delete(id).catch(() => undefined);
   };
 
   const addJobTemplate = (template: Omit<JobTemplateType, 'id' | 'createdAt'>) => {
@@ -2227,6 +2267,7 @@ const approveChangeOrder = (id: string) => {
       punchLists: visibleData.punchLists || [],
       jobIssues: visibleData.jobIssues || [],
       fileAttachments: visibleData.fileAttachments || [],
+      signatureRequests: visibleData.signatureRequests || [],
       addTimelineEntry,
       updateTimelineEntry,
       deleteTimelineEntry,
@@ -2242,6 +2283,9 @@ const approveChangeOrder = (id: string) => {
       addFileAttachment,
       updateFileAttachment,
       deleteFileAttachment,
+      addSignatureRequest,
+      updateSignatureRequest,
+      deleteSignatureRequest,
       suppliers: visibleData.suppliers || [],
       materialOrders: visibleData.materialOrders || [],
       addSupplier,
