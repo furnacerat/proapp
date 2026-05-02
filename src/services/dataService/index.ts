@@ -1,4 +1,4 @@
-import type { Allowance, AppData, Note, Photo, Receipt, Worker } from '../../data/types';
+import type { Allowance, AppData, Assembly, LaborRate, Material, Note, Photo, ProjectTypeTemplate, Receipt, Template, Worker } from '../../data/types';
 import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
 import { getStorageMode } from './config';
 import { createCollectionService, getDataServiceCompanyId, getDataServiceUserId, getLocalAppData, saveLocalAppData, setDataServiceCompanyId, setDataServiceOwnerUserId, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
@@ -19,8 +19,22 @@ import { TABLES } from './tables';
 const workersService = createCollectionService<Worker>('workers', TABLES.workers);
 const receiptsService = createCollectionService<Receipt>('receipts', TABLES.receipts);
 const allowancesService = createCollectionService<Allowance>('allowances', TABLES.allowances);
+const laborRatesService = createCollectionService<LaborRate>('laborRates', TABLES.laborRates);
+const materialsService = createCollectionService<Material>('materials', TABLES.materials);
+const assembliesService = createCollectionService<Assembly>('assemblies', TABLES.assemblies);
+const templatesService = createCollectionService<Template>('templates', TABLES.templates);
+const projectTypeTemplatesService = createCollectionService<ProjectTypeTemplate>('projectTypeTemplates', TABLES.projectTypeTemplates);
 const notesService = createCollectionService<Note>('notes', TABLES.notes);
 const photosService = createCollectionService<Photo>('photos', TABLES.jobPhotos);
+
+const supabaseErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const details = error as { message?: string; details?: string; hint?: string; code?: string };
+    return [details.message, details.details, details.hint, details.code].filter(Boolean).join(' ');
+  }
+  return 'sync failed';
+};
 
 export const dataService = {
   mode: getStorageMode(),
@@ -50,6 +64,11 @@ export const dataService = {
   workers: workersService,
   receipts: receiptsService,
   allowances: allowancesService,
+  laborRates: laborRatesService,
+  materials: materialsService,
+  assemblies: assembliesService,
+  templates: templatesService,
+  projectTypeTemplates: projectTypeTemplatesService,
   notes: notesService,
   photos: photosService,
 
@@ -63,9 +82,25 @@ export const dataService = {
   async syncWorkspaceDataToSupabase(data: AppData): Promise<void> {
     const userId = getDataServiceUserId();
     const companyId = getDataServiceCompanyId();
+    const errors: string[] = [];
+    let syncedTables = 0;
+
     for (const key of Object.keys(TABLES) as Array<keyof typeof TABLES>) {
       const records = collectionFromData(data, key).map(record => ({ ...record, userId, companyId, createdBy: userId }));
-      await upsertSupabaseRecords(TABLES[key], records);
+      try {
+        await upsertSupabaseRecords(TABLES[key], records);
+        syncedTables += 1;
+      } catch (error) {
+        errors.push(`${TABLES[key]}: ${supabaseErrorMessage(error)}`);
+      }
+    }
+
+    if (errors.length && syncedTables === 0) {
+      throw new Error(errors.slice(0, 3).join(' | '));
+    }
+
+    if (errors.length) {
+      throw new Error(errors.slice(0, 3).join(' | '));
     }
   },
 };

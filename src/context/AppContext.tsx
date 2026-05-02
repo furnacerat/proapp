@@ -354,7 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const supabaseInitialLoadComplete = useRef(dataService.mode !== 'supabase');
 
   useEffect(() => {
-    if (dataService.mode === 'supabase') return;
+    if (dataService.mode === 'supabase' && (!supabaseInitialLoadComplete.current || looksLikeDemoData(data))) return;
     dataService.local.saveAppData(data);
   }, [data]);
 
@@ -362,6 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured) return;
     if (!profile?.company_id) return;
     let cancelled = false;
+    const optionalCollection = <T,>(promise: Promise<T[]>) => promise.catch(() => [] as T[]);
     Promise.all([
       dataService.customers.getAll(),
       dataService.estimates.getAll(),
@@ -377,12 +378,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dataService.shoppingLists.getAll(),
       dataService.receipts.getAll(),
       dataService.allowances.getAll(),
+      optionalCollection(dataService.laborRates.getAll()),
+      optionalCollection(dataService.materials.getAll()),
+      optionalCollection(dataService.assemblies.getAll()),
+      optionalCollection(dataService.templates.getAll()),
+      optionalCollection(dataService.projectTypeTemplates.getAll()),
       dataService.notes.getAll(),
       dataService.photos.getAll(),
     ])
-      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, notes, photos]) => {
+      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos]) => {
         if (cancelled) return;
         setData(prev => {
+          const localData = dataService.local.getAppData();
+          const localFallback = localData && !looksLikeDemoData(localData) ? localData : undefined;
           const loadedData = {
             ...prev,
             customers,
@@ -399,6 +407,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             shoppingLists,
             receipts,
             allowances,
+            laborRates: laborRates.length ? laborRates : localFallback?.laborRates || prev.laborRates,
+            materials: materials.length ? materials : localFallback?.materials || prev.materials,
+            assemblies: assemblies.length ? assemblies : localFallback?.assemblies || prev.assemblies,
+            templates: templates.length ? templates : localFallback?.templates || prev.templates,
+            projectTypeTemplates: projectTypeTemplates.length ? projectTypeTemplates : localFallback?.projectTypeTemplates || prev.projectTypeTemplates,
             notes,
             photos,
           };
@@ -420,15 +433,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured || !supabaseInitialLoadComplete.current) return;
     if (!profile?.company_id) return;
     if (looksLikeDemoData(data)) return;
-    const timeout = window.setTimeout(() => {
+    const sync = () => {
       void dataService.syncWorkspaceDataToSupabase(data)
         .then(() => setDataServiceStatus(prev => ({ ...prev, lastSyncAt: new Date().toISOString(), syncError: undefined })))
         .catch(error => setDataServiceStatus(prev => ({
           ...prev,
           syncError: error instanceof Error ? error.message : 'Supabase sync failed',
         })));
-    }, 800);
-    return () => window.clearTimeout(timeout);
+    };
+    const syncWhenLeaving = () => sync();
+    const syncWhenHidden = () => {
+      if (document.visibilityState === 'hidden') sync();
+    };
+    const timeout = window.setTimeout(sync, 250);
+    window.addEventListener('pagehide', syncWhenLeaving);
+    document.addEventListener('visibilitychange', syncWhenHidden);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener('pagehide', syncWhenLeaving);
+      document.removeEventListener('visibilitychange', syncWhenHidden);
+    };
   }, [data, profile?.company_id]);
 
   useEffect(() => {
