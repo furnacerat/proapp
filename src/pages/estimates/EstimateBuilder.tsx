@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
@@ -190,6 +190,7 @@ export function EstimateBuilder() {
   const [scopes, setScopes] = useState<EstimateScope[]>(estimate?.scopes || []);
   const [legacySections, setLegacySections] = useState<EstimateSection[]>(estimate?.sections || []);
   const [estimateAllowances, setEstimateAllowances] = useState<Allowance[]>(estimate?.clientAllowances || []);
+  const hydratedEstimateId = useRef<string | null>(estimate?.id || null);
   const [activeScopeId, setActiveScopeId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
@@ -235,6 +236,24 @@ export function EstimateBuilder() {
   const [quickCustomer, setQuickCustomer] = useState({ name: '', email: '', phone: '', address: '' });
   const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
   const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
+
+  useEffect(() => {
+    if (isNew || !estimate || hydratedEstimateId.current === estimate.id) return;
+    setFormData({
+      name: estimate.name || 'New Estimate',
+      customerId: estimate.customerId || '',
+      address: estimate.address || '',
+      status: estimate.status || 'draft',
+      type: estimate.type || 'remodel',
+      markupPercent: estimate.markupPercent?.toString() || '20',
+      notes: estimate.notes || '',
+      validUntil: estimate.validUntil || '',
+    });
+    setScopes(estimate.scopes || []);
+    setLegacySections(estimate.sections || []);
+    setEstimateAllowances(estimate.clientAllowances || []);
+    hydratedEstimateId.current = estimate.id;
+  }, [estimate, isNew]);
 
   const defaultMarkup = parseFloat(formData.markupPercent) || 0;
 

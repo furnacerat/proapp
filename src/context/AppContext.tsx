@@ -54,6 +54,14 @@ const looksLikeDemoData = (data: AppData) => {
   return matchedSignals.length >= 3;
 };
 
+const mergeLoadedCollection = <T extends { id: string }>(loaded: T[], current: T[] = [], fallback: T[] = []) => {
+  const byId = new Map<string, T>();
+  current.forEach(item => byId.set(item.id, item));
+  fallback.forEach(item => byId.set(item.id, item));
+  loaded.forEach(item => byId.set(item.id, item));
+  return Array.from(byId.values());
+};
+
 interface AppContextType {
   data: AppData;
   setData: React.Dispatch<React.SetStateAction<AppData>>;
@@ -396,27 +404,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const localFallback = localData && !looksLikeDemoData(localData) ? localData : undefined;
           const loadedData = {
             ...prev,
-            customers,
-            estimates,
-            jobs,
-            tasks,
-            workers,
-            expenses,
-            timeEntries,
-            invoices,
-            payments,
-            suppliers,
-            materialOrders,
-            shoppingLists,
-            receipts,
-            allowances,
+            customers: mergeLoadedCollection(customers, prev.customers),
+            estimates: mergeLoadedCollection(estimates, prev.estimates),
+            jobs: mergeLoadedCollection(jobs, prev.jobs),
+            tasks: mergeLoadedCollection(tasks, prev.tasks),
+            workers: mergeLoadedCollection(workers, prev.workers),
+            expenses: mergeLoadedCollection(expenses, prev.expenses),
+            timeEntries: mergeLoadedCollection(timeEntries, prev.timeEntries),
+            invoices: mergeLoadedCollection(invoices, prev.invoices),
+            payments: mergeLoadedCollection(payments, prev.payments),
+            suppliers: mergeLoadedCollection(suppliers, prev.suppliers || []),
+            materialOrders: mergeLoadedCollection(materialOrders, prev.materialOrders || []),
+            shoppingLists: mergeLoadedCollection(shoppingLists, prev.shoppingLists || []),
+            receipts: mergeLoadedCollection(receipts, prev.receipts || []),
+            allowances: mergeLoadedCollection(allowances, prev.allowances || []),
             laborRates: laborRates.length ? laborRates : localFallback?.laborRates || prev.laborRates,
             materials: materials.length ? materials : localFallback?.materials || prev.materials,
             assemblies: assemblies.length ? assemblies : localFallback?.assemblies || prev.assemblies,
             templates: templates.length ? templates : localFallback?.templates || prev.templates,
             projectTypeTemplates: projectTypeTemplates.length ? projectTypeTemplates : localFallback?.projectTypeTemplates || prev.projectTypeTemplates,
-            notes,
-            photos,
+            notes: mergeLoadedCollection(notes, prev.notes),
+            photos: mergeLoadedCollection(photos, prev.photos),
             changeOrders: changeOrders.length ? changeOrders : localFallback?.changeOrders || prev.changeOrders,
             portalTokens: portalTokens.length ? portalTokens : localFallback?.portalTokens || prev.portalTokens || [],
           };
@@ -1530,7 +1538,11 @@ const approveChangeOrder = (id: string) => {
       updatedAt: now,
       taxable: estimate.taxable || 'none'
     };
-    setData(prev => ({ ...prev, estimates: [...prev.estimates, newEstimate] }));
+    setData(prev => {
+      const next = { ...prev, estimates: [...prev.estimates, newEstimate] };
+      dataService.local.saveAppData(next);
+      return next;
+    });
     void dataService.estimates.createWithItems(newEstimate, [
       ...(newEstimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
       ...(newEstimate.sections || []).flatMap(section => section.lineItems || []),
