@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection } from '../data/types';
+import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection, PortalAccessToken } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
@@ -243,6 +243,7 @@ const normalizeAppData = (raw: AppData): AppData => {
     ...raw,
     photos: raw.photos || [],
     changeOrders: raw.changeOrders || [],
+    portalTokens: raw.portalTokens || [],
     jobTemplates: raw.jobTemplates || [],
     alerts: raw.alerts || [],
     timeline: raw.timeline || [],
@@ -385,8 +386,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       optionalCollection(dataService.projectTypeTemplates.getAll()),
       dataService.notes.getAll(),
       dataService.photos.getAll(),
+      optionalCollection(dataService.changeOrders.getAll()),
+      optionalCollection(dataService.portalTokens.getAll()),
     ])
-      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos]) => {
+      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos, changeOrders, portalTokens]) => {
         if (cancelled) return;
         setData(prev => {
           const localData = dataService.local.getAppData();
@@ -414,6 +417,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             projectTypeTemplates: projectTypeTemplates.length ? projectTypeTemplates : localFallback?.projectTypeTemplates || prev.projectTypeTemplates,
             notes,
             photos,
+            changeOrders: changeOrders.length ? changeOrders : localFallback?.changeOrders || prev.changeOrders,
+            portalTokens: portalTokens.length ? portalTokens : localFallback?.portalTokens || prev.portalTokens || [],
           };
           return normalizeAppData(loadedData);
         });
@@ -1184,6 +1189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatedAt: now,
     };
     setData(prev => ({ ...prev, changeOrders: [...prev.changeOrders, newCO] }));
+    void dataService.changeOrders.create(newCO).catch(() => undefined);
   };
 
   const updateChangeOrder = (id: string, updates: Partial<ChangeOrderType>) => {
@@ -1193,6 +1199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         co.id === id ? { ...co, ...updates, updatedAt: new Date().toISOString() } : co
       ),
     }));
+    void dataService.changeOrders.update(id, updates).catch(() => undefined);
   };
 
   const deleteChangeOrder = (id: string) => {
@@ -1200,6 +1207,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       changeOrders: prev.changeOrders.filter(co => co.id !== id),
     }));
+    void dataService.changeOrders.delete(id).catch(() => undefined);
   };
 
 const approveChangeOrder = (id: string) => {

@@ -1,4 +1,4 @@
-import type { Allowance, AppData, Assembly, LaborRate, Material, Note, Photo, ProjectTypeTemplate, Receipt, Template, Worker } from '../../data/types';
+import type { Allowance, AppData, Assembly, ChangeOrder, LaborRate, Material, Note, Photo, PortalAccessToken, ProjectTypeTemplate, Receipt, Template, Worker } from '../../data/types';
 import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
 import { getStorageMode } from './config';
 import { createCollectionService, getDataServiceCompanyId, getDataServiceUserId, getLocalAppData, saveLocalAppData, setDataServiceCompanyId, setDataServiceOwnerUserId, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
@@ -26,6 +26,8 @@ const templatesService = createCollectionService<Template>('templates', TABLES.t
 const projectTypeTemplatesService = createCollectionService<ProjectTypeTemplate>('projectTypeTemplates', TABLES.projectTypeTemplates);
 const notesService = createCollectionService<Note>('notes', TABLES.notes);
 const photosService = createCollectionService<Photo>('photos', TABLES.jobPhotos);
+const changeOrdersService = createCollectionService<ChangeOrder>('changeOrders', TABLES.changeOrders);
+const portalTokensService = createCollectionService<PortalAccessToken>('portalTokens', TABLES.portalTokens);
 
 const supabaseErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -71,6 +73,8 @@ export const dataService = {
   projectTypeTemplates: projectTypeTemplatesService,
   notes: notesService,
   photos: photosService,
+  changeOrders: changeOrdersService,
+  portalTokens: portalTokensService,
 
   previewLocalMigration,
   importLocalDataToSupabase,

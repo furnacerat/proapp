@@ -31,6 +31,7 @@ import { MaterialOrders } from './pages/estimates/MaterialOrders';
 import { Settings } from './pages/Settings';
 import { Customers } from './pages/Customers';
 import { AuthPage } from './pages/auth/AuthPage';
+import { CustomerPortal } from './pages/CustomerPortal';
 import { Team } from './pages/admin/Team';
 import { canAccessRoute, getDefaultRouteForRole } from './auth/rbac';
 import { useAuth } from './context/AuthContext';
@@ -108,6 +109,7 @@ function App() {
           <Route path="/login" element={<AuthPage mode="login" />} />
           <Route path="/signup" element={<AuthPage mode="signup" />} />
           <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
+          <Route path="/portal/:token" element={<ToastProvider><CustomerPortal /></ToastProvider>} />
           <Route path="/*" element={<AppRoutes />} />
         </Routes>
       </AuthProvider>

@@ -95,6 +95,8 @@ create table if not exists public.workers (like public.customers including all);
 create table if not exists public.receipts (like public.customers including all);
 create table if not exists public.job_photos (like public.customers including all);
 create table if not exists public.notes (like public.customers including all);
+create table if not exists public.change_orders (like public.customers including all);
+create table if not exists public.portal_tokens (like public.customers including all);
 create table if not exists public.activity_log (like public.customers including all);
 
 alter table public.customers add column if not exists title text;
@@ -124,6 +126,8 @@ alter table public.workers add column if not exists title text;
 alter table public.receipts add column if not exists title text;
 alter table public.job_photos add column if not exists title text;
 alter table public.notes add column if not exists title text;
+alter table public.change_orders add column if not exists title text;
+alter table public.portal_tokens add column if not exists title text;
 alter table public.activity_log add column if not exists title text;
 
 alter table public.expenses add column if not exists vendor text;
@@ -193,6 +197,7 @@ create index if not exists allowance_selections_allowance_id_idx on public.allow
 create index if not exists receipts_job_id_idx on public.receipts (job_id);
 create index if not exists job_photos_job_id_idx on public.job_photos (job_id);
 create index if not exists notes_job_id_idx on public.notes (job_id);
+create index if not exists change_orders_job_id_idx on public.change_orders (job_id);
 create index if not exists activity_log_job_id_idx on public.activity_log (job_id);
 
 alter table public.customers enable row level security;
@@ -222,6 +227,8 @@ alter table public.workers enable row level security;
 alter table public.receipts enable row level security;
 alter table public.job_photos enable row level security;
 alter table public.notes enable row level security;
+alter table public.change_orders enable row level security;
+alter table public.portal_tokens enable row level security;
 alter table public.activity_log enable row level security;
 
 drop policy if exists "Users manage own rows" on public.customers;
@@ -278,6 +285,10 @@ drop policy if exists "Users manage own rows" on public.job_photos;
 create policy "Users manage own rows" on public.job_photos for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "Users manage own rows" on public.notes;
 create policy "Users manage own rows" on public.notes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "Users manage own rows" on public.change_orders;
+create policy "Users manage own rows" on public.change_orders for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "Users manage own rows" on public.portal_tokens;
+create policy "Users manage own rows" on public.portal_tokens for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "Users manage own rows" on public.activity_log;
 create policy "Users manage own rows" on public.activity_log for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 

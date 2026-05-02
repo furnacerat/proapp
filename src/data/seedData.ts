@@ -22,6 +22,7 @@ export const initialData: AppData = {
   notes: [],
   photos: [],
   changeOrders: [],
+  portalTokens: [],
   alerts: [],
   timeline: [],
   jobLogs: [],

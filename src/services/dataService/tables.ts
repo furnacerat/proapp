@@ -26,5 +26,7 @@ export const TABLES = {
   receipts: 'receipts',
   jobPhotos: 'job_photos',
   notes: 'notes',
+  changeOrders: 'change_orders',
+  portalTokens: 'portal_tokens',
   activityLog: 'activity_log',
 } as const;

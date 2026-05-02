@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
 import { dataService } from '../services/dataService';
+import { createPortalAccess } from '../services/portalService';
 import type { Customer, Estimate, Invoice, Job } from '../data/types';
 import {
   Activity,
@@ -15,6 +16,7 @@ import {
   Edit,
   FilePlus2,
   Filter,
+  Link2,
   Mail,
   MapPin,
   MessageSquarePlus,
@@ -113,6 +115,7 @@ export function Customers() {
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [portalLink, setPortalLink] = useState('');
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '', address: '', notes: ''
   });
@@ -339,6 +342,21 @@ export function Customers() {
     setActiveTab('notes');
   };
 
+  const handleCreatePortalLink = async () => {
+    if (!selectedCustomer) return;
+    try {
+      const { access, url } = await createPortalAccess(selectedCustomer);
+      setPortalLink(url);
+      setData(prev => ({ ...prev, portalTokens: [...(prev.portalTokens || []), access] }));
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url).catch(() => undefined);
+      }
+      showToast('Customer portal link copied');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not create portal link', 'error');
+    }
+  };
+
   if (isLoadingCustomers) {
     return (
       <div>
@@ -514,9 +532,23 @@ export function Customers() {
                 <Link className="btn btn-primary btn-sm" to="/estimates/new"><FilePlus2 size={16} /> New Estimate</Link>
                 <Link className="btn btn-secondary btn-sm" to="/jobs"><BriefcaseBusiness size={16} /> New Job</Link>
                 <Link className="btn btn-secondary btn-sm" to="/invoices"><Receipt size={16} /> Create Invoice</Link>
+                <button className="btn btn-secondary btn-sm" onClick={handleCreatePortalLink}><Link2 size={16} /> Portal Link</button>
                 <button className="btn btn-secondary btn-sm" onClick={logContact}><Phone size={16} /> Log Contact</button>
                 <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('notes')}><MessageSquarePlus size={16} /> Add Note</button>
               </div>
+
+              {portalLink && (
+                <div className="customer-portal-share">
+                  <div>
+                    <strong>Customer portal ready</strong>
+                    <span>Send this link by email or text. It opens a limited customer view.</span>
+                  </div>
+                  <input value={portalLink} readOnly onFocus={event => event.currentTarget.select()} />
+                  <a className="btn btn-primary btn-sm" href={selectedCustomer.email ? `mailto:${selectedCustomer.email}?subject=${encodeURIComponent('Your project portal')}&body=${encodeURIComponent(`Here is your project portal link:\n\n${portalLink}`)}` : `sms:${selectedCustomer.phone || ''}?&body=${encodeURIComponent(`Your project portal: ${portalLink}`)}`}>
+                    <Mail size={16} /> Send
+                  </a>
+                </div>
+              )}
 
               <div className="customer-detail-metrics">
                 <Metric label="Lifetime Value" value={formatCurrency(selectedSummary.lifetimeValue)} />

@@ -393,6 +393,9 @@ export interface Estimate {
   updatedAt: string;
   convertedToJobId?: string;
   archivedAt?: string;
+  viewedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
 }
 
 export interface JobTemplate {
@@ -583,6 +586,23 @@ export interface ChangeOrder {
   description: string;
   amount: number;
   status: ChangeOrderStatus;
+  approvedAt?: string;
+  approvedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalAccessToken {
+  id: string;
+  tokenHash: string;
+  customerId: string;
+  jobId?: string;
+  email?: string;
+  label?: string;
+  active: boolean;
+  permissions: ('view' | 'approve_estimates' | 'approve_change_orders' | 'view_invoices')[];
+  expiresAt?: string;
+  lastUsedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -880,6 +900,7 @@ export interface AppData {
   notes: Note[];
   photos: Photo[];
   changeOrders: ChangeOrder[];
+  portalTokens?: PortalAccessToken[];
   alerts: Alert[];
   timeline?: JobTimelineEntry[];
   jobLogs?: JobLog[];
