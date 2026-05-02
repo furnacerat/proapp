@@ -6,6 +6,7 @@ import { generateInsights, getWeeklySummary, getKPIS, generateSmartNextActions, 
 import { JOB_TYPES } from '../data/types';
 import { useToast } from '../components/common/Toast';
 import { Modal } from '../components/common/Modal';
+import { OnboardingGuide } from '../components/onboarding/OnboardingGuide';
 import {
   Plus, AlertTriangle, TrendingUp, DollarSign, Clock, CheckSquare, Users,
   Briefcase, Receipt, Activity, Zap, Target, AlertCircle, FileText
@@ -91,6 +92,8 @@ export function Dashboard() {
       </div>
 
       <div className="page-content">
+        <OnboardingGuide />
+
         <div className="kpi-grid mb-6">
           <div className="kpi-card">
             <div className="flex items-center gap-2 mb-2">

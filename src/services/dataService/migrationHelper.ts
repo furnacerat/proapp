@@ -4,6 +4,15 @@ import { TABLES } from './tables';
 
 type MigrationKey = keyof typeof TABLES;
 
+const supabaseErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const details = error as { message?: string; details?: string; hint?: string; code?: string };
+    return [details.message, details.details, details.hint, details.code].filter(Boolean).join(' ');
+  }
+  return 'import failed';
+};
+
 export const collectionFromData = (data: AppData, key: MigrationKey): RecordWithId[] => {
   if (key === 'estimateItems') {
     return data.estimates.flatMap(estimate =>
@@ -131,7 +140,26 @@ export const previewLocalMigration = (data: AppData = getLocalAppData() as AppDa
 
 export const importLocalDataToSupabase = async (data: AppData) => {
   const userId = getDataServiceUserId();
-  for (const key of Object.keys(TABLES) as MigrationKey[]) {
-    await upsertSupabaseRecords(TABLES[key], collectionFromData(data, key).map(record => ({ ...record, userId })));
+  const priorityKeys: MigrationKey[] = ['timeEntries', 'tasks', 'jobs', 'customers', 'workers'];
+  const remainingKeys = (Object.keys(TABLES) as MigrationKey[]).filter(key => !priorityKeys.includes(key));
+  const errors: string[] = [];
+  let importedTables = 0;
+
+  for (const key of [...priorityKeys, ...remainingKeys]) {
+    const records = collectionFromData(data, key)
+      .filter(record => record?.id)
+      .map(record => ({ ...record, userId }));
+    if (!records.length) continue;
+
+    try {
+      await upsertSupabaseRecords(TABLES[key], records);
+      importedTables += 1;
+    } catch (error) {
+      errors.push(`${TABLES[key]}: ${supabaseErrorMessage(error)}`);
+    }
+  }
+
+  if (errors.length && importedTables === 0) {
+    throw new Error(errors.slice(0, 3).join(' | '));
   }
 };

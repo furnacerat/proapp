@@ -5,6 +5,8 @@ export type UserRole = 'owner' | 'admin' | 'project_manager' | 'estimator' | 'cr
 export interface UserProfile {
   id: string;
   user_id: string;
+  company_id?: string | null;
+  member_id?: string | null;
   role: UserRole;
   display_name?: string;
   email?: string;
@@ -14,12 +16,12 @@ export interface UserProfile {
 }
 
 const ownerOnlyRoutes = ['/settings', '/reports', '/expenses', '/company-expenses', '/invoices'];
-const crewRoutes = ['/', '/jobs', '/tasks', '/schedule', '/shopping-lists', '/time-entries'];
+const crewRoutes = ['/', '/field', '/jobs', '/tasks', '/schedule', '/shopping-lists', '/time-entries'];
 
 const routeAccess: Record<UserRole, string[]> = {
   owner: ['*'],
-  admin: ['/', '/dashboard', '/jobs', '/customers', '/estimates', '/workers', '/time-entries', '/shopping-lists', '/tasks', '/schedule', '/admin/team'],
-  project_manager: ['/', '/dashboard', '/jobs', '/customers', '/workers', '/time-entries', '/shopping-lists', '/tasks', '/schedule', '/estimates/orders', '/estimates/suppliers'],
+  admin: ['/', '/field', '/dashboard', '/jobs', '/customers', '/estimates', '/workers', '/time-entries', '/shopping-lists', '/tasks', '/schedule', '/marketing', '/admin/team'],
+  project_manager: ['/', '/field', '/dashboard', '/jobs', '/customers', '/workers', '/time-entries', '/shopping-lists', '/tasks', '/schedule', '/estimates/orders', '/estimates/suppliers'],
   estimator: ['/', '/dashboard', '/customers', '/estimates', '/jobs', '/schedule'],
   crew: crewRoutes,
   viewer: ['/', '/dashboard', '/jobs', '/customers', '/tasks', '/schedule'],
@@ -51,7 +53,7 @@ export const canAccessRoute = (role: UserRole, pathname: string) => {
   });
 };
 
-export const getDefaultRouteForRole = (role: UserRole) => role === 'crew' ? '/' : '/dashboard';
+export const getDefaultRouteForRole = (role: UserRole) => role === 'crew' ? '/field' : '/dashboard';
 
 const redactWorkerPay = (worker: Worker): Worker => ({
   ...worker,

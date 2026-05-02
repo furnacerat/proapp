@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
+import { OnboardingGuide } from '../components/onboarding/OnboardingGuide';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { generateSmartNextActions } from '../utils/insights';
 import { expenseAffectsJobCost } from '../utils/timeEntries';
@@ -185,6 +186,8 @@ export function DailyCommandCenter() {
           <Link className="btn btn-secondary" to="/dashboard">Operations Dashboard</Link>
         </div>
       </section>
+
+      <OnboardingGuide />
 
       <section className="daily-progress-card">
         <div className="daily-progress-ring" style={{ '--progress': `${dailyCompletion}%` } as React.CSSProperties}>

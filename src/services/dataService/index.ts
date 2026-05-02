@@ -1,7 +1,7 @@
 import type { Allowance, AppData, Note, Photo, Receipt, Worker } from '../../data/types';
 import { isSupabaseConfigured, testSupabaseConnection } from '../../lib/supabase';
 import { getStorageMode } from './config';
-import { createCollectionService, getDataServiceUserId, getLocalAppData, saveLocalAppData, setDataServiceOwnerUserId, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
+import { createCollectionService, getDataServiceCompanyId, getDataServiceUserId, getLocalAppData, saveLocalAppData, setDataServiceCompanyId, setDataServiceOwnerUserId, setDataServiceRole, setDataServiceUserId, upsertSupabaseRecords } from './baseService';
 import { customersService } from './customersService';
 import { estimatesService } from './estimatesService';
 import { jobsService } from './jobsService';
@@ -27,6 +27,7 @@ export const dataService = {
   isSupabaseConfigured,
   testConnection: testSupabaseConnection,
   setUserId: setDataServiceUserId,
+  setCompanyId: setDataServiceCompanyId,
   setRole: setDataServiceRole,
   setOwnerUserId: setDataServiceOwnerUserId,
 
@@ -61,8 +62,9 @@ export const dataService = {
 
   async syncWorkspaceDataToSupabase(data: AppData): Promise<void> {
     const userId = getDataServiceUserId();
+    const companyId = getDataServiceCompanyId();
     for (const key of Object.keys(TABLES) as Array<keyof typeof TABLES>) {
-      const records = collectionFromData(data, key).map(record => ({ ...record, userId }));
+      const records = collectionFromData(data, key).map(record => ({ ...record, userId, companyId, createdBy: userId }));
       await upsertSupabaseRecords(TABLES[key], records);
     }
   },

@@ -45,6 +45,20 @@ const loadOwnerUserId = async (currentUser: User, role: UserRole) => {
   return data?.user_id || currentUser.id;
 };
 
+const loadActiveCompanyMember = async (userId: string) => {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('company_members')
+    .select('id,company_id,user_id,role,active')
+    .eq('user_id', userId)
+    .eq('active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as { id: string; company_id: string; user_id: string; role: UserRole; active: boolean } | null;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -56,51 +70,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       dataService.setRole('owner');
       dataService.setOwnerUserId(null);
+      dataService.setCompanyId(null);
       return;
     }
 
+    const member = await loadActiveCompanyMember(nextUser.id);
+    dataService.setCompanyId(member?.company_id || null);
+
     const { data, error } = await supabase
       .from('profiles')
-      .select('id,user_id,role,display_name,email,job_title,worker_id,active')
+      .select('id,user_id,company_id,role,display_name,email,job_title,worker_id,active')
       .eq('user_id', nextUser.id)
       .maybeSingle();
 
+    const activeRole = member?.role || data?.role || (nextUser.user_metadata?.role as UserRole) || 'crew';
+
     if (error || !data) {
-      const fallbackRole = (nextUser.user_metadata?.role as UserRole) || 'crew';
       await supabase.from('profiles').upsert({
         user_id: nextUser.id,
+        company_id: member?.company_id || null,
         email: nextUser.email || '',
         display_name: nextUser.user_metadata?.display_name || nextUser.email || '',
         job_title: nextUser.user_metadata?.job_title || '',
-        role: fallbackRole,
+        role: activeRole,
         active: true,
       }, { onConflict: 'user_id' });
-      dataService.setRole(fallbackRole);
+      dataService.setRole(activeRole);
       setProfile({
         id: nextUser.id,
         user_id: nextUser.id,
-        role: fallbackRole,
+        company_id: member?.company_id || null,
+        member_id: member?.id || null,
+        role: activeRole,
         display_name: nextUser.user_metadata?.display_name || nextUser.email || '',
         email: nextUser.email || '',
         job_title: nextUser.user_metadata?.job_title || '',
         worker_id: undefined,
         active: true,
       });
-      dataService.setOwnerUserId(await loadOwnerUserId(nextUser, fallbackRole));
+      dataService.setOwnerUserId(await loadOwnerUserId(nextUser, activeRole));
       return;
     }
 
-    dataService.setRole(data.role);
-    dataService.setOwnerUserId(await loadOwnerUserId(nextUser, data.role));
+    dataService.setRole(activeRole);
+    dataService.setOwnerUserId(await loadOwnerUserId(nextUser, activeRole));
     setProfile({
       id: data.id,
       user_id: data.user_id,
-      role: data.role,
+      company_id: member?.company_id || data.company_id || null,
+      member_id: member?.id || null,
+      role: activeRole,
       display_name: data.display_name || data.email || nextUser.email || '',
       email: data.email || nextUser.email || '',
       job_title: data.job_title || '',
       worker_id: data.worker_id || undefined,
-      active: data.active !== false,
+      active: member?.active ?? data.active !== false,
     });
   };
 
@@ -109,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dataService.setUserId(null);
       dataService.setRole('owner');
       dataService.setOwnerUserId(null);
+      dataService.setCompanyId(null);
       setLoading(false);
       return;
     }
@@ -173,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dataService.setUserId(null);
       dataService.setRole('owner');
       dataService.setOwnerUserId(null);
+      dataService.setCompanyId(null);
     },
     async resetPassword(email) {
       if (!supabase) return { error: 'Supabase is not configured.' };

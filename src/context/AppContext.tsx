@@ -15,6 +15,8 @@ interface DataServiceStatus {
   syncError?: string;
 }
 
+const LOCAL_RESCUE_DONE_KEY = 'buildops_pro_local_rescue_done';
+
 const looksLikeDemoData = (data: AppData) => {
   const demoSignals = [
     'john smith',
@@ -48,7 +50,8 @@ const looksLikeDemoData = (data: AppData) => {
     ...(data.jobTemplates || []).map(item => item.name),
   ].join(' ').toLowerCase();
 
-  return demoSignals.some(signal => haystack.includes(signal));
+  const matchedSignals = demoSignals.filter(signal => haystack.includes(signal));
+  return matchedSignals.length >= 3;
 };
 
 interface AppContextType {
@@ -332,12 +335,14 @@ const normalizeAppData = (raw: AppData): AppData => {
 export function AppProvider({ children }: { children: ReactNode }) {
   const { profile, role } = useAuth();
   const [data, setData] = useState<AppData>(() => {
-    const stored = dataService.local.getAppData();
-    if (stored) {
-      if (looksLikeDemoData(stored)) {
-        return normalizeAppData(generateCompleteSeedData());
+    if (dataService.mode !== 'supabase') {
+      const stored = dataService.local.getAppData();
+      if (stored) {
+        if (looksLikeDemoData(stored)) {
+          return normalizeAppData(generateCompleteSeedData());
+        }
+        return normalizeAppData(stored);
       }
-      return normalizeAppData(stored);
     }
     return normalizeAppData(generateCompleteSeedData());
   });
@@ -349,11 +354,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const supabaseInitialLoadComplete = useRef(dataService.mode !== 'supabase');
 
   useEffect(() => {
+    if (dataService.mode === 'supabase') return;
     dataService.local.saveAppData(data);
   }, [data]);
 
   useEffect(() => {
     if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured) return;
+    if (!profile?.company_id) return;
     let cancelled = false;
     Promise.all([
       dataService.customers.getAll(),
@@ -378,24 +385,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setData(prev => {
           const loadedData = {
             ...prev,
-            customers: customers.length ? customers : prev.customers,
-            estimates: estimates.length ? estimates : prev.estimates,
-            jobs: jobs.length ? jobs : prev.jobs,
-            tasks: tasks.length ? tasks : prev.tasks,
-            workers: workers.length ? workers : prev.workers,
-            expenses: expenses.length ? expenses : prev.expenses,
-            timeEntries: timeEntries.length ? timeEntries : prev.timeEntries,
-            invoices: invoices.length ? invoices : prev.invoices,
-            payments: payments.length ? payments : prev.payments,
-            suppliers: suppliers.length ? suppliers : prev.suppliers,
-            materialOrders: materialOrders.length ? materialOrders : prev.materialOrders,
-            shoppingLists: shoppingLists.length ? shoppingLists : prev.shoppingLists,
-            receipts: receipts.length ? receipts : prev.receipts,
-            allowances: allowances.length ? allowances : prev.allowances,
-            notes: notes.length ? notes : prev.notes,
-            photos: photos.length ? photos : prev.photos,
+            customers,
+            estimates,
+            jobs,
+            tasks,
+            workers,
+            expenses,
+            timeEntries,
+            invoices,
+            payments,
+            suppliers,
+            materialOrders,
+            shoppingLists,
+            receipts,
+            allowances,
+            notes,
+            photos,
           };
-          return looksLikeDemoData(loadedData) ? normalizeAppData(generateCompleteSeedData()) : loadedData;
+          return normalizeAppData(loadedData);
         });
         supabaseInitialLoadComplete.current = true;
       })
@@ -407,10 +414,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabaseInitialLoadComplete.current = true;
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [profile?.company_id]);
 
   useEffect(() => {
     if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured || !supabaseInitialLoadComplete.current) return;
+    if (!profile?.company_id) return;
     if (looksLikeDemoData(data)) return;
     const timeout = window.setTimeout(() => {
       void dataService.syncWorkspaceDataToSupabase(data)
@@ -421,7 +429,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })));
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [data]);
+  }, [data, profile?.company_id]);
+
+  useEffect(() => {
+    if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured) return;
+    if (!profile?.company_id) return;
+    if (localStorage.getItem(LOCAL_RESCUE_DONE_KEY) === profile.company_id) return;
+
+    const localData = dataService.local.getAppData();
+    if (!localData || looksLikeDemoData(localData)) {
+      localStorage.setItem(LOCAL_RESCUE_DONE_KEY, profile.company_id);
+      return;
+    }
+
+    void dataService.importLocalDataToSupabase(localData)
+      .then(() => {
+        localStorage.setItem(LOCAL_RESCUE_DONE_KEY, profile.company_id || '');
+        setDataServiceStatus(prev => ({ ...prev, lastSyncAt: new Date().toISOString(), syncError: undefined }));
+      })
+      .catch(error => {
+        setDataServiceStatus(prev => ({
+          ...prev,
+          syncError: error instanceof Error ? error.message : 'Local device rescue failed',
+        }));
+      });
+  }, [profile?.company_id]);
 
   useEffect(() => {
     generateAlerts();
@@ -499,7 +531,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const syncCoreDataToSupabase = () => runSupabaseSync(() => dataService.syncCoreDataToSupabase(data));
-  const importLocalDataToSupabase = () => runSupabaseSync(() => dataService.importLocalDataToSupabase(data));
+  const importLocalDataToSupabase = () => runSupabaseSync(async () => {
+    const localData = dataService.local.getAppData();
+    await dataService.importLocalDataToSupabase(localData || data);
+  });
 
   // Apply branding to CSS variables globally for a premium feel
   useEffect(() => {

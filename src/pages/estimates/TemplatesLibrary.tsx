@@ -26,6 +26,9 @@ const categories: { id: TemplateCategory; label: string }[] = [
   { id: 'custom', label: 'Custom' },
 ];
 
+const hasTemplateName = (templates: Template[], name: string) =>
+  templates.some(template => template.name.trim().toLowerCase() === name.trim().toLowerCase());
+
 const fixed = (name: string, unitPrice: number, category = 'labor', quantity = 1, unit = 'ea'): TemplateItem => ({ name, quantity, unit, unitPrice, category, isLabor: category === 'labor', quantityMode: 'fixed' });
 const required = (name: string, unitPrice: number, unit: string, prompt: string, category = 'material'): TemplateItem => ({ name, quantity: null, unit, unitPrice, category, isLabor: category === 'labor', quantityMode: 'user_required', measurementPrompt: prompt });
 const calculated = (name: string, unitPrice: number, unit: string, prompt: string, category = 'labor'): TemplateItem => ({ name, quantity: 0, unit, unitPrice, category, isLabor: category === 'labor', quantityMode: 'calculated', measurementPrompt: prompt });
@@ -266,8 +269,14 @@ export function TemplatesLibrary() {
   };
 
   const handleAddStarter = () => {
-    starterTemplates.forEach(template => addTemplate(template));
-    showToast(`Added ${starterTemplates.length} starter templates`);
+    let added = 0;
+    starterTemplates.forEach(template => {
+      if (!hasTemplateName(templates, template.name)) {
+        addTemplate(template);
+        added += 1;
+      }
+    });
+    showToast(added ? `Added ${added} starter templates` : 'Starter templates are already installed', added ? 'success' : 'info');
   };
 
   const handleUseTemplate = (template: Template) => {
@@ -350,6 +359,7 @@ export function TemplatesLibrary() {
             <p>Save reusable scopes, labor assumptions, materials, and markup so your next estimate starts with a strong baseline.</p>
             <div className="templates-empty-actions">
               <button className="templates-primary-btn" onClick={() => setShowModal(true)}><Plus size={18} /> New Template</button>
+              <button className="templates-secondary-btn" onClick={handleAddStarter}><PackageCheck size={18} /> Add Starter Templates</button>
             </div>
           </section>
         ) : (

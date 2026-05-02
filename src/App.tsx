@@ -8,6 +8,7 @@ import { DailyCommandCenter } from './pages/DailyCommandCenter';
 import { Dashboard } from './pages/Dashboard';
 import { Jobs } from './pages/Jobs';
 import { JobDetail } from './pages/JobDetail';
+import { FieldMode } from './pages/FieldMode';
 import { Workers } from './pages/Workers';
 import { TimeEntries } from './pages/TimeEntries';
 import { Expenses } from './pages/Expenses';
@@ -17,6 +18,7 @@ import { Tasks } from './pages/Tasks';
 import { Invoices } from './pages/Invoices';
 import { Calendar } from './pages/Calendar';
 import { Reports } from './pages/Reports';
+import { MarketingStudio } from './pages/MarketingStudio';
 import { EstimatesDashboard } from './pages/estimates/EstimatesDashboard';
 import { EstimatesList } from './pages/estimates/EstimatesList';
 import { EstimateBuilder } from './pages/estimates/EstimateBuilder';
@@ -66,6 +68,7 @@ function AppRoutes() {
               <Route path="/dashboard" element={<GuardedRoute><Dashboard /></GuardedRoute>} />
               <Route path="/jobs" element={<GuardedRoute><Jobs /></GuardedRoute>} />
               <Route path="/jobs/:id" element={<GuardedRoute><JobDetail /></GuardedRoute>} />
+              <Route path="/field" element={<GuardedRoute><FieldMode /></GuardedRoute>} />
               <Route path="/estimates" element={<GuardedRoute><EstimatesDashboard /></GuardedRoute>} />
               <Route path="/estimates/list" element={<GuardedRoute><EstimatesList /></GuardedRoute>} />
               <Route path="/estimates/new" element={<GuardedRoute><EstimateBuilder /></GuardedRoute>} />
@@ -88,6 +91,7 @@ function AppRoutes() {
               <Route path="/admin/team" element={<GuardedRoute><Team /></GuardedRoute>} />
               <Route path="/schedule" element={<GuardedRoute><Calendar /></GuardedRoute>} />
               <Route path="/reports" element={<GuardedRoute><Reports /></GuardedRoute>} />
+              <Route path="/marketing" element={<GuardedRoute><MarketingStudio /></GuardedRoute>} />
             </Routes>
           </Layout>
         </ToastProvider>

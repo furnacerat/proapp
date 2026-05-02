@@ -329,7 +329,7 @@ export function Settings() {
           <div className="card-header">
             <div>
               <h3 className="card-title">Supabase Data Service</h3>
-              <p className="text-sm text-muted">Local storage remains active. Supabase is an optional sync target until you are ready to switch modes.</p>
+              <p className="text-sm text-muted">Supabase is the active shared database. Use the import button only on a device that still has older local-only records.</p>
             </div>
             <span className={`badge ${dataServiceStatus.supabaseConfigured ? 'badge-green' : 'badge-gray'}`}>
               {dataServiceStatus.supabaseConfigured ? 'Configured' : 'Local Only'}
@@ -339,7 +339,7 @@ export function Settings() {
             <div className="grid-2">
               <div className="smart-setting-tile">
                 <strong>Current Storage</strong>
-                <span>{dataServiceStatus.mode === 'supabase' ? 'Supabase configured, local storage preserved' : 'Local storage only'}</span>
+                <span>{dataServiceStatus.mode === 'supabase' ? 'Supabase shared database' : 'Local storage only'}</span>
               </div>
               <div className="smart-setting-tile">
                 <strong>Last Sync</strong>
@@ -351,14 +351,14 @@ export function Settings() {
                 Test Connection
               </button>
               <button className="btn btn-primary" onClick={runCoreSync} disabled={!dataServiceStatus.supabaseConfigured || dataServiceStatus.isSyncing}>
-                {dataServiceStatus.isSyncing ? 'Syncing...' : 'Sync Customers, Estimates, Jobs'}
+                {dataServiceStatus.isSyncing ? 'Syncing...' : 'Sync Current Data'}
               </button>
               <button className="btn btn-secondary" onClick={runFullImport} disabled={!dataServiceStatus.supabaseConfigured || dataServiceStatus.isSyncing}>
-                Import Local Data to Supabase
+                Rescue This Device's Local Data
               </button>
             </div>
             <p className="text-sm text-muted mt-2">
-              Create the Supabase tables with <code>supabase/schema.sql</code>, then add <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code>, and optional <code>VITE_STORAGE_MODE</code> to your environment.
+              If records were entered before Supabase sharing was active, open this page on that same device and import them once.
             </p>
             {connectionMessage && <p className="text-sm mt-2">{connectionMessage}</p>}
             {databaseMessage && <p className="text-sm mt-2">{databaseMessage}</p>}

@@ -9,6 +9,7 @@ export type LocalCollectionKey = keyof AppData;
 const now = () => new Date().toISOString();
 let currentUserId: string | null = null;
 let currentUserRole: UserRole = 'owner';
+let currentCompanyId: string | null = null;
 let ownerUserIdCache: string | null | undefined;
 
 export const setDataServiceUserId = (userId: string | null) => {
@@ -22,6 +23,12 @@ export const setDataServiceRole = (role: UserRole) => {
 
 export const getDataServiceUserId = () => currentUserId;
 
+export const setDataServiceCompanyId = (companyId: string | null) => {
+  currentCompanyId = companyId;
+};
+
+export const getDataServiceCompanyId = () => currentCompanyId;
+
 export const setDataServiceOwnerUserId = (userId: string | null) => {
   ownerUserIdCache = userId;
 };
@@ -33,10 +40,8 @@ export const getVisibleSupabaseUserIds = () => {
 };
 
 export const applyVisibleUserFilter = (query: any): any => {
-  const visibleUserIds = getVisibleSupabaseUserIds();
-  if (!visibleUserIds) return query;
-  if (visibleUserIds.length === 1) return query.eq('user_id', visibleUserIds[0]);
-  return query.in('user_id', visibleUserIds);
+  const companyId = requireSupabaseCompanyId();
+  return query.eq('company_id', companyId);
 };
 
 export const getLocalAppData = (): AppData | null => {
@@ -66,6 +71,13 @@ const requireSupabaseUserId = () => {
   return currentUserId;
 };
 
+const requireSupabaseCompanyId = () => {
+  if (!currentCompanyId) {
+    throw new Error('Your user is not assigned to an active company.');
+  }
+  return currentCompanyId;
+};
+
 const updateLocalCollection = <T extends RecordWithId>(
   key: LocalCollectionKey,
   updater: (items: T[]) => T[],
@@ -75,13 +87,25 @@ const updateLocalCollection = <T extends RecordWithId>(
   saveLocalAppData({ ...data, [key]: updater(((data[key] || []) as unknown) as T[]) });
 };
 
-export const toSupabaseRow = (record: RecordWithId) => ({
+export const toSupabaseRow = (record: RecordWithId) => {
+  const userId = requireSupabaseUserId();
+  const companyId = requireSupabaseCompanyId();
+  const payload = {
+    ...record,
+    companyId: record.companyId || record.company_id || companyId,
+    createdBy: record.createdBy || record.created_by || userId,
+    userId: record.userId || record.user_id || userId,
+  };
+
+  return ({
   id: String(record.id),
-  payload: currentUserId && !record.userId && !record.user_id ? { ...record, userId: currentUserId } : record,
+  payload,
   name: record.name || record.title || record.invoiceNumber || record.poNumber || record.number || null,
   title: record.title || record.name || null,
   status: record.status || null,
-  user_id: record.userId || record.user_id || currentUserId,
+  user_id: record.userId || record.user_id || userId,
+  company_id: record.companyId || record.company_id || companyId,
+  created_by: record.createdBy || record.created_by || userId,
   customer_id: record.customerId || record.customer_id || null,
   estimate_id: record.estimateId || record.estimate_id || null,
   job_id: record.jobId || record.job_id || null,
@@ -145,16 +169,39 @@ export const toSupabaseRow = (record: RecordWithId) => ({
   created_at: record.createdAt || record.created_at || now(),
   updated_at: record.updatedAt || record.updated_at || now(),
 });
+};
 
 export const fromSupabaseRows = <T extends RecordWithId>(rows: any[] | null): T[] =>
   (rows || []).map(row => ({ ...row.payload, id: row.id }) as T);
 
+const minimalSupabaseRow = (row: ReturnType<typeof toSupabaseRow>) => ({
+  id: row.id,
+  payload: row.payload,
+  name: row.name,
+  title: row.title,
+  status: row.status,
+  user_id: row.user_id,
+  company_id: row.company_id,
+  created_by: row.created_by,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+});
+
+const isMissingColumnError = (error: unknown) =>
+  Boolean(error && typeof error === 'object' && (error as { code?: string }).code === 'PGRST204');
+
 export const upsertSupabaseRecords = async (table: string, records: RecordWithId[]) => {
   if (!records.length) return;
   const client = requireSupabase();
-  requireSupabaseUserId();
-  const { error } = await client.from(table).upsert(records.map(toSupabaseRow), { onConflict: 'id' });
-  if (error) throw error;
+  const rows = records.map(toSupabaseRow);
+  const { error } = await client.from(table).upsert(rows, { onConflict: 'id' });
+  if (!error) return;
+  if (!isMissingColumnError(error)) throw error;
+
+  const { error: retryError } = await client
+    .from(table)
+    .upsert(rows.map(minimalSupabaseRow), { onConflict: 'id' });
+  if (retryError) throw retryError;
 };
 
 export const createCollectionService = <T extends RecordWithId>(

@@ -22,6 +22,8 @@ import {
   Truck,
   ShoppingCart,
   SunMedium,
+  Megaphone,
+  HardHat,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
@@ -68,11 +70,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="nav-section">
           <div className="nav-section-title">Operations</div>
           {navLink('/', <SunMedium size={20} />, 'Today', true)}
+          {navLink('/field', <HardHat size={20} />, 'Field Mode')}
           {navLink('/dashboard', <LayoutDashboard size={20} />, 'Dashboard')}
           {navLink('/jobs', <Briefcase size={20} />, 'Jobs')}
           {navLink('/workers', <Users size={20} />, 'Workers')}
           {navLink('/time-entries', <Clock size={20} />, 'Time Entries')}
           {navLink('/shopping-lists', <ShoppingCart size={20} />, 'Shopping Lists')}
+          {navLink('/marketing', <Megaphone size={20} />, 'Marketing Studio')}
         </div>
         <div className="nav-section">
           <div className="nav-section-title">Finance</div>
