@@ -919,6 +919,7 @@ export interface Alert {
 // ============ APP DATA ============
 
 export interface AppData {
+  branding?: BrandingSettings;
   customers: Customer[];
   workers: Worker[];
   laborRates: LaborRate[];

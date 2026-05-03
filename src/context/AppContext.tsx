@@ -250,9 +250,23 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const DEFAULT_BRANDING: BrandingSettings = {
+  brandName: "Allen's Contractor's",
+  emailFromName: "Allen's Contractor's",
+  primaryColor: '#1f3a8a',
+  secondaryColor: '#2563eb',
+  fontFamily: 'Inter, system-ui, Arial',
+  logoUrl: '',
+  logoDataUrl: '',
+  termsText: '',
+  termsUrl: '',
+  smartFeaturesEnabled: true,
+};
+
 const normalizeAppData = (raw: AppData): AppData => {
   const data = {
     ...raw,
+    branding: { ...DEFAULT_BRANDING, ...(raw.branding || {}) },
     photos: raw.photos || [],
     changeOrders: raw.changeOrders || [],
     portalTokens: raw.portalTokens || [],
@@ -434,6 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             changeOrders: changeOrders.length ? changeOrders : localFallback?.changeOrders || prev.changeOrders,
             portalTokens: portalTokens.length ? portalTokens : localFallback?.portalTokens || prev.portalTokens || [],
             signatureRequests: signatureRequests.length ? signatureRequests : localFallback?.signatureRequests || prev.signatureRequests || [],
+            branding: localFallback?.branding || prev.branding,
           };
           return normalizeAppData(loadedData);
         });
@@ -504,21 +519,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.jobs, data.tasks, data.invoices, data.payments]);
 
   // Simple branding configuration accessible app-wide
-  const [branding, setBranding] = useState<BrandingSettings>({
-    brandName: "Allen's Contractor's",
-    emailFromName: "Allen's Contractor's",
-    primaryColor: '#1f3a8a',
-    secondaryColor: '#2563eb',
-    fontFamily: 'Inter, system-ui, Arial',
-    logoUrl: '',
-    logoDataUrl: '',
-    termsText: '',
-    termsUrl: '',
-    smartFeaturesEnabled: true,
-  } as BrandingSettings);
+  const [branding, setBranding] = useState<BrandingSettings>(() => ({
+    ...DEFAULT_BRANDING,
+    ...(data.branding || {}),
+  }));
+
+  useEffect(() => {
+    setBranding({ ...DEFAULT_BRANDING, ...(data.branding || {}) });
+  }, [data.branding]);
 
   const updateBranding = (updates: Partial<BrandingSettings>) => {
-    setBranding(prev => ({ ...prev, ...updates }));
+    setData(prev => {
+      const nextBranding = { ...DEFAULT_BRANDING, ...(prev.branding || branding), ...updates };
+      setBranding(nextBranding);
+      return normalizeAppData({ ...prev, branding: nextBranding });
+    });
   };
 
   // SMTP settings (global)

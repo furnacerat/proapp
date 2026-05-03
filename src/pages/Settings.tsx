@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { dataService } from '../services/dataService';
 import { useToast } from '../components/common/Toast';
@@ -21,14 +21,37 @@ export function Settings() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [databaseMessage, setDatabaseMessage] = useState('');
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [brandingDraft, setBrandingDraft] = useState(branding);
+  const [brandingSavedAt, setBrandingSavedAt] = useState('');
   const migrationPreview = dataService.previewLocalMigration(data);
+  const hasBrandingChanges = JSON.stringify(brandingDraft) !== JSON.stringify(branding);
+
+  useEffect(() => {
+    setBrandingDraft(branding);
+  }, [branding]);
 
   const setBrand = (key: keyof typeof branding, value: any) => {
     updateBranding({ [key]: value } as any);
   };
 
+  const setBrandingField = (key: keyof typeof brandingDraft, value: any) => {
+    setBrandingDraft(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveBranding = () => {
+    updateBranding(brandingDraft);
+    setBrandingSavedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+    showToast('Branding saved');
+  };
+
+  const discardBrandingChanges = () => {
+    setBrandingDraft(branding);
+    setBrandingSavedAt('');
+    showToast('Branding changes discarded', 'info');
+  };
+
   const exportData = () => {
-    const blob = new Blob([JSON.stringify(branding, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(brandingDraft, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -45,6 +68,7 @@ export function Settings() {
       try {
         const data = JSON.parse(String(fr.result));
         updateBranding(data as any);
+        setBrandingDraft(prev => ({ ...prev, ...data }));
         showToast('Settings imported');
       } catch {
         showToast('Invalid settings JSON', 'error');
@@ -59,7 +83,7 @@ export function Settings() {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = String(reader.result);
-      updateBranding({ logoDataUrl: dataUrl, logoUrl: '' });
+      setBrandingDraft(prev => ({ ...prev, logoDataUrl: dataUrl, logoUrl: '' }));
     };
     reader.readAsDataURL(file);
   };
@@ -110,21 +134,21 @@ export function Settings() {
             <div>
               <div className="form-group">
                 <label className="form-label">Company Name</label>
-                <input className="form-input" value={branding.brandName} onChange={e => setBrand('brandName', e.target.value)} />
+                <input className="form-input" value={brandingDraft.brandName} onChange={e => setBrandingField('brandName', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Email From Name</label>
-                <input className="form-input" value={branding.emailFromName || ''} onChange={e => setBrand('emailFromName', e.target.value)} />
+                <input className="form-input" value={brandingDraft.emailFromName || ''} onChange={e => setBrandingField('emailFromName', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Email From Address</label>
-                <input className="form-input" value={branding.emailFromAddress || ''} onChange={e => setBrand('emailFromAddress', e.target.value)} placeholder="info@company.com" />
+                <input className="form-input" value={brandingDraft.emailFromAddress || ''} onChange={e => setBrandingField('emailFromAddress', e.target.value)} placeholder="info@company.com" />
               </div>
             </div>
             <div>
               <div className="form-group">
                 <label className="form-label">Font Family</label>
-                <select className="form-select" value={branding.fontFamily} onChange={e => setBrand('fontFamily', e.target.value)}>
+                <select className="form-select" value={brandingDraft.fontFamily} onChange={e => setBrandingField('fontFamily', e.target.value)}>
                   <option value="Inter, system-ui">Inter</option>
                   <option value="Arial, Helvetica, sans-serif">Arial</option>
                   <option value="Georgia, serif">Georgia</option>
@@ -134,11 +158,11 @@ export function Settings() {
               </div>
               <div className="form-group">
                 <label className="form-label">Primary Color</label>
-                <input className="form-input" type="color" value={branding.primaryColor || '#1f3a8a'} onChange={e => setBrand('primaryColor', e.target.value)} />
+                <input className="form-input" type="color" value={brandingDraft.primaryColor || '#1f3a8a'} onChange={e => setBrandingField('primaryColor', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Secondary Color</label>
-                <input className="form-input" type="color" value={branding.secondaryColor || '#2563eb'} onChange={e => setBrand('secondaryColor', e.target.value)} />
+                <input className="form-input" type="color" value={brandingDraft.secondaryColor || '#2563eb'} onChange={e => setBrandingField('secondaryColor', e.target.value)} />
               </div>
             </div>
           </div>
@@ -148,11 +172,26 @@ export function Settings() {
               <div className="flex items-center gap-2">
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={onLogoFile} />
               </div>
-              {branding.logoDataUrl ? (
-                <img src={branding.logoDataUrl} alt="logo" style={{ maxWidth: '200px', marginTop: '8px' }} />
-              ) : branding.logoUrl ? (
-                <img src={branding.logoUrl} alt="logo" style={{ maxWidth: '200px', marginTop: '8px' }} />
+              {brandingDraft.logoDataUrl ? (
+                <img src={brandingDraft.logoDataUrl} alt="logo" style={{ maxWidth: '200px', marginTop: '8px' }} />
+              ) : brandingDraft.logoUrl ? (
+                <img src={brandingDraft.logoUrl} alt="logo" style={{ maxWidth: '200px', marginTop: '8px' }} />
               ) : null}
+            </div>
+          </div>
+          <div className="card-body border-t">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted">
+                {brandingSavedAt ? `Last saved at ${brandingSavedAt}.` : 'Save branding changes to keep them after refresh or sign-in.'}
+              </p>
+              <div className="flex gap-2">
+                <button className="btn btn-secondary" onClick={discardBrandingChanges} disabled={!hasBrandingChanges}>
+                  Discard
+                </button>
+                <button className="btn btn-primary" onClick={saveBranding} disabled={!hasBrandingChanges}>
+                  Save Branding
+                </button>
+              </div>
             </div>
           </div>
         </div>
