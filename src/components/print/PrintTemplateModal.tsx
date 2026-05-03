@@ -55,8 +55,8 @@ export const PrintTemplateModal: React.FC<Props> = ({
 
   // Sync if parent provides new settings
   useEffect(() => {
-    if (initialSettings) setSettings(initialSettings)
-  }, [initialSettings])
+    if (isOpen) setSettings(initialSettings ?? DEFAULT_PRINT_SETTINGS)
+  }, [initialSettings, isOpen])
 
   // Keyboard close
   useEffect(() => {

@@ -13,6 +13,9 @@ const fmtDate = (d?: string) => d ? parseDateString(d).toLocaleDateString('en-US
 export const InvoicePrintTemplate: React.FC<Props> = ({ data, settings = DEFAULT_PRINT_SETTINGS }) => {
   const { company, client, project, lineItems, payments, balanceDue, notes, paymentTerms } = data
   const isPaidInFull = balanceDue !== undefined && balanceDue <= 0
+  const visibleLineItems = settings.hideZeroValueLines
+    ? lineItems.filter(item => item.total !== 0)
+    : lineItems
 
   return (
     <div className="print-document">
@@ -101,7 +104,7 @@ export const InvoicePrintTemplate: React.FC<Props> = ({ data, settings = DEFAULT
           </tr>
         </thead>
         <tbody>
-          {lineItems.map((item, i) => (
+          {visibleLineItems.map((item, i) => (
             <tr key={i}>
               <td>
                 <div className="print-item-name">{item.description}</div>
@@ -115,6 +118,11 @@ export const InvoicePrintTemplate: React.FC<Props> = ({ data, settings = DEFAULT
               <td className="text-right">{fmt(item.total)}</td>
             </tr>
           ))}
+          {visibleLineItems.length === 0 && (
+            <tr>
+              <td colSpan={5}>No billable line items selected.</td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -194,6 +202,26 @@ export const InvoicePrintTemplate: React.FC<Props> = ({ data, settings = DEFAULT
       )}
 
       {/* ── Footer ── */}
+      {settings.showSignatureLine && (
+        <div className="print-signature-block">
+          <div className="print-section-title">Authorization</div>
+          <div className="print-signature-grid">
+            <div className="print-sig-field">
+              <div className="print-sig-line" />
+              <div className="print-sig-label">Customer Signature</div>
+            </div>
+            <div className="print-sig-field">
+              <div className="print-sig-line" />
+              <div className="print-sig-label">Printed Name</div>
+            </div>
+            <div className="print-sig-field">
+              <div className="print-sig-line" />
+              <div className="print-sig-label">Date</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="print-footer">
         {company.brandName} · Thank you for your business!
       </div>

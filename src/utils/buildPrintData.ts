@@ -86,12 +86,11 @@ export const buildClientInvoiceData = (
     },
   ]
 
-  const filteredItems = settings.hideZeroValueLines
-    ? lineItems.filter(item => item.total !== 0)
-    : lineItems
-
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
-  const balanceDue = invoice.amount - totalPaid
+  const subtotal = invoice.subtotal ?? Math.max(invoice.amount - (invoice.tax ?? 0), 0)
+  const tax = invoice.tax
+  const total = invoice.total ?? invoice.amount
+  const balanceDue = (invoice.balanceDue ?? total) - totalPaid
 
   return {
     type: 'invoice',
@@ -117,10 +116,11 @@ export const buildClientInvoiceData = (
         }
       : undefined,
     // WHITELISTED line items
-    lineItems: filteredItems,
+    lineItems,
     // WHITELISTED financials (client totals only — no cost/profit)
-    subtotal: invoice.amount,
-    total: invoice.amount,
+    subtotal,
+    tax,
+    total,
     payments: payments.map(p => ({
       date: p.date,
       amount: p.amount,
@@ -128,10 +128,8 @@ export const buildClientInvoiceData = (
     })),
     balanceDue,
     // WHITELISTED optional client-visible fields
-    notes: settings.showNotes ? invoice.notes : undefined,
-    paymentTerms: settings.showPaymentTerms
-      ? company.paymentTerms || company.termsText
-      : undefined,
+    notes: invoice.notes,
+    paymentTerms: company.paymentTerms || company.termsText,
   }
 }
 
