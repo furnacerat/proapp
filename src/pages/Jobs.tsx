@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Banknote,
@@ -87,6 +87,7 @@ export function Jobs() {
     getJobProfit,
   } = useApp();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
   const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>('all');
@@ -106,6 +107,13 @@ export function Jobs() {
     type: 'remodel' as JobType, contractAmount: '', estimatedCost: '',
     startDate: '', dueDate: '', status: 'lead' as JobStatus, notes: ''
   });
+
+  useEffect(() => {
+    const filter = searchParams.get('filter');
+    if (filter && ['all', 'active', 'scheduled', 'in_progress', 'on_hold', 'completed'].includes(filter)) {
+      setPipelineFilter(filter as PipelineFilter);
+    }
+  }, [searchParams]);
 
   const jobSummaries = useMemo(() => jobs.map(job => {
     const jobTasks = tasks.filter(task => task.jobId === job.id);

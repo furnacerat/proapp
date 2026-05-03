@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Bell,
@@ -54,11 +54,13 @@ const todayString = () => new Date().toISOString().split('T')[0];
 export function Invoices() {
   const { customers, jobs, invoices, payments, addInvoice, updateInvoice, addPayment, deleteInvoice, getJobProgress, branding, sendEmail } = useApp();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [groupMode, setGroupMode] = useState<GroupMode>('none');
+  const [ageFilter, setAgeFilter] = useState<InvoiceSummary['ageBucket'] | ''>('');
   const [showModal, setShowModal] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -73,6 +75,12 @@ export function Invoices() {
   const [paymentForm, setPaymentForm] = useState({
     amount: '', date: todayString(), method: 'check', checkNumber: '', notes: ''
   });
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    if (status === 'overdue') setStatusFilter('overdue');
+    if (status === 'open') setStatusFilter('');
+  }, [searchParams]);
 
   const getInvoicePayments = (invoiceId: string) => payments.filter(payment => payment.invoiceId === invoiceId);
 
@@ -114,9 +122,10 @@ export function Invoices() {
       if (query && ![invoice.invoiceNumber, invoice.jobName, invoice.customer, invoice.type, invoice.effectiveStatus].some(value => value.toLowerCase().includes(query))) return false;
       if (jobFilter && invoice.jobId !== jobFilter) return false;
       if (statusFilter && invoice.effectiveStatus !== statusFilter) return false;
+      if (ageFilter && invoice.ageBucket !== ageFilter) return false;
       return true;
     });
-  }, [invoiceSummaries, search, jobFilter, statusFilter]);
+  }, [invoiceSummaries, search, jobFilter, statusFilter, ageFilter]);
 
   const groupedInvoices = useMemo(() => {
     const groups = new Map<string, { label: string; invoices: InvoiceSummary[] }>();
@@ -328,9 +337,9 @@ export function Invoices() {
       </div>
 
       <section className="invoice-kpi-grid">
-        <InvoiceKpi icon={ReceiptText} label="Total Invoiced" value={formatCurrency(totalInvoiced)} sub={`${invoices.length} invoices`} />
-        <InvoiceKpi icon={CheckCircle} label="Total Paid" value={formatCurrency(totalPaid)} sub={`${payments.length} payments`} tone="paid" />
-        <InvoiceKpi icon={Wallet} label="Outstanding" value={formatCurrency(outstanding)} sub={`${invoiceSummaries.filter(invoice => invoice.balance > 0).length} open invoices`} tone={outstanding > 0 ? 'warning' : 'paid'} />
+        <InvoiceKpi icon={ReceiptText} label="Total Invoiced" value={formatCurrency(totalInvoiced)} sub={`${invoices.length} invoices`} onClick={() => { setStatusFilter(''); setAgeFilter(''); }} />
+        <InvoiceKpi icon={CheckCircle} label="Total Paid" value={formatCurrency(totalPaid)} sub={`${payments.length} payments`} tone="paid" onClick={() => { setStatusFilter('paid'); setAgeFilter(''); }} />
+        <InvoiceKpi icon={Wallet} label="Outstanding" value={formatCurrency(outstanding)} sub={`${invoiceSummaries.filter(invoice => invoice.balance > 0).length} open invoices`} tone={outstanding > 0 ? 'warning' : 'paid'} onClick={() => { setStatusFilter(''); setAgeFilter(''); }} />
       </section>
 
       <section className="invoice-urgent-panel">
@@ -345,18 +354,21 @@ export function Invoices() {
       </section>
 
       <section className="invoice-aging-grid">
-        <AgingCard label="0-7 days" value={aging['0-7']} />
-        <AgingCard label="8-30 days" value={aging['8-30']} />
-        <AgingCard label="30+ days" value={aging['30+']} urgent={aging['30+'] > 0} />
+        <AgingCard label="0-7 days" value={aging['0-7']} active={ageFilter === '0-7'} onClick={() => { setAgeFilter('0-7'); setStatusFilter(''); }} />
+        <AgingCard label="8-30 days" value={aging['8-30']} active={ageFilter === '8-30'} onClick={() => { setAgeFilter('8-30'); setStatusFilter(''); }} />
+        <AgingCard label="30+ days" value={aging['30+']} urgent={aging['30+'] > 0} active={ageFilter === '30+'} onClick={() => { setAgeFilter('30+'); setStatusFilter(''); }} />
       </section>
 
       {alerts.length > 0 && (
         <section className="invoice-alert-grid">
           {alerts.map(alert => (
-            <div key={`${alert.title}-${alert.detail}`} className="invoice-alert-card">
+            <button key={`${alert.title}-${alert.detail}`} className="invoice-alert-card" onClick={() => {
+              setAgeFilter('');
+              setStatusFilter(alert.title.toLowerCase().includes('overdue') ? 'overdue' : '');
+            }}>
               <AlertTriangle size={18} />
               <span><strong>{alert.title}</strong>{alert.detail}</span>
-            </div>
+            </button>
           ))}
         </section>
       )}
@@ -370,7 +382,7 @@ export function Invoices() {
           <option value="">All Jobs</option>
           {jobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}
         </select>
-        <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+        <select value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setAgeFilter(''); }}>
           <option value="">All Status</option>
           {INVOICE_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
         </select>
@@ -479,24 +491,24 @@ export function Invoices() {
   );
 }
 
-function InvoiceKpi({ icon: Icon, label, value, sub, tone }: { icon: LucideIcon; label: string; value: string; sub: string; tone?: 'paid' | 'warning' }) {
+function InvoiceKpi({ icon: Icon, label, value, sub, tone, onClick }: { icon: LucideIcon; label: string; value: string; sub: string; tone?: 'paid' | 'warning'; onClick?: () => void }) {
   return (
-    <div className={`invoice-kpi-card ${tone || ''}`}>
+    <button className={`invoice-kpi-card ${tone || ''}`} onClick={onClick}>
       <div className="invoice-kpi-icon"><Icon size={18} /></div>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{sub}</small>
-    </div>
+    </button>
   );
 }
 
-function AgingCard({ label, value, urgent }: { label: string; value: number; urgent?: boolean }) {
+function AgingCard({ label, value, urgent, active, onClick }: { label: string; value: number; urgent?: boolean; active?: boolean; onClick?: () => void }) {
   return (
-    <div className={`invoice-aging-card ${urgent ? 'urgent' : ''}`}>
+    <button className={`invoice-aging-card ${urgent ? 'urgent' : ''} ${active ? 'active' : ''}`} onClick={onClick}>
       <Clock3 size={18} />
       <span>{label}</span>
       <strong>{formatCurrency(value)}</strong>
-    </div>
+    </button>
   );
 }
 

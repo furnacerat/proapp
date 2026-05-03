@@ -207,12 +207,12 @@ export function DailyCommandCenter() {
       </section>
 
       <section className="daily-kpi-grid">
-        <div className="daily-kpi"><CheckCircle2 size={20} /><span>Tasks due today</span><strong>{todayTasks.length}</strong></div>
-        <div className="daily-kpi warning"><AlertTriangle size={20} /><span>Urgent tasks</span><strong>{urgentTasks.length}</strong></div>
-        <div className="daily-kpi danger"><FileText size={20} /><span>Overdue invoices</span><strong>{overdueInvoices.length}</strong></div>
-        <div className="daily-kpi"><Briefcase size={20} /><span>Jobs need attention</span><strong>{activeJobsNeedingAttention.length}</strong></div>
-        <div className="daily-kpi"><PackageCheck size={20} /><span>Pending orders</span><strong>{pendingOrders.length}</strong></div>
-        <div className="daily-kpi warning"><Clock size={20} /><span>Missing time</span><strong>{missingTimeJobs.length}</strong></div>
+        <Link to="/tasks?due=today" className="daily-kpi"><CheckCircle2 size={20} /><span>Tasks due today</span><strong>{todayTasks.length}</strong></Link>
+        <Link to="/tasks?priority=high" className="daily-kpi warning"><AlertTriangle size={20} /><span>Urgent tasks</span><strong>{urgentTasks.length}</strong></Link>
+        <Link to="/invoices?status=overdue" className="daily-kpi danger"><FileText size={20} /><span>Overdue invoices</span><strong>{overdueInvoices.length}</strong></Link>
+        <Link to="/jobs?filter=active" className="daily-kpi"><Briefcase size={20} /><span>Jobs need attention</span><strong>{activeJobsNeedingAttention.length}</strong></Link>
+        <Link to="/estimates/orders" className="daily-kpi"><PackageCheck size={20} /><span>Pending orders</span><strong>{pendingOrders.length}</strong></Link>
+        <Link to="/time-entries" className="daily-kpi warning"><Clock size={20} /><span>Missing time</span><strong>{missingTimeJobs.length}</strong></Link>
       </section>
 
       <section className="daily-workspace">

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CalendarCheck,
@@ -68,6 +68,7 @@ export function Tasks() {
   const { jobs, workers, tasks, estimates, materialOrders, addTask, updateTask, deleteTask } = useApp();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('');
@@ -82,6 +83,15 @@ export function Tasks() {
   const [formData, setFormData] = useState(defaultForm);
 
   const today = todayString();
+
+  useEffect(() => {
+    const priority = searchParams.get('priority');
+    const status = searchParams.get('status');
+    const due = searchParams.get('due');
+    if (priority === 'high') setPriorityFilter('high');
+    if (status && ['open', 'in_progress', 'blocked', 'done'].includes(status)) setStatusFilter(status);
+    if (due === 'today' || due === 'overdue') setOpenOnly(true);
+  }, [searchParams]);
 
   const getTaskAction = (task: Task): Pick<EnrichedTask, 'actionLabel' | 'actionTo'> => {
     if (task.orderId || task.sourceType === 'order') return { actionLabel: 'Open order board', actionTo: '/estimates/orders' };
@@ -339,9 +349,9 @@ export function Tasks() {
           <p>{highPriorityTasks.length} high priority • {overdueTasks.length} overdue • {blockingTasks.length} blocking progress</p>
         </div>
         <div className="tasks-focus-stats">
-          <FocusMetric icon={CalendarCheck} label="Due Today" value={todayTasks.length} />
-          <FocusMetric icon={AlertTriangle} label="High Priority" value={highPriorityTasks.length} warning />
-          <FocusMetric icon={Clock3} label="Overdue" value={overdueTasks.length} danger />
+          <FocusMetric icon={CalendarCheck} label="Due Today" value={todayTasks.length} onClick={() => { setOpenOnly(true); setStatusFilter(''); setPriorityFilter(''); }} />
+          <FocusMetric icon={AlertTriangle} label="High Priority" value={highPriorityTasks.length} warning onClick={() => { setOpenOnly(true); setPriorityFilter('high'); setStatusFilter(''); }} />
+          <FocusMetric icon={Clock3} label="Overdue" value={overdueTasks.length} danger onClick={() => { setOpenOnly(true); setStatusFilter(''); setPriorityFilter(''); }} />
         </div>
         <button className="tasks-start-btn" onClick={startWork}><Play size={18} /> Start Work</button>
       </section>
@@ -349,10 +359,14 @@ export function Tasks() {
       {alerts.length > 0 && (
         <section className="tasks-alert-grid">
           {alerts.map(alert => (
-            <div key={`${alert.title}-${alert.detail}`} className="tasks-alert-card">
+            <button key={`${alert.title}-${alert.detail}`} className="tasks-alert-card" onClick={() => {
+              setOpenOnly(true);
+              if (alert.title.toLowerCase().includes('high')) setPriorityFilter('high');
+              if (alert.title.toLowerCase().includes('blocking')) setStatusFilter('blocked');
+            }}>
               <AlertTriangle size={18} />
               <span><strong>{alert.title}</strong>{alert.detail}</span>
-            </div>
+            </button>
           ))}
         </section>
       )}
@@ -502,13 +516,13 @@ export function Tasks() {
   );
 }
 
-function FocusMetric({ icon: Icon, label, value, warning, danger }: { icon: LucideIcon; label: string; value: number; warning?: boolean; danger?: boolean }) {
+function FocusMetric({ icon: Icon, label, value, warning, danger, onClick }: { icon: LucideIcon; label: string; value: number; warning?: boolean; danger?: boolean; onClick?: () => void }) {
   return (
-    <div className={`tasks-focus-metric ${warning ? 'warning' : ''} ${danger ? 'danger' : ''}`}>
+    <button className={`tasks-focus-metric ${warning ? 'warning' : ''} ${danger ? 'danger' : ''}`} onClick={onClick}>
       <Icon size={18} />
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+    </button>
   );
 }
 

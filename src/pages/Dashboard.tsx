@@ -242,43 +242,43 @@ export function Dashboard() {
             <div className="card-body">
               <div className="space-y-3">
                 {overdueTasks.length > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <Link to="/tasks?status=open&due=overdue" className="dashboard-focus-action flex items-center justify-between p-3 bg-red-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <span className="badge badge-red">{overdueTasks.length}</span>
                       <span className="text-sm">Overdue Tasks</span>
                     </div>
-                    <Link to="/tasks" className="btn btn-sm btn-danger">View</Link>
-                  </div>
+                    <span className="btn btn-sm btn-danger">View</span>
+                  </Link>
                 )}
                 
                 {unpaidInvoices.length > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <Link to="/invoices?status=open" className="dashboard-focus-action flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <span className="badge badge-yellow">{unpaidInvoices.length}</span>
                       <span className="text-sm">Unpaid Invoices</span>
                     </div>
-                    <Link to="/invoices" className="btn btn-sm btn-secondary">View</Link>
-                  </div>
+                    <span className="btn btn-sm btn-secondary">View</span>
+                  </Link>
                 )}
                 
                 {jobsDueSoon.length > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <Link to="/jobs?filter=active" className="dashboard-focus-action flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <span className="badge badge-blue">{jobsDueSoon.length}</span>
                       <span className="text-sm">Jobs Due Soon</span>
                     </div>
-                    <Link to="/jobs" className="btn btn-sm btn-secondary">View</Link>
-                  </div>
+                    <span className="btn btn-sm btn-secondary">View</span>
+                  </Link>
                 )}
                 
                 {highPriorityTasks.length > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                  <Link to="/tasks?priority=high" className="dashboard-focus-action flex items-center justify-between p-3 bg-orange-50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <span className="badge badge-orange">{highPriorityTasks.length}</span>
                       <span className="text-sm">High Priority Tasks</span>
                     </div>
-                    <Link to="/tasks" className="btn btn-sm btn-secondary">View</Link>
-                  </div>
+                    <span className="btn btn-sm btn-secondary">View</span>
+                  </Link>
                 )}
               </div>
             </div>
