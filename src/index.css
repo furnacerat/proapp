@@ -13759,6 +13759,20 @@ body {
   font-size: 0.82rem;
 }
 
+.tasks-action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 260px;
+}
+
+.tasks-action-cell .btn {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .tasks-group-list {
   display: flex;
   flex-direction: column;
@@ -13857,6 +13871,11 @@ body {
     border: 0;
     border-radius: 0;
     background: transparent;
+  }
+
+  .tasks-action-cell {
+    justify-content: flex-start;
+    min-width: 0;
   }
 
   .tasks-table td::before {

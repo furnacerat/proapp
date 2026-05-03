@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   CalendarCheck,
   Clock3,
+  Edit3,
+  ExternalLink,
   Filter,
   Play,
   Plus,
@@ -29,6 +31,8 @@ interface EnrichedTask extends Task {
   effectiveRole: TaskAssignmentRole;
   isToday: boolean;
   isOverdue: boolean;
+  actionLabel?: string;
+  actionTo?: string;
 }
 
 const taskTypes: { value: TaskType; label: string }[] = [
@@ -63,6 +67,7 @@ const defaultForm = {
 export function Tasks() {
   const { jobs, workers, tasks, estimates, materialOrders, addTask, updateTask, deleteTask } = useApp();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('');
@@ -71,16 +76,28 @@ export function Tasks() {
   const [typeFilter, setTypeFilter] = useState<TaskType | ''>('');
   const [groupMode, setGroupMode] = useState<GroupMode>('none');
   const [showModal, setShowModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openOnly, setOpenOnly] = useState(false);
   const [formData, setFormData] = useState(defaultForm);
 
   const today = todayString();
 
+  const getTaskAction = (task: Task): Pick<EnrichedTask, 'actionLabel' | 'actionTo'> => {
+    if (task.orderId || task.sourceType === 'order') return { actionLabel: 'Open order board', actionTo: '/estimates/orders' };
+    if (task.estimateId || (task.sourceType === 'approved_estimate' && task.sourceId)) return { actionLabel: 'Open estimate', actionTo: `/estimates/${task.estimateId || task.sourceId}` };
+    if (task.invoiceId) return { actionLabel: 'Open invoices', actionTo: '/invoices' };
+    if (task.shoppingListId) return { actionLabel: 'Open shopping list', actionTo: `/shopping-lists${task.jobId ? `?jobId=${encodeURIComponent(task.jobId)}` : ''}` };
+    if (task.jobId) return { actionLabel: 'Open job', actionTo: `/jobs/${task.jobId}` };
+    if (task.customerId) return { actionLabel: 'Open customer', actionTo: '/customers' };
+    return {};
+  };
+
   const enrichedTasks = useMemo<EnrichedTask[]>(() => tasks.map(task => {
     const job = jobs.find(item => item.id === task.jobId);
     const worker = workers.find(item => item.id === task.assignedTo);
     const dueDate = task.dueDate || '';
+    const action = getTaskAction(task);
     return {
       ...task,
       jobName: job?.name || 'Company',
@@ -89,6 +106,7 @@ export function Tasks() {
       effectiveRole: task.assignmentRole || (task.assignedTo ? 'worker' : 'office'),
       isToday: dueDate === today,
       isOverdue: task.status !== 'done' && !!dueDate && dueDate < today,
+      ...action,
     };
   }), [tasks, jobs, workers, today]);
 
@@ -149,12 +167,39 @@ export function Tasks() {
     ...(highNotStarted.length > 0 ? [{ title: 'High priority not started', detail: `${highNotStarted.length} high priority task${highNotStarted.length === 1 ? '' : 's'} still open.` }] : []),
   ];
 
+  const openTaskModal = (task?: Task) => {
+    if (task) {
+      setEditingTask(task);
+      setFormData({
+        title: task.title || '',
+        description: task.description || '',
+        dueDate: task.dueDate || today,
+        jobId: task.jobId || '',
+        assignedTo: task.assignedTo || '',
+        assignmentRole: task.assignmentRole || (task.assignedTo ? 'worker' : 'office'),
+        taskType: task.taskType || 'task',
+        priority: task.priority,
+        status: task.status,
+      });
+    } else {
+      setEditingTask(null);
+      setFormData(defaultForm);
+    }
+    setShowModal(true);
+  };
+
+  const closeTaskModal = () => {
+    setShowModal(false);
+    setEditingTask(null);
+    setFormData(defaultForm);
+  };
+
   const handleSave = () => {
     if (!formData.title.trim()) {
       showToast('Title required', 'error');
       return;
     }
-    addTask({
+    const updates = {
       title: formData.title,
       description: formData.description,
       dueDate: formData.dueDate || undefined,
@@ -164,11 +209,18 @@ export function Tasks() {
       taskType: formData.taskType,
       priority: formData.priority,
       status: formData.status,
-      sourceType: 'manual',
-    });
-    showToast('Task added');
-    setShowModal(false);
-    setFormData(defaultForm);
+    };
+    if (editingTask) {
+      updateTask(editingTask.id, updates);
+      showToast('Task updated');
+    } else {
+      addTask({
+        ...updates,
+        sourceType: 'manual',
+      });
+      showToast('Task added');
+    }
+    closeTaskModal();
   };
 
   const quickAdd = () => {
@@ -187,6 +239,18 @@ export function Tasks() {
     }
     updateTask(task.id, { status: 'in_progress' });
     showToast(`Started: ${task.title}`);
+    if (task.actionTo) navigate(task.actionTo);
+  };
+
+  const startTask = (task: EnrichedTask) => {
+    updateTask(task.id, { status: 'in_progress' });
+    showToast(`Started: ${task.title}`);
+    if (task.actionTo) navigate(task.actionTo);
+  };
+
+  const completeTask = (task: EnrichedTask) => {
+    updateTask(task.id, { status: 'done' });
+    showToast(`Completed: ${task.title}`);
   };
 
   const generateSmartTasks = () => {
@@ -264,7 +328,7 @@ export function Tasks() {
         </div>
         <div className="tasks-header-actions">
           <button className="btn btn-secondary" onClick={generateSmartTasks}><Sparkles size={18} /> Generate Smart Tasks</button>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={18} /> Add Task</button>
+          <button className="btn btn-primary" onClick={() => openTaskModal()}><Plus size={18} /> Add Task</button>
         </div>
       </div>
 
@@ -351,7 +415,7 @@ export function Tasks() {
 
       <section className="tasks-table-card">
         {groupMode === 'none' ? (
-          <TaskTable tasks={filteredTasks} workers={workers} onUpdate={updateTask} onDelete={setDeleteId} />
+          <TaskTable tasks={filteredTasks} workers={workers} onUpdate={updateTask} onDelete={setDeleteId} onEdit={openTaskModal} onStart={startTask} onComplete={completeTask} />
         ) : (
           <div className="tasks-group-list">
             {groupedTasks.length === 0 ? <div className="tasks-empty">No tasks</div> : groupedTasks.map(group => (
@@ -360,14 +424,14 @@ export function Tasks() {
                   <h3>{group.label.replace('_', ' ')}</h3>
                   <span>{group.tasks.length} tasks • {group.tasks.filter(task => task.status !== 'done').length} open</span>
                 </div>
-                <TaskTable tasks={group.tasks} workers={workers} onUpdate={updateTask} onDelete={setDeleteId} compact />
+                <TaskTable tasks={group.tasks} workers={workers} onUpdate={updateTask} onDelete={setDeleteId} onEdit={openTaskModal} onStart={startTask} onComplete={completeTask} compact />
               </div>
             ))}
           </div>
         )}
       </section>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add Task" size="lg">
+      <Modal isOpen={showModal} onClose={closeTaskModal} title={editingTask ? 'Edit Task' : 'Add Task'} size="lg">
         <div className="form-group">
           <label className="form-label">Title *</label>
           <input className="form-input" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Task title" />
@@ -427,8 +491,8 @@ export function Tasks() {
           </div>
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}>
-          <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add Task</button>
+          <button className="btn btn-secondary" onClick={closeTaskModal}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>{editingTask ? 'Save Task' : 'Add Task'}</button>
         </div>
       </Modal>
 
@@ -453,12 +517,18 @@ function TaskTable({
   workers,
   onUpdate,
   onDelete,
+  onEdit,
+  onStart,
+  onComplete,
   compact,
 }: {
   tasks: EnrichedTask[];
   workers: { id: string; name: string }[];
   onUpdate: (id: string, updates: Partial<Task>) => void;
   onDelete: (id: string) => void;
+  onEdit: (task: Task) => void;
+  onStart: (task: EnrichedTask) => void;
+  onComplete: (task: EnrichedTask) => void;
   compact?: boolean;
 }) {
   if (tasks.length === 0) return <div className="tasks-empty">No tasks</div>;
@@ -478,7 +548,7 @@ function TaskTable({
             <th>Due</th>
             <th>Priority</th>
             <th>Status</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -524,9 +594,39 @@ function TaskTable({
                 </div>
               </td>
               <td data-label="Actions">
-                <button className="btn btn-sm btn-danger btn-icon" onClick={() => onDelete(task.id)}>
-                  <Trash2 size={14} />
-                </button>
+                <div className="tasks-action-cell">
+                  {task.actionTo ? (
+                    <Link className="btn btn-sm btn-primary" to={task.actionTo}>
+                      <ExternalLink size={14} /> {task.actionLabel}
+                    </Link>
+                  ) : (
+                    <button className="btn btn-sm btn-primary" onClick={() => onEdit(task)}>
+                      <ExternalLink size={14} /> Open task
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-secondary" onClick={() => onEdit(task)}>
+                    <Edit3 size={14} /> Edit
+                  </button>
+                  {task.status === 'done' ? (
+                    <button className="btn btn-sm btn-secondary" onClick={() => onUpdate(task.id, { status: 'open' })}>
+                      Reopen
+                    </button>
+                  ) : (
+                    <>
+                      {task.status !== 'in_progress' && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => onStart(task)}>
+                          <Play size={14} /> Start
+                        </button>
+                      )}
+                      <button className="btn btn-sm btn-secondary" onClick={() => onComplete(task)}>
+                        Done
+                      </button>
+                    </>
+                  )}
+                  <button className="btn btn-sm btn-danger btn-icon" onClick={() => onDelete(task.id)} title="Delete task">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
