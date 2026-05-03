@@ -366,6 +366,7 @@ export function Tasks() {
             }}>
               <AlertTriangle size={18} />
               <span><strong>{alert.title}</strong>{alert.detail}</span>
+              <em>Review</em>
             </button>
           ))}
         </section>
@@ -522,6 +523,7 @@ function FocusMetric({ icon: Icon, label, value, warning, danger, onClick }: { i
       <Icon size={18} />
       <span>{label}</span>
       <strong>{value}</strong>
+      <em>Review</em>
     </button>
   );
 }
