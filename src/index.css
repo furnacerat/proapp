@@ -19,8 +19,8 @@
   --surface-warm: #FFF7ED;
 
   --text-primary: #172033;
-  --text-secondary: #64748B;
-  --text-muted: #94A3B8;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
 
   --border: #DDE6F0;
   --border-light: #F1F5F9;
@@ -2568,7 +2568,7 @@ body {
   --bg: #f5f7fb;
   --surface: #ffffff;
   --text: #0b1020;
-  --muted: #6b7280;
+  --muted: #64748B;
   --primary: #0b5bd3;
   --secondary: #4f46e5;
   --radius: 12px;
@@ -3797,6 +3797,12 @@ body {
   border-color: rgba(96, 165, 250, 0.7);
   background: linear-gradient(145deg, rgba(20, 47, 78, 0.96), rgba(11, 28, 47, 0.9));
   box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.14), 0 16px 36px rgba(37, 99, 235, 0.2);
+}
+
+.customer-card:focus-visible {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.8);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.38), 0 16px 36px rgba(37, 99, 235, 0.2);
 }
 
 .customer-card-top,
@@ -9231,6 +9237,12 @@ body {
   box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.14), 0 16px 36px rgba(37, 99, 235, 0.2);
 }
 
+.order-card:focus-visible {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.8);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.38), 0 16px 36px rgba(37, 99, 235, 0.2);
+}
+
 .order-card-top,
 .order-detail-hero {
   display: flex;
@@ -14427,6 +14439,21 @@ body {
   color: #334155;
   background: #f1f5f9;
   border-color: #dce5ef;
+}
+
+.portal-payment-note {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .portal-primary-btn:disabled,

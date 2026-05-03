@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { dataService } from '../services/dataService';
+import { useToast } from '../components/common/Toast';
 
 type SettingsTab = 'branding' | 'smart' | 'markups' | 'email' | 'smtp' | 'database' | 'import';
 
@@ -15,6 +16,7 @@ export function Settings() {
     importLocalDataToSupabase,
     data,
   } = useApp();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<SettingsTab>('branding');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [databaseMessage, setDatabaseMessage] = useState('');
@@ -43,9 +45,9 @@ export function Settings() {
       try {
         const data = JSON.parse(String(fr.result));
         updateBranding(data as any);
-        alert('Settings imported');
+        showToast('Settings imported');
       } catch {
-        alert('Invalid settings JSON');
+        showToast('Invalid settings JSON', 'error');
       }
     };
     fr.readAsText(file);

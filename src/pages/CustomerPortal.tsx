@@ -271,7 +271,7 @@ export function CustomerPortal() {
                   <strong>{formatCurrency(balance)}</strong>
                   <span>{balance > 0 ? 'Balance due' : 'Paid'}</span>
                 </div>
-                <button className="portal-secondary-btn" disabled><CreditCard size={16} /> Pay Online Soon</button>
+                <span className="portal-payment-note"><CreditCard size={16} /> Online payment not set up</span>
               </div>
             );
           })}

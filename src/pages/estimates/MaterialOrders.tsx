@@ -93,6 +93,7 @@ export function MaterialOrders() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showEstimateOrder, setShowEstimateOrder] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [manualForm, setManualForm] = useState<ManualOrderForm>(emptyManualForm);
   const [estimateId, setEstimateId] = useState('');
   const [selectedEstimateItems, setSelectedEstimateItems] = useState<string[]>([]);
@@ -228,7 +229,35 @@ export function MaterialOrders() {
     showToast('Material order created');
   };
 
-  const handleCreateManualOrder = () => {
+  const resetManualOrderModal = () => {
+    setManualForm(emptyManualForm);
+    setEditingOrderId(null);
+    setShowNewOrder(false);
+  };
+
+  const openNewManualOrder = () => {
+    setManualForm(emptyManualForm);
+    setEditingOrderId(null);
+    setShowNewOrder(true);
+  };
+
+  const openEditOrder = (order: MaterialOrder) => {
+    const firstItem = order.items[0];
+    setManualForm({
+      supplierId: order.supplierId || '',
+      jobId: order.jobId || '',
+      expectedDate: order.expectedDate || '',
+      notes: order.notes || '',
+      itemName: firstItem?.name || '',
+      quantity: String(firstItem?.quantity ?? 1),
+      unit: firstItem?.unit || 'ea',
+      unitPrice: String(firstItem?.unitPrice ?? 0),
+    });
+    setEditingOrderId(order.id);
+    setShowNewOrder(true);
+  };
+
+  const handleSaveManualOrder = () => {
     if (!manualForm.itemName.trim()) {
       showToast('Add at least one item', 'error');
       return;
@@ -252,6 +281,27 @@ export function MaterialOrders() {
       costTreatment: 'contractor_cost',
     };
 
+    if (editingOrderId) {
+      const order = materialOrders.find(existing => existing.id === editingOrderId);
+      const items = order?.items.length
+        ? order.items.map((existing, index) => index === 0 ? { ...existing, ...item, id: existing.id } : existing)
+        : [item];
+      const subtotal = items.reduce((sum, orderItem) => sum + orderItem.lineTotal, 0);
+      updateMaterialOrder(editingOrderId, {
+        supplierId: supplier?.id,
+        supplierName: supplier?.name,
+        jobId: manualForm.jobId || undefined,
+        items,
+        subtotal,
+        total: subtotal,
+        expectedDate: manualForm.expectedDate || undefined,
+        notes: manualForm.notes,
+      });
+      showToast('Order updated');
+      resetManualOrderModal();
+      return;
+    }
+
     createOrder({
       poNumber: `PO-${new Date().getFullYear()}-${String(materialOrders.length + 1).padStart(3, '0')}`,
       supplierId: supplier?.id,
@@ -264,8 +314,7 @@ export function MaterialOrders() {
       expectedDate: manualForm.expectedDate || undefined,
       notes: manualForm.notes,
     });
-    setManualForm(emptyManualForm);
-    setShowNewOrder(false);
+    resetManualOrderModal();
   };
 
   const handleCreateFromEstimate = () => {
@@ -368,7 +417,7 @@ export function MaterialOrders() {
             </div>
           </div>
           <div className="orders-header-actions">
-            <button className="orders-primary-btn" onClick={() => setShowNewOrder(true)}>
+            <button className="orders-primary-btn" onClick={openNewManualOrder}>
               <Plus size={18} /> New Order
             </button>
             <button className="orders-secondary-btn" onClick={() => setShowEstimateOrder(true)}>
@@ -455,7 +504,7 @@ export function MaterialOrders() {
             <h2>Create your first material order</h2>
             <p>Generate orders directly from your estimates</p>
             <div className="orders-empty-actions">
-              <button className="orders-primary-btn" onClick={() => setShowNewOrder(true)}><Plus size={18} /> New Order</button>
+              <button className="orders-primary-btn" onClick={openNewManualOrder}><Plus size={18} /> New Order</button>
               <button className="orders-secondary-btn" onClick={() => setShowEstimateOrder(true)}><FileText size={18} /> Create From Estimate</button>
             </div>
           </section>
@@ -478,10 +527,19 @@ export function MaterialOrders() {
                   const job = order.jobId ? jobs.find(j => j.id === order.jobId) : null;
                   const config = STATUS_CONFIG[order.status];
                   return (
-                    <button
+                    <div
                       key={order.id}
+                      role="button"
+                      tabIndex={0}
                       className={`order-card ${selectedOrder?.id === order.id ? 'selected' : ''}`}
                       onClick={() => setSelectedId(order.id)}
+                      onKeyDown={event => {
+                        if (event.currentTarget !== event.target) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedId(order.id);
+                        }
+                      }}
                     >
                       <div className="order-card-top">
                         <div>
@@ -496,7 +554,7 @@ export function MaterialOrders() {
                         <span><Truck size={14} /> {order.expectedDate ? formatDate(order.expectedDate) : 'No delivery date'}</span>
                         <span><ClipboardList size={14} /> {job?.name || 'No job linked'}</span>
                       </div>
-                      <div className="order-card-actions" onClick={event => event.stopPropagation()}>
+                      <div className="order-card-actions" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
                         <button className="orders-secondary-btn small" onClick={() => setSelectedId(order.id)}>View</button>
                         {order.status === 'draft' && (
                           <button className="orders-secondary-btn small" onClick={() => handleStatusChange(order.id, 'sent')}>Mark Sent</button>
@@ -506,7 +564,7 @@ export function MaterialOrders() {
                         )}
                         <button className="orders-secondary-btn small danger" onClick={() => setDeleteConfirm(order.id)}>Delete</button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -534,7 +592,7 @@ export function MaterialOrders() {
                     {selectedOrder.status !== 'received' && selectedOrder.status !== 'cancelled' && (
                       <button className="orders-primary-btn" onClick={() => handleStatusChange(selectedOrder.id, 'received')}><CheckCircle size={16} /> Mark as Received</button>
                     )}
-                    <button className="orders-secondary-btn" onClick={() => showToast('Edit order details from the order form coming soon', 'info')}><Edit3 size={16} /> Edit</button>
+                    <button className="orders-secondary-btn" onClick={() => openEditOrder(selectedOrder)}><Edit3 size={16} /> Edit</button>
                     {selectedOrder.status !== 'cancelled' && (
                       <button className="orders-secondary-btn danger" onClick={() => handleStatusChange(selectedOrder.id, 'cancelled')}><XCircle size={16} /> Cancel</button>
                     )}
@@ -598,7 +656,7 @@ export function MaterialOrders() {
         )}
       </div>
 
-      <Modal isOpen={showNewOrder} onClose={() => setShowNewOrder(false)} title="New Material Order" size="lg">
+      <Modal isOpen={showNewOrder} onClose={resetManualOrderModal} title={editingOrderId ? 'Edit Material Order' : 'New Material Order'} size="lg">
         <div className="form-row form-row-2">
           <div className="form-group">
             <label className="form-label">Supplier</label>
@@ -644,8 +702,8 @@ export function MaterialOrders() {
           <textarea className="form-textarea" value={manualForm.notes} onChange={event => setManualForm({ ...manualForm, notes: event.target.value })} placeholder="Delivery instructions, vendor notes, jobsite contact..." />
         </div>
         <div className="modal-footer" style={{ padding: 0, borderTop: 'none', marginTop: '16px' }}>
-          <button className="orders-secondary-btn" onClick={() => setShowNewOrder(false)}>Cancel</button>
-          <button className="orders-primary-btn" onClick={handleCreateManualOrder}>Create Order</button>
+          <button className="orders-secondary-btn" onClick={resetManualOrderModal}>Cancel</button>
+          <button className="orders-primary-btn" onClick={handleSaveManualOrder}>{editingOrderId ? 'Save Order' : 'Create Order'}</button>
         </div>
       </Modal>
 

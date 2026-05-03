@@ -502,7 +502,7 @@ export function Customers() {
             <Search size={18} />
             <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search customers..." />
           </div>
-          <button className="btn btn-secondary"><Filter size={18} /> Filter</button>
+          <button className="btn btn-secondary" onClick={() => { setSearch(''); setSegment('all'); }} disabled={!search && segment === 'all'}><Filter size={18} /> Clear Filters</button>
           <button className="btn btn-primary" onClick={handleNewCustomer}><Plus size={18} /> Add Customer</button>
         </div>
       </div>
@@ -547,12 +547,22 @@ export function Customers() {
                   <p>Try a different search or segment.</p>
                 </div>
               ) : filteredSummaries.map(summary => (
-                <button
+                <div
                   key={summary.customer.id}
+                  role="button"
+                  tabIndex={0}
                   className={`customer-card ${selectedCustomer?.id === summary.customer.id ? 'selected' : ''}`}
                   onClick={() => {
                     setSelectedId(summary.customer.id);
                     setActiveTab('overview');
+                  }}
+                  onKeyDown={event => {
+                    if (event.currentTarget !== event.target) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedId(summary.customer.id);
+                      setActiveTab('overview');
+                    }
                   }}
                 >
                   <div className="customer-card-top">
@@ -573,14 +583,14 @@ export function Customers() {
                     <span><strong>{summary.jobs.length}</strong> jobs</span>
                     <span><strong>{formatCurrency(summary.balanceDue)}</strong> due</span>
                   </div>
-                  <div className="customer-card-actions" onClick={event => event.stopPropagation()}>
+                  <div className="customer-card-actions" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
                     <a className="customer-icon-btn" href={summary.customer.phone ? `tel:${summary.customer.phone}` : undefined} title="Call"><Phone size={16} /></a>
                     <a className="customer-icon-btn" href={summary.customer.email ? `mailto:${summary.customer.email}` : undefined} title="Email"><Mail size={16} /></a>
                     <Link className="customer-icon-btn" to="/estimates/new" title="New Estimate"><FilePlus2 size={16} /></Link>
                     <button className="customer-icon-btn" onClick={() => handleEdit(summary.customer)} title="Edit"><Edit size={16} /></button>
                     <button className="customer-icon-btn danger" onClick={() => setDeleteId(summary.customer.id)} title="Delete"><Trash2 size={16} /></button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </section>
