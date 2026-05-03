@@ -3,6 +3,19 @@
 
 create extension if not exists pgcrypto;
 
+do $$
+begin
+  if to_regclass('public.change_orders') is not null then
+    execute 'drop policy if exists "Users manage own rows" on public.change_orders';
+  end if;
+  if to_regclass('public.portal_tokens') is not null then
+    execute 'drop policy if exists "Users manage own rows" on public.portal_tokens';
+  end if;
+  if to_regclass('public.signature_requests') is not null then
+    execute 'drop policy if exists "Users manage own rows" on public.signature_requests';
+  end if;
+end $$;
+
 create table if not exists public.portal_tokens (like public.customers including all);
 create table if not exists public.change_orders (like public.customers including all);
 create table if not exists public.signature_requests (like public.customers including all);
