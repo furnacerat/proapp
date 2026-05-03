@@ -6998,6 +6998,9 @@ body {
 }
 
 .estimates-list-card {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
   padding: 16px;
   border-radius: 28px;
 }
@@ -7040,6 +7043,10 @@ body {
   border-radius: 22px;
   background: linear-gradient(145deg, rgba(15, 34, 56, 0.92), rgba(8, 21, 34, 0.78));
   transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.estimate-record.menu-open {
+  z-index: 40;
 }
 
 .estimate-record:hover {
@@ -7134,7 +7141,7 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 20;
+  z-index: 60;
   min-width: 180px;
   padding: 8px;
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -7215,6 +7222,8 @@ body {
 }
 
 .estimates-recent-strip {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

@@ -322,7 +322,7 @@ export function EstimatesList() {
                   const customer = getEstimateCustomer(estimate.id);
                   const typeLabel = JOB_TYPES.find(t => t.value === estimate.type)?.label || estimate.type || 'Project';
                   return (
-                    <article className="estimate-record" key={estimate.id}>
+                    <article className={`estimate-record ${showActions === estimate.id ? 'menu-open' : ''}`} key={estimate.id}>
                       <div className="estimate-record-main">
                         <div className="estimate-record-icon"><FileText size={19} /></div>
                         <div>
