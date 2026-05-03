@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -23,6 +23,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 
 type GroupMode = 'none' | 'today' | 'job' | 'worker' | 'priority';
+type DueFilter = '' | 'today' | 'overdue';
 
 interface EnrichedTask extends Task {
   jobName: string;
@@ -75,12 +76,14 @@ export function Tasks() {
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<TaskType | ''>('');
+  const [dueFilter, setDueFilter] = useState<DueFilter>('');
   const [groupMode, setGroupMode] = useState<GroupMode>('none');
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openOnly, setOpenOnly] = useState(false);
   const [formData, setFormData] = useState(defaultForm);
+  const taskResultsRef = useRef<HTMLElement | null>(null);
 
   const today = todayString();
 
@@ -90,7 +93,10 @@ export function Tasks() {
     const due = searchParams.get('due');
     if (priority === 'high') setPriorityFilter('high');
     if (status && ['open', 'in_progress', 'blocked', 'done'].includes(status)) setStatusFilter(status);
-    if (due === 'today' || due === 'overdue') setOpenOnly(true);
+    if (due === 'today' || due === 'overdue') {
+      setDueFilter(due);
+      setOpenOnly(true);
+    }
   }, [searchParams]);
 
   const getTaskAction = (task: Task): Pick<EnrichedTask, 'actionLabel' | 'actionTo'> => {
@@ -129,6 +135,8 @@ export function Tasks() {
         if (statusFilter && task.status !== statusFilter) return false;
         if (priorityFilter && task.priority !== priorityFilter) return false;
         if (typeFilter && task.effectiveType !== typeFilter) return false;
+        if (dueFilter === 'today' && !task.isToday) return false;
+        if (dueFilter === 'overdue' && !task.isOverdue) return false;
         if (openOnly && task.status === 'done') return false;
         return true;
       })
@@ -143,7 +151,7 @@ export function Tasks() {
         if (b.dueDate) return 1;
         return a.title.localeCompare(b.title);
       });
-  }, [enrichedTasks, search, jobFilter, statusFilter, priorityFilter, typeFilter, openOnly]);
+  }, [enrichedTasks, search, jobFilter, statusFilter, priorityFilter, typeFilter, dueFilter, openOnly]);
 
   const groupedTasks = useMemo(() => {
     const groups = new Map<string, { label: string; tasks: EnrichedTask[] }>();
@@ -176,6 +184,21 @@ export function Tasks() {
     ...blockingTasks.slice(0, 2).map(task => ({ title: 'Blocking job progress', detail: `${task.title} is blocking ${task.jobName}.` })),
     ...(highNotStarted.length > 0 ? [{ title: 'High priority not started', detail: `${highNotStarted.length} high priority task${highNotStarted.length === 1 ? '' : 's'} still open.` }] : []),
   ];
+
+  const showTaskResults = () => {
+    window.requestAnimationFrame(() => {
+      taskResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const applyTaskFocusFilter = (filter: { due?: DueFilter; priority?: Priority | ''; status?: TaskStatus | '' }) => {
+    setOpenOnly(true);
+    setDueFilter(filter.due || '');
+    setPriorityFilter(filter.priority || '');
+    setStatusFilter(filter.status || '');
+    setGroupMode('none');
+    showTaskResults();
+  };
 
   const openTaskModal = (task?: Task) => {
     if (task) {
@@ -349,9 +372,9 @@ export function Tasks() {
           <p>{highPriorityTasks.length} high priority • {overdueTasks.length} overdue • {blockingTasks.length} blocking progress</p>
         </div>
         <div className="tasks-focus-stats">
-          <FocusMetric icon={CalendarCheck} label="Due Today" value={todayTasks.length} onClick={() => { setOpenOnly(true); setStatusFilter(''); setPriorityFilter(''); }} />
-          <FocusMetric icon={AlertTriangle} label="High Priority" value={highPriorityTasks.length} warning onClick={() => { setOpenOnly(true); setPriorityFilter('high'); setStatusFilter(''); }} />
-          <FocusMetric icon={Clock3} label="Overdue" value={overdueTasks.length} danger onClick={() => { setOpenOnly(true); setStatusFilter(''); setPriorityFilter(''); }} />
+          <FocusMetric icon={CalendarCheck} label="Due Today" value={todayTasks.length} onClick={() => applyTaskFocusFilter({ due: 'today' })} />
+          <FocusMetric icon={AlertTriangle} label="High Priority" value={highPriorityTasks.length} warning onClick={() => applyTaskFocusFilter({ priority: 'high' })} />
+          <FocusMetric icon={Clock3} label="Overdue" value={overdueTasks.length} danger onClick={() => applyTaskFocusFilter({ due: 'overdue' })} />
         </div>
         <button className="tasks-start-btn" onClick={startWork}><Play size={18} /> Start Work</button>
       </section>
@@ -360,9 +383,12 @@ export function Tasks() {
         <section className="tasks-alert-grid">
           {alerts.map(alert => (
             <button key={`${alert.title}-${alert.detail}`} className="tasks-alert-card" onClick={() => {
-              setOpenOnly(true);
-              if (alert.title.toLowerCase().includes('high')) setPriorityFilter('high');
-              if (alert.title.toLowerCase().includes('blocking')) setStatusFilter('blocked');
+              const title = alert.title.toLowerCase();
+              applyTaskFocusFilter({
+                due: title.includes('overdue') ? 'overdue' : '',
+                priority: title.includes('high') ? 'high' : '',
+                status: title.includes('blocking') ? 'blocked' : '',
+              });
             }}>
               <AlertTriangle size={18} />
               <span><strong>{alert.title}</strong>{alert.detail}</span>
@@ -400,11 +426,11 @@ export function Tasks() {
           <option value="">All Jobs</option>
           {jobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}
         </select>
-        <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+        <select value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setDueFilter(''); }}>
           <option value="">All Status</option>
           {TASK_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
         </select>
-        <select value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)}>
+        <select value={priorityFilter} onChange={event => { setPriorityFilter(event.target.value); setDueFilter(''); }}>
           <option value="">All Priority</option>
           {PRIORITIES.map(priority => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
         </select>
@@ -428,7 +454,7 @@ export function Tasks() {
         ))}
       </div>
 
-      <section className="tasks-table-card">
+      <section className="tasks-table-card" ref={taskResultsRef}>
         {groupMode === 'none' ? (
           <TaskTable tasks={filteredTasks} workers={workers} onUpdate={updateTask} onDelete={setDeleteId} onEdit={openTaskModal} onStart={startTask} onComplete={completeTask} />
         ) : (
