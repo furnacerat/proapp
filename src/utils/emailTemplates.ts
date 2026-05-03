@@ -39,7 +39,9 @@ export function renderEmailHTML(type: EmailTemplateType, branding: BrandingSetti
     bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Please review your estimate: <strong>${data.estimate.name}</strong></p>`);
     bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Total: <strong>${data.totals?.total ?? ''}</strong></p>`);
   } else if (type === 'invoice' && data?.invoice) {
-    bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Invoice amount: <strong>${data.invoice.amount}</strong></p>`);
+    bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Please review invoice <strong>${data.invoice.invoiceNumber || ''}</strong>.</p>`);
+    bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Invoice amount: <strong>${data.invoice.amount}</strong>${data?.totals?.balance ? ` | Balance due: <strong>${data.totals.balance}</strong>` : ''}</p>`);
+    if (data.invoice.dueDate) bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Due date: <strong>${data.invoice.dueDate}</strong></p>`);
   } else if (type === 'changeorder' && data?.changeOrder) {
     bodyParts.push(`<p style="font-family:${branding.fontFamily || 'Arial'}, sans-serif; font-size:14px;">Change Order: ${data.changeOrder.description}</p>`);
   } else {
@@ -62,7 +64,7 @@ export function renderEmailAll(type: EmailTemplateType, branding: BrandingSettin
     text = `Hello ${name},\n\nPlease review the estimate: ${estName}. Total: ${total}.\n\nThank you, ${branding.brandName}`;
   } else if (type === 'invoice') {
     const inv = data?.invoice ?? {};
-    text = `Hello ${name},\n\nPlease review Invoice ${inv.invoiceNumber ?? ''}: ${inv.amount ?? ''}.\n\nThank you, ${branding.brandName}`;
+    text = `Hello ${name},\n\nPlease review Invoice ${inv.invoiceNumber ?? ''}. Amount: ${inv.amount ?? ''}. Balance due: ${data?.totals?.balance ?? inv.balance ?? ''}.\n\nThank you, ${branding.brandName}`;
   } else if (type === 'changeorder') {
     const c = data?.changeOrder ?? {};
     text = `Hello ${name},\n\nChange Order: ${c.description ?? ''}.\n\nThank you, ${branding.brandName}`;

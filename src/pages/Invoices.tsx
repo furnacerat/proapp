@@ -10,6 +10,7 @@ import {
   DollarSign,
   FileText,
   Mail,
+  MessageSquare,
   Plus,
   Printer,
   ReceiptText,
@@ -30,6 +31,7 @@ import { buildClientInvoiceData } from '../utils/buildPrintData';
 import { PrintTemplateModal } from '../components/print/PrintTemplateModal';
 import type { PrintInvoiceData } from '../data/printTypes';
 import { DEFAULT_PRINT_SETTINGS } from '../data/printTypes';
+import { renderEmailAll } from '../utils/emailTemplates';
 
 type GroupMode = 'none' | 'job' | 'customer' | 'status';
 
@@ -43,12 +45,14 @@ interface InvoiceSummary extends Invoice {
   ageBucket: '0-7' | '8-30' | '30+';
   daysPastDue: number;
   expectedPaid: number;
+  customerEmail?: string;
+  customerPhone?: string;
 }
 
 const todayString = () => new Date().toISOString().split('T')[0];
 
 export function Invoices() {
-  const { jobs, invoices, payments, addInvoice, addPayment, deleteInvoice, getJobProgress, branding } = useApp();
+  const { customers, jobs, invoices, payments, addInvoice, updateInvoice, addPayment, deleteInvoice, getJobProgress, branding, sendEmail } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -59,6 +63,9 @@ export function Invoices() {
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [printData, setPrintData] = useState<PrintInvoiceData | null>(null);
+  const [sendInvoiceId, setSendInvoiceId] = useState<string | null>(null);
+  const [sendMethod, setSendMethod] = useState<'email' | 'sms'>('email');
+  const [isSendingInvoice, setIsSendingInvoice] = useState(false);
 
   const [formData, setFormData] = useState({
     jobId: '', invoiceNumber: '', amount: '', type: 'deposit', dueDate: '', status: 'draft', notes: ''
@@ -74,6 +81,7 @@ export function Invoices() {
     now.setHours(0, 0, 0, 0);
     return invoices.map(invoice => {
       const job = jobs.find(item => item.id === invoice.jobId);
+      const customer = customers.find(item => item.id === invoice.customerId || item.id === job?.customerId);
       const paid = payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0);
       const balance = Math.max(0, invoice.amount - paid);
       const dueDate = invoice.dueDate ? parseDateString(invoice.dueDate) : now;
@@ -94,9 +102,11 @@ export function Invoices() {
         ageBucket,
         daysPastDue,
         expectedPaid: job ? job.contractAmount * (progress / 100) : 0,
+        customerEmail: customer?.email || job?.customerEmail,
+        customerPhone: customer?.phone || job?.customerPhone,
       };
     }).sort((a, b) => parseDateString(a.dueDate || a.createdAt).getTime() - parseDateString(b.dueDate || b.createdAt).getTime());
-  }, [invoices, jobs, payments, getJobProgress]);
+  }, [customers, invoices, jobs, payments, getJobProgress]);
 
   const filteredInvoices = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -217,6 +227,69 @@ export function Invoices() {
     setPrintData(data);
   };
 
+  const handleOpenSendInvoice = (invoice: InvoiceSummary) => {
+    setSendInvoiceId(invoice.id);
+    setSendMethod(invoice.customerEmail ? 'email' : 'sms');
+  };
+
+  const selectedSendInvoice = invoiceSummaries.find(invoice => invoice.id === sendInvoiceId);
+
+  const invoiceSmsMessage = (invoice: InvoiceSummary) => {
+    const dueText = invoice.dueDate ? ` Due ${formatDate(invoice.dueDate)}.` : '';
+    return `${branding.brandName || 'Allens'}: Invoice ${invoice.invoiceNumber} has a balance of ${formatCurrency(invoice.balance)}.${dueText}`;
+  };
+
+  const handleSendInvoice = async () => {
+    if (!selectedSendInvoice) return;
+    if (sendMethod === 'email' && !selectedSendInvoice.customerEmail) {
+      showToast('Add a customer email before sending', 'warning');
+      return;
+    }
+    if (sendMethod === 'sms' && !selectedSendInvoice.customerPhone) {
+      showToast('Add a customer phone number before texting', 'warning');
+      return;
+    }
+
+    const job = jobs.find(item => item.id === selectedSendInvoice.jobId);
+    const customer = customers.find(item => item.id === selectedSendInvoice.customerId || item.id === job?.customerId);
+
+    if (sendMethod === 'sms') {
+      const phone = String(selectedSendInvoice.customerPhone || '').replace(/[^\d+]/g, '');
+      const bodySeparator = /iPad|iPhone|iPod/i.test(navigator.userAgent) ? '&' : '?';
+      window.location.href = `sms:${phone}${bodySeparator}body=${encodeURIComponent(invoiceSmsMessage(selectedSendInvoice))}`;
+      if (selectedSendInvoice.status === 'draft') updateInvoice(selectedSendInvoice.id, { status: 'sent' });
+      showToast('Text app opened');
+      setSendInvoiceId(null);
+      return;
+    }
+
+    setIsSendingInvoice(true);
+    const email = renderEmailAll('invoice', branding, {
+      invoice: {
+        ...selectedSendInvoice,
+        amount: formatCurrency(selectedSendInvoice.amount),
+        balance: formatCurrency(selectedSendInvoice.balance),
+      },
+      customer: customer || { name: selectedSendInvoice.customer, email: selectedSendInvoice.customerEmail },
+      totals: { balance: formatCurrency(selectedSendInvoice.balance), paid: formatCurrency(selectedSendInvoice.paid) },
+    });
+    const delivered = await sendEmail({
+      to: selectedSendInvoice.customerEmail || '',
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+    });
+    setIsSendingInvoice(false);
+
+    if (delivered) {
+      if (selectedSendInvoice.status === 'draft') updateInvoice(selectedSendInvoice.id, { status: 'sent' });
+      showToast('Invoice email sent');
+      setSendInvoiceId(null);
+    } else {
+      showToast('Email draft opened');
+    }
+  };
+
   const duplicateInvoice = (invoice: InvoiceSummary) => {
     addInvoice({
       jobId: invoice.jobId,
@@ -231,7 +304,16 @@ export function Invoices() {
   };
 
   const sendReminder = (invoice?: InvoiceSummary) => {
-    showToast(invoice ? `Reminder queued for ${invoice.invoiceNumber}` : `Reminders queued for ${overdueInvoices.length} overdue invoices`);
+    if (invoice) {
+      handleOpenSendInvoice(invoice);
+      return;
+    }
+    const firstOverdue = overdueInvoices[0];
+    if (!firstOverdue) {
+      showToast('No overdue invoices to send', 'warning');
+      return;
+    }
+    handleOpenSendInvoice(firstOverdue);
   };
 
   return (
@@ -349,6 +431,38 @@ export function Invoices() {
         <div className="form-group"><label className="form-label">Check / Reference #</label><input className="form-input" value={paymentForm.checkNumber} onChange={e => setPaymentForm({...paymentForm, checkNumber: e.target.value})} /></div>
         <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} /></div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none', marginTop: '16px'}}><button className="btn btn-secondary" onClick={() => setPaymentModalId(null)}>Cancel</button><button className="btn btn-primary" onClick={handleAddPayment}>Record Payment</button></div>
+      </Modal>
+
+      <Modal isOpen={!!sendInvoiceId} onClose={() => setSendInvoiceId(null)} title="Send Invoice" size="sm">
+        {selectedSendInvoice && (
+          <>
+            <div className="space-y-4">
+              <div className="send-method-grid">
+                <button className={`send-method-card ${sendMethod === 'email' ? 'active' : ''}`} onClick={() => setSendMethod('email')}>
+                  <Mail size={18} />
+                  <span>Email</span>
+                  <small>{selectedSendInvoice.customerEmail || 'No email on file'}</small>
+                </button>
+                <button className={`send-method-card ${sendMethod === 'sms' ? 'active' : ''}`} onClick={() => setSendMethod('sms')}>
+                  <MessageSquare size={18} />
+                  <span>Text</span>
+                  <small>{selectedSendInvoice.customerPhone || 'No phone on file'}</small>
+                </button>
+              </div>
+              <div className="send-preview">
+                {sendMethod === 'sms'
+                  ? invoiceSmsMessage(selectedSendInvoice)
+                  : `Invoice ${selectedSendInvoice.invoiceNumber} will be emailed to ${selectedSendInvoice.customerEmail || 'the customer email on file'}. Balance: ${formatCurrency(selectedSendInvoice.balance)}.`}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setSendInvoiceId(null)} disabled={isSendingInvoice}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSendInvoice} disabled={isSendingInvoice}>
+                {isSendingInvoice ? 'Sending...' : sendMethod === 'sms' ? 'Open Text App' : 'Send Email'}
+              </button>
+            </div>
+          </>
+        )}
       </Modal>
 
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Invoice" message="Delete this invoice and all payments?" confirmLabel="Delete" danger />
