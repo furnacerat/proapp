@@ -920,6 +920,7 @@ export interface Alert {
 
 export interface AppData {
   branding?: BrandingSettings;
+  smtpSettings?: SmtpSettings;
   customers: Customer[];
   workers: Worker[];
   laborRates: LaborRate[];

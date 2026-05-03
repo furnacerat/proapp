@@ -51,7 +51,11 @@ export function Settings() {
   };
 
   const exportData = () => {
-    const blob = new Blob([JSON.stringify(brandingDraft, null, 2)], { type: 'application/json' });
+    const settingsExport = {
+      branding: brandingDraft,
+      smtpSettings,
+    };
+    const blob = new Blob([JSON.stringify(settingsExport, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -67,8 +71,11 @@ export function Settings() {
     fr.onload = () => {
       try {
         const data = JSON.parse(String(fr.result));
-        updateBranding(data as any);
-        setBrandingDraft(prev => ({ ...prev, ...data }));
+        const importedBranding = data.branding || data;
+        const importedSmtpSettings = data.smtpSettings;
+        updateBranding(importedBranding as any);
+        if (importedSmtpSettings) updateSmtpSettings(importedSmtpSettings as any);
+        setBrandingDraft(prev => ({ ...prev, ...importedBranding }));
         showToast('Settings imported');
       } catch {
         showToast('Invalid settings JSON', 'error');

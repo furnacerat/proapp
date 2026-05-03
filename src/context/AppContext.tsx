@@ -263,10 +263,22 @@ const DEFAULT_BRANDING: BrandingSettings = {
   smartFeaturesEnabled: true,
 };
 
+const DEFAULT_SMTP_SETTINGS: SmtpSettings = {
+  host: '',
+  port: 587,
+  user: '',
+  password: '',
+  secure: true,
+  fromName: '',
+  fromEmail: '',
+  enabled: false,
+};
+
 const normalizeAppData = (raw: AppData): AppData => {
   const data = {
     ...raw,
     branding: { ...DEFAULT_BRANDING, ...(raw.branding || {}) },
+    smtpSettings: { ...DEFAULT_SMTP_SETTINGS, ...(raw.smtpSettings || {}) },
     photos: raw.photos || [],
     changeOrders: raw.changeOrders || [],
     portalTokens: raw.portalTokens || [],
@@ -449,6 +461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             portalTokens: portalTokens.length ? portalTokens : localFallback?.portalTokens || prev.portalTokens || [],
             signatureRequests: signatureRequests.length ? signatureRequests : localFallback?.signatureRequests || prev.signatureRequests || [],
             branding: localFallback?.branding || prev.branding,
+            smtpSettings: localFallback?.smtpSettings || prev.smtpSettings,
           };
           return normalizeAppData(loadedData);
         });
@@ -537,13 +550,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // SMTP settings (global)
-  const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>({
-    host: '', port: 587, user: '', password: '', secure: true,
-    fromName: '', fromEmail: '', enabled: false
-  });
+  const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>(() => ({
+    ...DEFAULT_SMTP_SETTINGS,
+    ...(data.smtpSettings || {}),
+  }));
+
+  useEffect(() => {
+    setSmtpSettings({ ...DEFAULT_SMTP_SETTINGS, ...(data.smtpSettings || {}) });
+  }, [data.smtpSettings]);
 
   const updateSmtpSettings = (updates: Partial<SmtpSettings>) => {
-    setSmtpSettings(prev => ({ ...prev, ...updates }));
+    setData(prev => {
+      const nextSmtpSettings = { ...DEFAULT_SMTP_SETTINGS, ...(prev.smtpSettings || smtpSettings), ...updates };
+      setSmtpSettings(nextSmtpSettings);
+      return normalizeAppData({ ...prev, smtpSettings: nextSmtpSettings });
+    });
   };
 
   const sendEmail = async (payload: { to: string; subject: string; html?: string; text?: string; }): Promise<boolean> => {
