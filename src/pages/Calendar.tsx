@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ExternalLink,
   Filter,
   GripVertical,
   Plus,
@@ -20,6 +21,10 @@ import {
 type CalendarView = 'month' | 'week' | 'day';
 type PlannerMode = 'calendar' | 'crew';
 type DragPayload = { type: 'job' | 'task'; id: string };
+type SelectedScheduleItem =
+  | { type: 'job'; job: Job; dateKey: string }
+  | { type: 'task'; task: Task }
+  | { type: 'time'; dateKey: string; hours: number };
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TASK_TYPES: { value: 'all' | TaskType; label: string }[] = [
@@ -95,6 +100,7 @@ export function Calendar() {
   const [workerFilter, setWorkerFilter] = useState('all');
   const [taskTypeFilter, setTaskTypeFilter] = useState<'all' | TaskType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus | JobStatus>('all');
+  const [selectedItem, setSelectedItem] = useState<SelectedScheduleItem | null>(null);
   const [quickForm, setQuickForm] = useState({
     mode: 'task' as 'task' | 'job',
     title: '',
@@ -184,6 +190,25 @@ export function Calendar() {
     });
   };
 
+  const showCalendarResults = () => {
+    window.requestAnimationFrame(() => {
+      document.querySelector('.schedule-board')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const showUnassignedTasks = () => {
+    setWorkerFilter('all');
+    setTaskTypeFilter('all');
+    setStatusFilter('open');
+    showCalendarResults();
+  };
+
+  const showMissedDeadlines = () => {
+    setTaskTypeFilter('all');
+    setStatusFilter('open');
+    showCalendarResults();
+  };
+
   const handleDragStart = (payload: DragPayload, event: React.DragEvent) => {
     event.dataTransfer.setData('application/json', JSON.stringify(payload));
     event.dataTransfer.effectAllowed = 'move';
@@ -270,17 +295,18 @@ export function Calendar() {
   const renderTask = (task: Task, compact = false) => {
     const worker = workers.find(item => item.id === task.assignedTo);
     return (
-      <div
+      <button
         key={task.id}
         draggable
         onDragStart={(event) => handleDragStart({ type: 'task', id: task.id }, event)}
+        onClick={() => setSelectedItem({ type: 'task', task })}
         className={`schedule-event ${getTaskClass(task)} ${compact ? 'compact' : ''}`}
-        title="Drag to reschedule"
+        title="Open task details or drag to reschedule"
       >
         <GripVertical size={12} />
         <span>{task.title}</span>
         {!compact && worker && <small>{worker.name}</small>}
-      </div>
+      </button>
     );
   };
 
@@ -288,18 +314,18 @@ export function Calendar() {
     const starts = job.startDate === dayKey;
     const ends = job.dueDate === dayKey;
     return (
-      <Link
+      <button
         key={`${job.id}-${dayKey}`}
-        to={`/jobs/${job.id}`}
         draggable
         onDragStart={(event) => handleDragStart({ type: 'job', id: job.id }, event)}
+        onClick={() => setSelectedItem({ type: 'job', job, dateKey: dayKey })}
         className={`schedule-event job ${job.status === 'completed' || job.status === 'closed' ? 'completed' : ''} ${starts ? 'starts' : ''} ${ends ? 'ends' : ''} ${compact ? 'compact' : ''}`}
-        title="Drag to move job"
+        title="Open job schedule details or drag to move job"
       >
         <GripVertical size={12} />
         <span>{compact ? job.name : `${job.name} (${differenceInDays(job.startDate, job.dueDate) + 1}d)`}</span>
         {!compact && <small>{job.status.replace('_', ' ')}</small>}
-      </Link>
+      </button>
     );
   };
 
@@ -330,7 +356,7 @@ export function Calendar() {
             <div className="schedule-day-events">
               {dayJobs.slice(0, view === 'month' ? 3 : 8).map(job => renderJob(job, dayKey, view === 'month'))}
               {dayTasks.slice(0, view === 'month' ? 3 : 10).map(task => renderTask(task, view === 'month'))}
-              {dayHours > 0 && <div className="schedule-event time"><Clock size={12} /><span>{dayHours.toFixed(1)}h logged</span></div>}
+              {dayHours > 0 && <button className="schedule-event time" onClick={() => setSelectedItem({ type: 'time', dateKey: dayKey, hours: dayHours })}><Clock size={12} /><span>{dayHours.toFixed(1)}h logged</span></button>}
               {(dayJobs.length + dayTasks.length) > (view === 'month' ? 6 : 18) && <div className="schedule-more">+ more scheduled</div>}
             </div>
           </div>
@@ -421,9 +447,9 @@ export function Calendar() {
       </div>
 
       <div className="schedule-alerts">
-        {alerts.overlappingDays.length > 0 && <div><AlertTriangle size={16} /><strong>{alerts.overlappingDays.length}</strong><span>days may be overbooked</span></div>}
-        {alerts.unassignedTasks.length > 0 && <div><AlertTriangle size={16} /><strong>{alerts.unassignedTasks.length}</strong><span>unassigned tasks</span></div>}
-        {alerts.missedDeadlines.length > 0 && <div className="danger"><AlertTriangle size={16} /><strong>{alerts.missedDeadlines.length}</strong><span>missed deadlines</span></div>}
+        {alerts.overlappingDays.length > 0 && <button onClick={() => { setMode('calendar'); showCalendarResults(); }}><AlertTriangle size={16} /><strong>{alerts.overlappingDays.length}</strong><span>days may be overbooked</span><em>Review</em></button>}
+        {alerts.unassignedTasks.length > 0 && <button onClick={showUnassignedTasks}><AlertTriangle size={16} /><strong>{alerts.unassignedTasks.length}</strong><span>unassigned tasks</span><em>Review</em></button>}
+        {alerts.missedDeadlines.length > 0 && <button className="danger" onClick={showMissedDeadlines}><AlertTriangle size={16} /><strong>{alerts.missedDeadlines.length}</strong><span>missed deadlines</span><em>Review</em></button>}
         {alerts.overlappingDays.length + alerts.unassignedTasks.length + alerts.missedDeadlines.length === 0 && <div className="success"><CalendarIcon size={16} /><strong>Clear</strong><span>No scheduling alerts in this view</span></div>}
       </div>
 
@@ -486,6 +512,40 @@ export function Calendar() {
           <button className="btn btn-secondary" onClick={() => setSelectedDate(null)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleQuickSave}>Save to Schedule</button>
         </div>
+      </Modal>
+
+      <Modal isOpen={Boolean(selectedItem)} onClose={() => setSelectedItem(null)} title="Scheduled Item" size="sm">
+        {selectedItem?.type === 'job' && (
+          <div className="schedule-detail-card">
+            <span className="badge badge-blue">Job</span>
+            <h3>{selectedItem.job.name}</h3>
+            <p>{selectedItem.job.customer || 'No customer'} - {selectedItem.job.status.replace('_', ' ')}</p>
+            <div><strong>Scheduled</strong><span>{formatDate(selectedItem.job.startDate)} - {formatDate(selectedItem.job.dueDate)}</span></div>
+            <div><strong>Selected day</strong><span>{formatDate(selectedItem.dateKey)}</span></div>
+            <div><strong>Address</strong><span>{selectedItem.job.address || 'No address'}</span></div>
+            <Link className="btn btn-primary" to={`/jobs/${selectedItem.job.id}`}><ExternalLink size={16} /> Open Job</Link>
+          </div>
+        )}
+        {selectedItem?.type === 'task' && (
+          <div className="schedule-detail-card">
+            <span className={`badge ${selectedItem.task.status === 'done' ? 'badge-green' : selectedItem.task.dueDate && selectedItem.task.dueDate < todayKey ? 'badge-red' : 'badge-yellow'}`}>Task</span>
+            <h3>{selectedItem.task.title}</h3>
+            <p>{selectedItem.task.description || selectedItem.task.taskType?.replace('_', ' ') || 'Scheduled task'}</p>
+            <div><strong>Due</strong><span>{selectedItem.task.dueDate ? formatDate(selectedItem.task.dueDate) : 'No due date'}</span></div>
+            <div><strong>Status</strong><span>{selectedItem.task.status.replace('_', ' ')}</span></div>
+            <div><strong>Priority</strong><span>{selectedItem.task.priority}</span></div>
+            <div><strong>Assigned</strong><span>{workers.find(worker => worker.id === selectedItem.task.assignedTo)?.name || 'Unassigned'}</span></div>
+            {selectedItem.task.jobId && <Link className="btn btn-primary" to={`/jobs/${selectedItem.task.jobId}`}><ExternalLink size={16} /> Open Related Job</Link>}
+          </div>
+        )}
+        {selectedItem?.type === 'time' && (
+          <div className="schedule-detail-card">
+            <span className="badge badge-blue">Time</span>
+            <h3>{selectedItem.hours.toFixed(1)} hours logged</h3>
+            <p>{formatDate(selectedItem.dateKey)}</p>
+            <Link className="btn btn-primary" to="/time-entries"><ExternalLink size={16} /> Open Time Entries</Link>
+          </div>
+        )}
       </Modal>
     </div>
   );

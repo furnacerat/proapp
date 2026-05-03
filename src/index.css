@@ -11914,7 +11914,9 @@ body {
   color: #93c5fd;
 }
 
-.schedule-alerts div {
+.schedule-alerts div,
+.schedule-alerts button {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -11923,9 +11925,21 @@ body {
   border: 1px solid rgba(251, 191, 36, 0.28);
   border-radius: 14px;
   background: rgba(120, 53, 15, 0.18);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 
-.schedule-alerts div.danger {
+.schedule-alerts button:hover,
+.schedule-alerts button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(251, 191, 36, 0.56);
+  background: rgba(120, 53, 15, 0.3);
+}
+
+.schedule-alerts div.danger,
+.schedule-alerts button.danger {
   color: #fecaca;
   border-color: rgba(248, 113, 113, 0.34);
   background: rgba(127, 29, 29, 0.22);
@@ -11935,6 +11949,17 @@ body {
   color: #bbf7d0;
   border-color: rgba(52, 211, 153, 0.26);
   background: rgba(6, 78, 59, 0.2);
+  cursor: default;
+}
+
+.schedule-alerts em {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #fef3c7;
+  background: rgba(251, 191, 36, 0.14);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
 }
 
 .schedule-alerts strong {
@@ -12047,6 +12072,8 @@ body {
 }
 
 .schedule-event {
+  appearance: none;
+  width: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -12058,6 +12085,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   background: linear-gradient(135deg, #facc15, #f59e0b);
+  font: inherit;
+  text-align: left;
   cursor: grab;
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
@@ -12107,7 +12136,7 @@ body {
   color: #e0f2fe;
   background: rgba(14, 165, 233, 0.18);
   border-color: rgba(125, 211, 252, 0.22);
-  cursor: default;
+  cursor: pointer;
 }
 
 .schedule-event.compact {
@@ -12237,6 +12266,40 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px;
   background: rgba(2, 6, 23, 0.08);
+}
+
+.schedule-detail-card {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-detail-card h3 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.schedule-detail-card p {
+  margin: 0;
+  color: #b9d7ff;
+}
+
+.schedule-detail-card div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.schedule-detail-card div strong {
+  color: #f8fafc;
+  font-size: 0.78rem;
+}
+
+.schedule-detail-card div span {
+  color: #b9d7ff;
+  font-size: 0.88rem;
 }
 
 /* Daily Command Center */
