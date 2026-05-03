@@ -47,6 +47,13 @@ interface CustomerSummary {
   status: 'Lead' | 'Active Customer' | 'Past Customer';
 }
 
+interface RecommendedAction {
+  message: string;
+  buttonLabel: string;
+  tab?: DetailTab;
+  to?: string;
+}
+
 const openEstimateStatuses = new Set(['draft', 'in_review', 'sent', 'viewed', 'approved']);
 const activeJobStatuses = new Set(['approved', 'scheduled', 'active', 'awaiting_materials', 'awaiting_payment']);
 
@@ -205,6 +212,7 @@ export function Customers() {
 
   const selectedSummary = summaries.find(summary => summary.customer.id === selectedId) || filteredSummaries[0] || summaries[0];
   const selectedCustomer = selectedSummary?.customer;
+  const selectedRecommendedAction = selectedSummary ? getRecommendedAction(selectedSummary) : null;
   const selectedSignatureRequests = useMemo(() => (
     selectedCustomer
       ? (signatureRequests || []).filter(request => request.customerId === selectedCustomer.id)
@@ -308,6 +316,12 @@ export function Customers() {
       .catch(error => showToast(error instanceof Error ? error.message : 'Note save failed', 'error'));
     setNoteDraft('');
     showToast('Note added');
+  };
+
+  const handleRecommendedAction = () => {
+    if (!selectedRecommendedAction) return;
+    if (selectedRecommendedAction.tab) setActiveTab(selectedRecommendedAction.tab);
+    if (selectedRecommendedAction.to) navigate(selectedRecommendedAction.to);
   };
 
   const handleUpdateNote = (index: number) => {
@@ -654,13 +668,18 @@ export function Customers() {
                     <InfoBlock icon={Activity} label="Recent Activity" value={getRecentActivity(selectedSummary)} wide />
                     <InfoBlock icon={ClipboardList} label="Last Estimate" value={selectedSummary.estimates[0] ? `${selectedSummary.estimates[0].name} - ${formatCurrency(selectedSummary.estimates[0].total)}` : 'No estimates yet'} />
                     <InfoBlock icon={BriefcaseBusiness} label="Last Job" value={selectedSummary.jobs[0] ? selectedSummary.jobs[0].name : 'No jobs yet'} />
-                    <div className="customer-recommendation">
-                      <Sparkles size={18} />
-                      <div>
-                        <span>Next recommended action</span>
-                        <strong>{getRecommendedAction(selectedSummary)}</strong>
+                    {selectedRecommendedAction && (
+                      <div className="customer-recommendation">
+                        <Sparkles size={18} />
+                        <div>
+                          <span>Next recommended action</span>
+                          <strong>{selectedRecommendedAction.message}</strong>
+                        </div>
+                        <button className="btn btn-sm btn-primary" onClick={handleRecommendedAction}>
+                          {selectedRecommendedAction.buttonLabel}
+                        </button>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
@@ -922,11 +941,39 @@ function getRecentActivity(summary: CustomerSummary) {
   return dates[0] ? `${dates[0].label} on ${formatDate(dates[0].date)}` : 'No recent activity yet';
 }
 
-function getRecommendedAction(summary: CustomerSummary) {
-  if (summary.balanceDue > 0) return 'Follow up on the outstanding invoice balance.';
-  if (summary.openEstimates.length > 0) return 'Review open estimates and push the next decision.';
-  if (summary.activeJobs.length > 0) return 'Check job progress and confirm the next milestone.';
-  return 'Create a new estimate or log the next customer touchpoint.';
+function getRecommendedAction(summary: CustomerSummary): RecommendedAction {
+  const firstOpenEstimate = summary.openEstimates[0];
+  const firstActiveJob = summary.activeJobs[0];
+
+  if (summary.balanceDue > 0) {
+    return {
+      message: 'Follow up on the outstanding invoice balance.',
+      buttonLabel: 'Open invoices',
+      tab: 'invoices',
+    };
+  }
+
+  if (firstOpenEstimate) {
+    return {
+      message: 'Review open estimates and push the next decision.',
+      buttonLabel: 'Open estimate',
+      to: `/estimates/${firstOpenEstimate.id}`,
+    };
+  }
+
+  if (firstActiveJob) {
+    return {
+      message: 'Check job progress and confirm the next milestone.',
+      buttonLabel: 'Open job',
+      to: `/jobs/${firstActiveJob.id}`,
+    };
+  }
+
+  return {
+    message: 'Create a new estimate or log the next customer touchpoint.',
+    buttonLabel: 'Start estimate',
+    to: `/estimates/new?customerId=${encodeURIComponent(summary.customer.id)}`,
+  };
 }
 
 export default Customers;

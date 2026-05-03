@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
@@ -167,18 +167,21 @@ const getGuidedQuestions = (projectTypeValue: string): GuidedQuestion[] => {
 export function EstimateBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, jobs, expenses, timeEntries, addCustomer, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob, sendEmail, addTemplate, updateTemplate, addAssembly, updateAssembly, updateMaterial } = useApp();
   const { showToast } = useToast();
 
   const isNew = id === 'new';
   const estimate = (!isNew && id) ? estimates?.find(e => e.id === id) : null;
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
+  const requestedCustomerId = isNew ? searchParams.get('customerId') || '' : '';
+  const requestedCustomer = requestedCustomerId ? customers?.find(c => c.id === requestedCustomerId) : undefined;
 
   // Form state
   const [formData, setFormData] = useState({
     name: estimate?.name || 'New Estimate',
-    customerId: estimate?.customerId || '',
-    address: estimate?.address || '',
+    customerId: estimate?.customerId || requestedCustomerId,
+    address: estimate?.address || requestedCustomer?.address || '',
     status: estimate?.status || 'draft',
     type: estimate?.type || 'remodel',
     markupPercent: estimate?.markupPercent?.toString() || '20',
@@ -257,6 +260,15 @@ export function EstimateBuilder() {
     setEstimateAllowances(estimate.clientAllowances || []);
     hydratedEstimateId.current = estimate.id;
   }, [estimate, isNew]);
+
+  useEffect(() => {
+    if (!isNew || !requestedCustomerId || formData.customerId) return;
+    setFormData(previous => ({
+      ...previous,
+      customerId: requestedCustomerId,
+      address: previous.address || requestedCustomer?.address || '',
+    }));
+  }, [formData.customerId, isNew, requestedCustomer?.address, requestedCustomerId]);
 
   const defaultMarkup = parseFloat(formData.markupPercent) || 0;
 

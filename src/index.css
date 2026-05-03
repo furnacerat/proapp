@@ -4074,9 +4074,20 @@ body {
 
 .customer-recommendation {
   display: flex;
+  align-items: center;
   gap: 10px;
   padding: 14px;
   background: linear-gradient(135deg, rgba(79, 70, 229, 0.26), rgba(14, 165, 233, 0.14));
+}
+
+.customer-recommendation > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-recommendation .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .customer-recommendation svg {
@@ -4248,6 +4259,15 @@ body {
   .customer-detail-metrics,
   .customer-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .customer-recommendation {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .customer-recommendation .btn {
+    margin-left: 28px;
   }
 
   .customers-command-grid {
