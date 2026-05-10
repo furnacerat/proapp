@@ -18,8 +18,40 @@ import {
   Package, Clock, DollarSign, ChevronDown, ChevronUp,
   Calculator, X, Eye, CheckSquare, Search, Zap, Briefcase,
   Users, Wrench, Truck, Home, Building, Building2, LayoutGrid,
-  EyeOff, RotateCcw, CheckCircle, Edit3, AlertTriangle, Mail, MessageSquare
+  EyeOff, RotateCcw, CheckCircle, Edit3, AlertTriangle, Mail, MessageSquare,
+  Mic, MicOff, ListPlus
 } from 'lucide-react';
+
+type SpeechRecognitionEventResult = {
+  isFinal: boolean;
+  0: { transcript: string };
+};
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: SpeechRecognitionEventResult[];
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
 
 const PROJECT_TYPES = [
   { value: 'kitchen', label: 'Kitchen', icon: Home, color: '#f97316' },
@@ -64,6 +96,12 @@ interface GuidedGeneratedScope {
   sections: EstimateSection[];
   warnings: string[];
   suggestions: string[];
+}
+
+interface VoiceParsedSection {
+  name: string;
+  items: EstimateLineItem[];
+  deleteTerms: string[];
 }
 
 const isAffirmative = (value: GuidedAnswerValue | undefined) => value === true || value === 'yes';
@@ -216,6 +254,10 @@ export function EstimateBuilder() {
   const [guidedStep, setGuidedStep] = useState(0);
   const [guidedAnswers, setGuidedAnswers] = useState<GuidedAnswers>({});
   const [guidedDismissed, setGuidedDismissed] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceInterim, setVoiceInterim] = useState('');
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
   const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
   const [newItemForm, setNewItemForm] = useState({
@@ -242,6 +284,7 @@ export function EstimateBuilder() {
   const [quickCustomer, setQuickCustomer] = useState({ name: '', email: '', phone: '', address: '' });
   const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
   const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
     if (isNew || !estimate || hydratedEstimateId.current === estimate.id) return;
@@ -269,6 +312,12 @@ export function EstimateBuilder() {
       address: previous.address || requestedCustomer?.address || '',
     }));
   }, [formData.customerId, isNew, requestedCustomer?.address, requestedCustomerId]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort();
+    };
+  }, []);
 
   const defaultMarkup = parseFloat(formData.markupPercent) || 0;
 
@@ -540,6 +589,316 @@ export function EstimateBuilder() {
     setPricePickerTab(tab);
     setPriceSearch('');
     setShowPricePicker(true);
+  };
+
+  const speechRecognitionSupported = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const startVoiceCapture = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError('Speech recognition is not available in this browser. Try Chrome or Edge on the jobsite device.');
+      return;
+    }
+
+    recognitionRef.current?.abort();
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onresult = event => {
+      let finalText = '';
+      let interimText = '';
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result.isFinal) finalText += result[0].transcript;
+        else interimText += result[0].transcript;
+      }
+      if (finalText.trim()) {
+        setVoiceTranscript(current => [current.trim(), finalText.trim()].filter(Boolean).join('\n'));
+      }
+      setVoiceInterim(interimText.trim());
+    };
+    recognition.onerror = event => {
+      setVoiceError(event.error ? `Speech capture stopped: ${event.error}` : 'Speech capture stopped.');
+      setIsVoiceRecording(false);
+    };
+    recognition.onend = () => {
+      setIsVoiceRecording(false);
+      setVoiceInterim('');
+    };
+    recognitionRef.current = recognition;
+    setVoiceError('');
+    setIsVoiceRecording(true);
+    try {
+      recognition.start();
+    } catch (error) {
+      setIsVoiceRecording(false);
+      setVoiceError(error instanceof Error ? error.message : 'Speech capture could not start.');
+    }
+  };
+
+  const stopVoiceCapture = () => {
+    recognitionRef.current?.stop();
+    setIsVoiceRecording(false);
+    setVoiceInterim('');
+  };
+
+  const inferVoiceCategory = (text: string): EstimateLineCategory => {
+    const normalized = text.toLowerCase();
+    if (/(labor|install|demo|remove|paint|frame|hang|finish|repair|prep)/.test(normalized)) return 'labor';
+    if (/(permit|dump|disposal|fee|cleanup|protection)/.test(normalized)) return 'other';
+    if (/(sub|electric|plumb|hvac|roof|concrete|drywall)/.test(normalized)) return 'subcontractor';
+    if (/(rental|lift|scaffold|equipment|tool)/.test(normalized)) return 'equipment';
+    return 'material';
+  };
+
+  const voiceSpacePattern = [
+    'bedroom\\s*\\d+',
+    'bathroom\\s*\\d+',
+    'bed\\s*\\d+',
+    'bath\\s*\\d+',
+    'primary\\s+bedroom',
+    'master\\s+bedroom',
+    'primary\\s+bath(?:room)?',
+    'master\\s+bath(?:room)?',
+    'kitchen',
+    'basement',
+    'garage',
+    'living\\s+room',
+    'family\\s+room',
+    'dining\\s+room',
+    'laundry(?:\\s+room)?',
+    'mudroom',
+    'office',
+    'hallway',
+    'entry',
+    'foyer',
+    'attic',
+    'crawl\\s+space',
+    'utility\\s+room',
+    'mechanical\\s+room',
+    'exterior',
+    'roof',
+    'porch',
+    'deck',
+    'patio',
+  ].join('|');
+
+  const normalizeVoiceSpaceName = (space: string) => {
+    const normalized = space.toLowerCase().replace(/\s+/g, ' ').trim();
+    const aliases: Record<string, string> = {
+      bed: 'Bedroom',
+      bath: 'Bathroom',
+      'primary bath': 'Primary Bathroom',
+      'master bath': 'Master Bathroom',
+    };
+    const aliased = aliases[normalized] || normalized
+      .replace(/^bed\s+(\d+)$/, 'bedroom $1')
+      .replace(/^bath\s+(\d+)$/, 'bathroom $1');
+    return aliased.replace(/\b\w/g, letter => letter.toUpperCase());
+  };
+
+  const getVoiceParts = (transcript: string) => transcript
+    .split(/\n|\.|;|, and |\band then\b|\bplus\b/i)
+    .map(part => part.trim())
+    .filter(part => part.length > 2);
+
+  const extractVoiceSpace = (part: string) => {
+    const patterns = [
+      new RegExp(`^(${voiceSpacePattern})\\b\\s*[:,-]?\\s*(.*)$`, 'i'),
+      new RegExp(`\\b(?:in|inside|for|to|from|at|on)\\s+(?:the\\s+)?(${voiceSpacePattern})\\b`, 'i'),
+    ];
+    for (const pattern of patterns) {
+      const match = part.match(pattern);
+      if (!match) continue;
+      const rawSpace = match[1];
+      const remaining = pattern.source.startsWith('^')
+        ? (match[2] || '').trim()
+        : part.replace(match[0], ' ').replace(/\s+/g, ' ').trim();
+      return { sectionName: normalizeVoiceSpaceName(rawSpace), remaining };
+    }
+    return null;
+  };
+
+  const getVoiceItemName = (part: string, fallback: string) => part
+    .replace(/^(add|include|need|create|put in|price|quote|scope|change|update|edit)\s+/i, '')
+    .replace(/^(delete|remove|take out|scratch|exclude)\s+/i, '')
+    .replace(/\b(?:from|in|inside|for|to|at|on)\s+(?:the\s+)?(?:bedroom\s*\d+|bathroom\s*\d+|bed\s*\d+|bath\s*\d+|primary\s+bedroom|master\s+bedroom|primary\s+bath(?:room)?|master\s+bath(?:room)?|kitchen|basement|garage|living\s+room|family\s+room|dining\s+room|laundry(?:\s+room)?|mudroom|office|hallway|entry|foyer|attic|crawl\s+space|utility\s+room|mechanical\s+room|exterior|roof|porch|deck|patio)\b/ig, '')
+    .replace(/(?:^|\s)(\d+(?:\.\d+)?)\s*(sq\s*ft|square\s*feet|sf|linear\s*feet|lineal\s*feet|lf|feet|ft|hours|hrs|hr|each|ea|rooms?|sheets?|doors?|windows?|fixtures?|outlets?|lights?|cans?|ls|lot)\b/ig, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || fallback;
+
+  const makeVoiceLineItem = (part: string, index: number): EstimateLineItem => {
+    const quantityPattern = /(?:^|\s)(\d+(?:\.\d+)?)\s*(sq\s*ft|square\s*feet|sf|linear\s*feet|lineal\s*feet|lf|feet|ft|hours|hrs|hr|each|ea|rooms?|sheets?|doors?|windows?|fixtures?|outlets?|lights?|cans?|ls|lot)\b/i;
+    const quantityMatch = part.match(quantityPattern);
+    const quantity = quantityMatch ? Number(quantityMatch[1]) : null;
+    const rawUnit = quantityMatch?.[2]?.toLowerCase().replace(/\s+/g, ' ');
+    const unitMap: Record<string, string> = {
+      'sq ft': 'sq ft',
+      'square feet': 'sq ft',
+      sf: 'sq ft',
+      'linear feet': 'lf',
+      'lineal feet': 'lf',
+      lf: 'lf',
+      feet: 'ft',
+      ft: 'ft',
+      hours: 'hr',
+      hrs: 'hr',
+      hr: 'hr',
+      each: 'ea',
+      ea: 'ea',
+      room: 'room',
+      rooms: 'room',
+      sheet: 'sheet',
+      sheets: 'sheet',
+      door: 'ea',
+      doors: 'ea',
+      window: 'ea',
+      windows: 'ea',
+      fixture: 'ea',
+      fixtures: 'ea',
+      outlet: 'ea',
+      outlets: 'ea',
+      light: 'ea',
+      lights: 'ea',
+      can: 'ea',
+      cans: 'ea',
+      ls: 'ls',
+      lot: 'ls',
+    };
+    const unit = rawUnit ? unitMap[rawUnit] || rawUnit : 'ea';
+    const category = inferVoiceCategory(part);
+    return normalizeLineItem({
+      id: crypto.randomUUID(),
+      sourceType: 'manual',
+      name: getVoiceItemName(part, `Voice scope item ${index + 1}`),
+      description: part,
+      quantity,
+      unit,
+      quantityMode: quantity === null ? 'user_required' : 'fixed',
+      unitCost: 0,
+      unitPrice: 0,
+      category,
+      type: category === 'allowance' ? 'other' : category as EstimateLineItem['type'],
+      isLabor: category === 'labor',
+      hours: category === 'labor' ? quantityValue(quantity) : undefined,
+      total: 0,
+      internalNotes: 'Captured from job walk voice notes',
+      notes: 'Voice captured item. Refine quantity and pricing before sending.',
+      sortOrder: index,
+    });
+  };
+
+  const parseVoiceSections = (transcript: string): VoiceParsedSection[] => {
+    let currentSection = 'General Walkthrough';
+    const sections = new Map<string, VoiceParsedSection>();
+    const ensureSection = (name: string) => {
+      if (!sections.has(name)) sections.set(name, { name, items: [], deleteTerms: [] });
+      return sections.get(name)!;
+    };
+
+    getVoiceParts(transcript).forEach((rawPart, index) => {
+      const space = extractVoiceSpace(rawPart);
+      if (space) currentSection = space.sectionName;
+      const commandText = (space?.remaining || rawPart).trim();
+      if (!commandText || commandText.toLowerCase() === currentSection.toLowerCase()) {
+        ensureSection(currentSection);
+        return;
+      }
+
+      const target = ensureSection(currentSection);
+      if (/^(delete|remove|take out|scratch|exclude)\b/i.test(commandText)) {
+        target.deleteTerms.push(getVoiceItemName(commandText, commandText).toLowerCase());
+        return;
+      }
+      target.items.push(makeVoiceLineItem(commandText, index));
+    });
+
+    return Array.from(sections.values()).filter(section => section.items.length > 0 || section.deleteTerms.length > 0);
+  };
+
+  const pushVoiceTranscriptToEstimate = () => {
+    const transcript = voiceTranscript.trim();
+    if (!transcript) {
+      showToast('Record or type voice notes before pushing to the estimate', 'warning');
+      return;
+    }
+
+    const parsedSections = parseVoiceSections(transcript);
+    if (parsedSections.length === 0) {
+      showToast('No scope spaces or items found in the transcript', 'warning');
+      return;
+    }
+
+    let activeNextScopeId = '';
+    let activeNextSectionId = '';
+    let addedCount = 0;
+    let deletedCount = 0;
+    const findSectionNameMatch = (sectionName: string, candidate: EstimateSection) =>
+      candidate.name.toLowerCase().trim() === sectionName.toLowerCase().trim();
+    const itemMatchesDeleteTerm = (item: EstimateLineItem, term: string) => {
+      const haystack = `${item.name} ${item.description || ''} ${item.notes || ''}`.toLowerCase();
+      return haystack.includes(term) || term.includes(item.name.toLowerCase());
+    };
+
+    const nextScopes = scopes.map(scope => ({ ...scope, sections: scope.sections?.map(section => ({ ...section, lineItems: [...(section.lineItems || [])] })) || [] }));
+    let voiceScope = nextScopes.find(scope => scope.name === 'Job Walk Voice Scope');
+    if (!voiceScope) {
+      voiceScope = {
+        id: crypto.randomUUID(),
+        name: 'Job Walk Voice Scope',
+        projectType: formData.type as JobType,
+        sections: [],
+        subtotal: 0,
+        isOptional: false,
+        sortOrder: nextScopes.length,
+      };
+      nextScopes.push(voiceScope);
+    }
+
+    parsedSections.forEach(parsedSection => {
+      let targetScope = nextScopes.find(scope => scope.sections?.some(section => findSectionNameMatch(parsedSection.name, section)));
+      if (!targetScope) targetScope = voiceScope;
+      let targetSection = targetScope.sections.find(section => findSectionNameMatch(parsedSection.name, section));
+      if (!targetSection) {
+        targetSection = {
+          id: crypto.randomUUID(),
+          name: parsedSection.name,
+          description: 'Created from speech-to-text job walk notes. Review quantities and pricing before sending.',
+          lineItems: [],
+        };
+        targetScope.sections.push(targetSection);
+      }
+
+      if (parsedSection.deleteTerms.length > 0) {
+        const beforeCount = targetSection.lineItems.length;
+        targetSection.lineItems = targetSection.lineItems.filter(item =>
+          !parsedSection.deleteTerms.some(term => itemMatchesDeleteTerm(item, term))
+        );
+        deletedCount += beforeCount - targetSection.lineItems.length;
+      }
+
+      if (parsedSection.items.length > 0) {
+        targetSection.lineItems.push(...parsedSection.items.map((item, index) => ({ ...item, sortOrder: targetSection.lineItems.length + index })));
+        addedCount += parsedSection.items.length;
+        activeNextScopeId = targetScope.id;
+        activeNextSectionId = targetSection.id;
+      } else if (!activeNextSectionId) {
+        activeNextScopeId = targetScope.id;
+        activeNextSectionId = targetSection.id;
+      }
+    });
+
+    setScopes(nextScopes);
+    setActiveScopeId(activeNextScopeId || voiceScope.id);
+    setActiveSectionId(activeNextSectionId || voiceScope.sections[0]?.id || null);
+    setFormData(prev => ({
+      ...prev,
+      notes: [prev.notes, `Voice job walk transcript:\n${transcript}`].filter(Boolean).join('\n\n'),
+    }));
+    setVoiceTranscript('');
+    setVoiceInterim('');
+    showToast(`Voice scope updated: ${addedCount} added${deletedCount ? `, ${deletedCount} removed` : ''}`);
   };
 
   // Auto-save
@@ -1531,6 +1890,9 @@ export function EstimateBuilder() {
   const hasGuidedAnswer = currentGuidedQuestion
     ? guidedAnswers[currentGuidedQuestion.id] !== undefined && guidedAnswers[currentGuidedQuestion.id] !== ''
     : false;
+  const voiceDraftSections = parseVoiceSections(voiceTranscript);
+  const voiceDraftItemCount = voiceDraftSections.reduce((sum, section) => sum + section.items.length, 0);
+  const voiceDraftDeleteCount = voiceDraftSections.reduce((sum, section) => sum + section.deleteTerms.length, 0);
 
   return (
     <div className="eb-root">
@@ -1712,6 +2074,56 @@ export function EstimateBuilder() {
               </div>
             </div>
           )}
+
+          <div className="eb-section eb-voiceCapture">
+            <div className="eb-sectionHeader">
+              <div>
+                <p className="eb-sectionEyebrow">Job Walk Capture</p>
+                <h2>Talk scope into the estimate</h2>
+              </div>
+              <span className={`eb-sectionPill ${isVoiceRecording ? 'recording' : ''}`}>
+                {isVoiceRecording ? 'Listening' : 'Voice Ready'}
+              </span>
+            </div>
+            <div className="eb-voiceGrid">
+              <div className="eb-voiceControls">
+                <button
+                  className={`eb-voiceButton ${isVoiceRecording ? 'recording' : ''}`}
+                  onClick={isVoiceRecording ? stopVoiceCapture : startVoiceCapture}
+                  disabled={!speechRecognitionSupported}
+                >
+                  {isVoiceRecording ? <MicOff size={22} /> : <Mic size={22} />}
+                  <span>{isVoiceRecording ? 'Stop Walkthrough' : 'Start Talking'}</span>
+                </button>
+                <button className="eb-actionBtn" onClick={pushVoiceTranscriptToEstimate}>
+                  <ListPlus size={16} /><span>Push to Estimate</span>
+                </button>
+                <button className="eb-actionBtn" onClick={() => { setVoiceTranscript(''); setVoiceInterim(''); setVoiceError(''); }}>
+                  <RotateCcw size={16} /><span>Clear</span>
+                </button>
+              </div>
+              <div className="eb-voiceHelp">
+                Say a space name like "Bedroom 1" or "Kitchen", then add scope. Later, say "add paint to Bedroom 1" or "remove recessed lights from Kitchen" and the app will update that section.
+              </div>
+            </div>
+            {!speechRecognitionSupported && (
+              <div className="eb-voiceNotice">Speech recognition is not available in this browser. You can still type field notes below and push them into scope.</div>
+            )}
+            {voiceError && <div className="eb-voiceNotice warning">{voiceError}</div>}
+            <textarea
+              className="form-textarea eb-voiceTranscript"
+              value={[voiceTranscript, voiceInterim].filter(Boolean).join(voiceTranscript && voiceInterim ? '\n' : '')}
+              onChange={event => {
+                setVoiceTranscript(event.target.value);
+                setVoiceInterim('');
+              }}
+              placeholder="Walk the job and dictate scope here. Each sentence becomes a draft line item you can refine before sending."
+            />
+            <div className="eb-voiceFooter">
+              <span>{voiceDraftSections.length} space{voiceDraftSections.length === 1 ? '' : 's'} / {voiceDraftItemCount} item{voiceDraftItemCount === 1 ? '' : 's'}{voiceDraftDeleteCount ? ` / ${voiceDraftDeleteCount} removal${voiceDraftDeleteCount === 1 ? '' : 's'}` : ''} detected</span>
+              <span>Recall a space by name at any time to add or remove scope before pricing.</span>
+            </div>
+          </div>
 
           {smartEnabled && estimateSuggestions.length > 0 && (
             <div className="eb-section eb-smartAssist">

@@ -7812,6 +7812,111 @@ body {
   margin-top: 16px;
 }
 
+.eb-voiceCapture {
+  border-color: rgba(20, 184, 166, 0.26);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(20, 184, 166, 0.14), transparent 18rem),
+    linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.eb-sectionPill.recording {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.eb-voiceGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.eb-voiceControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.eb-voiceButton {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 10px 16px;
+  color: #ffffff;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0f766e, #0ea5e9);
+  box-shadow: 0 12px 24px rgba(14, 165, 233, 0.18);
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.eb-voiceButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(14, 165, 233, 0.24);
+}
+
+.eb-voiceButton.recording {
+  background: linear-gradient(135deg, #b91c1c, #f97316);
+  box-shadow: 0 12px 24px rgba(249, 115, 22, 0.2);
+}
+
+.eb-voiceButton:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.eb-voiceHelp,
+.eb-voiceFooter {
+  color: #64748b;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.eb-voiceNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.eb-voiceNotice.warning {
+  color: #92400e;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.eb-voiceTranscript {
+  min-height: 136px;
+  background: #ffffff;
+}
+
+.eb-voiceFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.eb-voiceFooter span:first-child {
+  color: #0f766e;
+  font-weight: 850;
+}
+
 .eb-actionBtn:disabled {
   opacity: 0.48;
   cursor: not-allowed;
@@ -7892,6 +7997,7 @@ body {
 
   .eb-typeGrid,
   .eb-detailsGrid,
+  .eb-voiceGrid,
   .eb-builderActions,
   .eb-profitGrid {
     grid-template-columns: 1fr;
@@ -7908,11 +8014,16 @@ body {
   }
 
   .eb-guidedPromptActions,
+  .eb-voiceControls,
   .eb-guidedChoices,
   .eb-guidedChoices.two,
   .eb-guidedFooter > div {
     width: 100%;
     grid-template-columns: 1fr;
+  }
+
+  .eb-voiceButton {
+    width: 100%;
   }
 }
 
