@@ -7867,6 +7867,14 @@ body {
   box-shadow: 0 12px 24px rgba(249, 115, 22, 0.2);
 }
 
+.eb-voiceButton svg {
+  flex: 0 0 auto;
+}
+
+.eb-voiceButton.transcribing svg {
+  animation: spin 0.9s linear infinite;
+}
+
 .eb-voiceButton:disabled {
   opacity: 0.52;
   cursor: not-allowed;

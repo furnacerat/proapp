@@ -19,39 +19,8 @@ import {
   Calculator, X, Eye, CheckSquare, Search, Zap, Briefcase,
   Users, Wrench, Truck, Home, Building, Building2, LayoutGrid,
   EyeOff, RotateCcw, CheckCircle, Edit3, AlertTriangle, Mail, MessageSquare,
-  Mic, MicOff, ListPlus
+  Mic, MicOff, ListPlus, Loader2
 } from 'lucide-react';
-
-type SpeechRecognitionEventResult = {
-  isFinal: boolean;
-  0: { transcript: string };
-};
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: SpeechRecognitionEventResult[];
-}
-
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
 
 const PROJECT_TYPES = [
   { value: 'kitchen', label: 'Kitchen', icon: Home, color: '#f97316' },
@@ -257,6 +226,7 @@ export function EstimateBuilder() {
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceInterim, setVoiceInterim] = useState('');
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
@@ -284,7 +254,10 @@ export function EstimateBuilder() {
   const [quickCustomer, setQuickCustomer] = useState({ name: '', email: '', phone: '', address: '' });
   const [convertOptions, setConvertOptions] = useState({ startDate: new Date().toISOString().split('T')[0], dueDate: '', copyLineItems: true, copyPricing: true, copyNotes: true });
   const [allowanceForm, setAllowanceForm] = useState({ name: '', category: 'materials' as AllowanceCategory, amount: '', notes: '', clientResponsible: true, includeInClientProposal: true });
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceStreamRef = useRef<MediaStream | null>(null);
+  const voiceTranscriptionQueueRef = useRef(Promise.resolve());
+  const activeVoiceTranscriptionsRef = useRef(0);
 
   useEffect(() => {
     if (isNew || !estimate || hydratedEstimateId.current === estimate.id) return;
@@ -315,7 +288,9 @@ export function EstimateBuilder() {
 
   useEffect(() => {
     return () => {
-      recognitionRef.current?.abort();
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      voiceStreamRef.current?.getTracks().forEach(track => track.stop());
     };
   }, []);
 
@@ -591,56 +566,121 @@ export function EstimateBuilder() {
     setShowPricePicker(true);
   };
 
-  const speechRecognitionSupported = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const voiceCaptureSupported = typeof window !== 'undefined'
+    && !!navigator.mediaDevices?.getUserMedia
+    && typeof MediaRecorder !== 'undefined';
 
-  const startVoiceCapture = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setVoiceError('Speech recognition is not available in this browser. Try Chrome or Edge on the jobsite device.');
+  const getSupportedAudioMimeType = () => {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/mpeg',
+    ];
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+  };
+
+  const setVoiceTranscribingActive = (active: boolean) => {
+    activeVoiceTranscriptionsRef.current += active ? 1 : -1;
+    activeVoiceTranscriptionsRef.current = Math.max(0, activeVoiceTranscriptionsRef.current);
+    setIsVoiceTranscribing(activeVoiceTranscriptionsRef.current > 0);
+  };
+
+  const appendVoiceTranscript = (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+    setVoiceTranscript(current => [current.trim(), cleanText].filter(Boolean).join('\n'));
+  };
+
+  const transcribeVoiceBlob = async (blob: Blob) => {
+    if (blob.size < 1000) return;
+    setVoiceTranscribingActive(true);
+    setVoiceInterim('Transcribing latest audio...');
+    try {
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        body: blob,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Transcription failed');
+      appendVoiceTranscript(data.text || '');
+      setVoiceError('');
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : 'Transcription failed.');
+    } finally {
+      setVoiceTranscribingActive(false);
+      setVoiceInterim('');
+    }
+  };
+
+  const queueVoiceBlobTranscription = (blob: Blob) => {
+    voiceTranscriptionQueueRef.current = voiceTranscriptionQueueRef.current
+      .then(() => transcribeVoiceBlob(blob))
+      .catch(() => undefined);
+  };
+
+  const stopVoiceStream = () => {
+    voiceStreamRef.current?.getTracks().forEach(track => track.stop());
+    voiceStreamRef.current = null;
+  };
+
+  const startVoiceCapture = async () => {
+    if (!voiceCaptureSupported) {
+      setVoiceError('Audio recording is not available in this browser. You can still type field notes below and push them into scope.');
       return;
     }
 
-    recognitionRef.current?.abort();
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.onresult = event => {
-      let finalText = '';
-      let interimText = '';
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        if (result.isFinal) finalText += result[0].transcript;
-        else interimText += result[0].transcript;
-      }
-      if (finalText.trim()) {
-        setVoiceTranscript(current => [current.trim(), finalText.trim()].filter(Boolean).join('\n'));
-      }
-      setVoiceInterim(interimText.trim());
-    };
-    recognition.onerror = event => {
-      setVoiceError(event.error ? `Speech capture stopped: ${event.error}` : 'Speech capture stopped.');
-      setIsVoiceRecording(false);
-    };
-    recognition.onend = () => {
-      setIsVoiceRecording(false);
-      setVoiceInterim('');
-    };
-    recognitionRef.current = recognition;
-    setVoiceError('');
-    setIsVoiceRecording(true);
     try {
-      recognition.start();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      const mimeType = getSupportedAudioMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+      recorder.ondataavailable = event => {
+        if (event.data?.size) queueVoiceBlobTranscription(event.data);
+      };
+      recorder.onerror = () => {
+        setVoiceError('Audio recording stopped unexpectedly.');
+        setIsVoiceRecording(false);
+        stopVoiceStream();
+      };
+      recorder.onstop = () => {
+        setIsVoiceRecording(false);
+        stopVoiceStream();
+      };
+
+      mediaRecorderRef.current = recorder;
+      voiceStreamRef.current = stream;
+      setVoiceError('');
+      setVoiceInterim('');
+      setIsVoiceRecording(true);
+      recorder.start(12000);
     } catch (error) {
       setIsVoiceRecording(false);
-      setVoiceError(error instanceof Error ? error.message : 'Speech capture could not start.');
+      stopVoiceStream();
+      setVoiceError(error instanceof Error ? error.message : 'Microphone access was blocked or unavailable.');
     }
   };
 
   const stopVoiceCapture = () => {
-    recognitionRef.current?.stop();
-    setIsVoiceRecording(false);
-    setVoiceInterim('');
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.requestData();
+      } catch {
+        // Some browsers throw if a chunk was just emitted. The stop event still finalizes the stream.
+      }
+      recorder.stop();
+    } else {
+      stopVoiceStream();
+      setIsVoiceRecording(false);
+    }
   };
 
   const inferVoiceCategory = (text: string): EstimateLineCategory => {
@@ -653,10 +693,10 @@ export function EstimateBuilder() {
   };
 
   const voiceSpacePattern = [
-    'bedroom\\s*\\d+',
-    'bathroom\\s*\\d+',
-    'bed\\s*\\d+',
-    'bath\\s*\\d+',
+    'bedroom\\s*(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)',
+    'bathroom\\s*(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)',
+    'bed\\s*(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)',
+    'bath\\s*(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)',
     'primary\\s+bedroom',
     'master\\s+bedroom',
     'primary\\s+bath(?:room)?',
@@ -686,6 +726,18 @@ export function EstimateBuilder() {
 
   const normalizeVoiceSpaceName = (space: string) => {
     const normalized = space.toLowerCase().replace(/\s+/g, ' ').trim();
+    const numberWords: Record<string, string> = {
+      one: '1',
+      two: '2',
+      three: '3',
+      four: '4',
+      five: '5',
+      six: '6',
+      seven: '7',
+      eight: '8',
+      nine: '9',
+      ten: '10',
+    };
     const aliases: Record<string, string> = {
       bed: 'Bedroom',
       bath: 'Bathroom',
@@ -693,37 +745,77 @@ export function EstimateBuilder() {
       'master bath': 'Master Bathroom',
     };
     const aliased = aliases[normalized] || normalized
+      .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/g, word => numberWords[word] || word)
       .replace(/^bed\s+(\d+)$/, 'bedroom $1')
       .replace(/^bath\s+(\d+)$/, 'bathroom $1');
     return aliased.replace(/\b\w/g, letter => letter.toUpperCase());
   };
 
+  const voiceSpaceReferencePattern = `(?:${voiceSpacePattern})`;
+  const voiceSectionMarkerPattern = '(?:gets?|needs?|has|includes?|will\\s+get|should\\s+get|scope(?:\\s+is)?|work\\s+is)';
+  const fillerWordsPattern = '\\b(?:uh|um|erm|hmm|like|okay|ok|alright|so|well|actually|basically|just|please|you\\s+know)\\b';
+  const commandLeadPattern = '^(?:oh\\s+wait|wait|also|then|and|next|plus|now|go\\s+back|going\\s+back|back\\s+to)\\b\\s*';
+
   const getVoiceParts = (transcript: string) => transcript
-    .split(/\n|\.|;|, and |\band then\b|\bplus\b/i)
+    .replace(new RegExp(`\\b(${voiceSpaceReferencePattern})\\s+(${voiceSectionMarkerPattern})\\b`, 'ig'), '\n$1 $2')
+    .replace(/\b(?:oh wait|wait|also|then|next|plus|and then)\b/ig, '\n$&')
+    .split(/\n|\.|;|, and |\band then\b/i)
     .map(part => part.trim())
     .filter(part => part.length > 2);
 
+  const cleanVoiceCommand = (part: string) => part
+    .replace(new RegExp(commandLeadPattern, 'i'), '')
+    .replace(new RegExp(`(?:^|\\s)${fillerWordsPattern}(?=\\s|$)`, 'ig'), ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[,:\- ]+|[,:\- ]+$/g, '')
+    .trim();
+
+  const isVoiceFillerOnly = (part: string) => {
+    const cleaned = cleanVoiceCommand(part)
+      .replace(/^(gets?|needs?|has|includes?|will get|should get)\b/i, '')
+      .replace(/\b(?:this|that|it|stuff|things?|items?|work|scope)\b/ig, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned.length < 3;
+  };
+
+  const isGenericVoiceSectionName = (value: string) => {
+    const normalized = value.toLowerCase().trim();
+    if (!normalized || normalized.length > 40) return false;
+    if (/^(add|include|need|create|put|price|quote|scope|change|update|edit|delete|remove|take|scratch|exclude)\b/.test(normalized)) return false;
+    if (new RegExp(`^${fillerWordsPattern}$`, 'i').test(normalized)) return false;
+    return /^[a-z][a-z0-9\s#-]*$/i.test(value);
+  };
+
   const extractVoiceSpace = (part: string) => {
+    const cleanedPart = cleanVoiceCommand(part);
     const patterns = [
-      new RegExp(`^(${voiceSpacePattern})\\b\\s*[:,-]?\\s*(.*)$`, 'i'),
+      new RegExp(`^(${voiceSpacePattern})\\b\\s*(?:${voiceSectionMarkerPattern})?\\s*[:,-]?\\s*(.*)$`, 'i'),
+      new RegExp(`^(.{2,40}?)\\s+(${voiceSectionMarkerPattern})\\b\\s*[:,-]?\\s*(.*)$`, 'i'),
       new RegExp(`\\b(?:in|inside|for|to|from|at|on)\\s+(?:the\\s+)?(${voiceSpacePattern})\\b`, 'i'),
     ];
     for (const pattern of patterns) {
-      const match = part.match(pattern);
+      const match = cleanedPart.match(pattern);
       if (!match) continue;
-      const rawSpace = match[1];
+      if (pattern.source.includes('.{2,40}?')) {
+        const rawSpace = match[1].trim();
+        if (!isGenericVoiceSectionName(rawSpace)) continue;
+        return { sectionName: normalizeVoiceSpaceName(rawSpace), remaining: cleanVoiceCommand(match[3] || '') };
+      }
+      const rawSpace = match[1].trim();
       const remaining = pattern.source.startsWith('^')
-        ? (match[2] || '').trim()
-        : part.replace(match[0], ' ').replace(/\s+/g, ' ').trim();
+        ? cleanVoiceCommand(match[2] || '')
+        : cleanVoiceCommand(cleanedPart.replace(match[0], ' '));
       return { sectionName: normalizeVoiceSpaceName(rawSpace), remaining };
     }
     return null;
   };
 
-  const getVoiceItemName = (part: string, fallback: string) => part
+  const getVoiceItemName = (part: string, fallback: string) => cleanVoiceCommand(part)
+    .replace(new RegExp(`^${voiceSectionMarkerPattern}\\b\\s*`, 'i'), '')
     .replace(/^(add|include|need|create|put in|price|quote|scope|change|update|edit)\s+/i, '')
     .replace(/^(delete|remove|take out|scratch|exclude)\s+/i, '')
-    .replace(/\b(?:from|in|inside|for|to|at|on)\s+(?:the\s+)?(?:bedroom\s*\d+|bathroom\s*\d+|bed\s*\d+|bath\s*\d+|primary\s+bedroom|master\s+bedroom|primary\s+bath(?:room)?|master\s+bath(?:room)?|kitchen|basement|garage|living\s+room|family\s+room|dining\s+room|laundry(?:\s+room)?|mudroom|office|hallway|entry|foyer|attic|crawl\s+space|utility\s+room|mechanical\s+room|exterior|roof|porch|deck|patio)\b/ig, '')
+    .replace(new RegExp(`\\b(?:from|in|inside|for|to|at|on)\\s+(?:the\\s+)?${voiceSpaceReferencePattern}\\b`, 'ig'), '')
     .replace(/(?:^|\s)(\d+(?:\.\d+)?)\s*(sq\s*ft|square\s*feet|sf|linear\s*feet|lineal\s*feet|lf|feet|ft|hours|hrs|hr|each|ea|rooms?|sheets?|doors?|windows?|fixtures?|outlets?|lights?|cans?|ls|lot)\b/ig, ' ')
     .replace(/\s+/g, ' ')
     .trim() || fallback;
@@ -772,7 +864,7 @@ export function EstimateBuilder() {
       id: crypto.randomUUID(),
       sourceType: 'manual',
       name: getVoiceItemName(part, `Voice scope item ${index + 1}`),
-      description: part,
+      description: cleanVoiceCommand(part),
       quantity,
       unit,
       quantityMode: quantity === null ? 'user_required' : 'fixed',
@@ -800,8 +892,8 @@ export function EstimateBuilder() {
     getVoiceParts(transcript).forEach((rawPart, index) => {
       const space = extractVoiceSpace(rawPart);
       if (space) currentSection = space.sectionName;
-      const commandText = (space?.remaining || rawPart).trim();
-      if (!commandText || commandText.toLowerCase() === currentSection.toLowerCase()) {
+      const commandText = cleanVoiceCommand(space?.remaining || rawPart);
+      if (!commandText || commandText.toLowerCase() === currentSection.toLowerCase() || isVoiceFillerOnly(commandText)) {
         ensureSection(currentSection);
         return;
       }
@@ -1890,7 +1982,7 @@ export function EstimateBuilder() {
   const hasGuidedAnswer = currentGuidedQuestion
     ? guidedAnswers[currentGuidedQuestion.id] !== undefined && guidedAnswers[currentGuidedQuestion.id] !== ''
     : false;
-  const voiceDraftSections = parseVoiceSections(voiceTranscript);
+  const voiceDraftSections = useMemo(() => parseVoiceSections(voiceTranscript), [voiceTranscript]);
   const voiceDraftItemCount = voiceDraftSections.reduce((sum, section) => sum + section.items.length, 0);
   const voiceDraftDeleteCount = voiceDraftSections.reduce((sum, section) => sum + section.deleteTerms.length, 0);
 
@@ -2082,18 +2174,18 @@ export function EstimateBuilder() {
                 <h2>Talk scope into the estimate</h2>
               </div>
               <span className={`eb-sectionPill ${isVoiceRecording ? 'recording' : ''}`}>
-                {isVoiceRecording ? 'Listening' : 'Voice Ready'}
+                {isVoiceRecording ? 'Recording' : isVoiceTranscribing ? 'Transcribing' : 'Voice Ready'}
               </span>
             </div>
             <div className="eb-voiceGrid">
               <div className="eb-voiceControls">
                 <button
-                  className={`eb-voiceButton ${isVoiceRecording ? 'recording' : ''}`}
+                  className={`eb-voiceButton ${isVoiceRecording ? 'recording' : ''} ${isVoiceTranscribing ? 'transcribing' : ''}`}
                   onClick={isVoiceRecording ? stopVoiceCapture : startVoiceCapture}
-                  disabled={!speechRecognitionSupported}
+                  disabled={!voiceCaptureSupported || (!isVoiceRecording && isVoiceTranscribing)}
                 >
-                  {isVoiceRecording ? <MicOff size={22} /> : <Mic size={22} />}
-                  <span>{isVoiceRecording ? 'Stop Walkthrough' : 'Start Talking'}</span>
+                  {isVoiceRecording ? <MicOff size={22} /> : isVoiceTranscribing ? <Loader2 size={22} /> : <Mic size={22} />}
+                  <span>{isVoiceRecording ? 'Stop Walkthrough' : isVoiceTranscribing ? 'Transcribing...' : 'Start Talking'}</span>
                 </button>
                 <button className="eb-actionBtn" onClick={pushVoiceTranscriptToEstimate}>
                   <ListPlus size={16} /><span>Push to Estimate</span>
@@ -2106,8 +2198,8 @@ export function EstimateBuilder() {
                 Say a space name like "Bedroom 1" or "Kitchen", then add scope. Later, say "add paint to Bedroom 1" or "remove recessed lights from Kitchen" and the app will update that section.
               </div>
             </div>
-            {!speechRecognitionSupported && (
-              <div className="eb-voiceNotice">Speech recognition is not available in this browser. You can still type field notes below and push them into scope.</div>
+            {!voiceCaptureSupported && (
+              <div className="eb-voiceNotice">Audio recording is not available in this browser. You can still type field notes below and push them into scope.</div>
             )}
             {voiceError && <div className="eb-voiceNotice warning">{voiceError}</div>}
             <textarea
