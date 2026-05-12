@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { Sidebar } from './Sidebar';
 import { Menu } from 'lucide-react';
+import { GlobalVoiceAssistant } from '../voice/GlobalVoiceAssistant';
 
 interface LayoutProps {
   children: ReactNode;
@@ -52,6 +53,7 @@ export function Layout({ children }: LayoutProps) {
       <main className="main-content">
         {children}
       </main>
+      <GlobalVoiceAssistant />
     </div>
   );
 }
