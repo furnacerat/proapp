@@ -117,7 +117,7 @@ export function GlobalVoiceAssistant() {
   const updateDraftFromText = (text: string) => {
     if (!commandIncludesShoppingList(text)) {
       setDraft({ jobId: '', title: 'Builder Assistant Command', itemsText: '', sourceText: text });
-      setError('I can create shopping lists right now. Try “create a shopping list for [job] with [items].”');
+      setError('I can create shopping lists right now. Try "create a shopping list for [job] with [items]."');
       return;
     }
     const job = findJobFromCommand(text, jobs);
@@ -142,6 +142,7 @@ export function GlobalVoiceAssistant() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Transcription failed');
+      if (!data.text?.trim()) throw new Error('I did not catch any speech. Try again a little closer to the mic.');
       updateDraftFromText(data.text || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Transcription failed.');
@@ -171,6 +172,7 @@ export function GlobalVoiceAssistant() {
         stopStream();
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
         if (blob.size > 1000) void transcribeBlob(blob);
+        else setError('I did not get enough audio. Hold the mic for a second, speak, then stop.');
       };
       recorder.onerror = () => {
         setIsRecording(false);
@@ -192,7 +194,14 @@ export function GlobalVoiceAssistant() {
 
   const stopRecording = () => {
     const recorder = recorderRef.current;
-    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.requestData();
+      } catch {
+        // Some browsers already emitted the last chunk. Stopping still finalizes the recording.
+      }
+      recorder.stop();
+    }
   };
 
   const closeAssistant = () => {
@@ -292,7 +301,7 @@ export function GlobalVoiceAssistant() {
 
                   <div className="assistant-preview">
                     <ShoppingCart size={16} />
-                    <span>{selectedJob?.name || 'No job selected'} · {parsedItems.length} item{parsedItems.length === 1 ? '' : 's'}</span>
+                    <span>{selectedJob?.name || 'No job selected'} - {parsedItems.length} item{parsedItems.length === 1 ? '' : 's'}</span>
                   </div>
 
                   {parsedItems.length > 0 && (
@@ -309,7 +318,7 @@ export function GlobalVoiceAssistant() {
               )}
 
               {!draft && !error && !isRecording && !isTranscribing && (
-                <p className="assistant-hint">Say “Create a shopping list for Smith kitchen with drywall screws and tile spacers.”</p>
+                <p className="assistant-hint">Say "Create a shopping list for Smith kitchen with drywall screws and tile spacers."</p>
               )}
             </div>
           </div>
