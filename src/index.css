@@ -1414,6 +1414,11 @@ body {
   cursor: not-allowed;
 }
 
+.assistant-create:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .assistant-form,
 .assistant-form label {
   display: grid;
@@ -1486,6 +1491,25 @@ body {
   background: #f8fafc;
   font-size: 0.78rem;
   overflow-wrap: anywhere;
+}
+
+.assistant-choice-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.assistant-secondary {
+  min-height: 40px;
+  padding: 0 10px;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .assistant-create {

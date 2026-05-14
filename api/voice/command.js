@@ -33,15 +33,56 @@ function extractOutputText(data) {
 const commandSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['intent', 'jobId', 'jobName', 'title', 'items', 'missingFields', 'confidence', 'message'],
+  required: [
+    'intent',
+    'jobId',
+    'jobName',
+    'customerId',
+    'customerName',
+    'estimateId',
+    'title',
+    'content',
+    'dueDate',
+    'priority',
+    'shoppingListMode',
+    'items',
+    'estimateItem',
+    'missingFields',
+    'confidence',
+    'message',
+  ],
   properties: {
     intent: {
       type: 'string',
-      enum: ['create_shopping_list', 'unknown'],
+      enum: [
+        'create_shopping_list',
+        'create_task',
+        'add_daily_log',
+        'add_note',
+        'add_photo_note',
+        'add_estimate_item',
+        'open_job',
+        'open_customer',
+        'schedule_follow_up',
+        'unknown',
+      ],
     },
     jobId: { type: 'string' },
     jobName: { type: 'string' },
+    customerId: { type: 'string' },
+    customerName: { type: 'string' },
+    estimateId: { type: 'string' },
     title: { type: 'string' },
+    content: { type: 'string' },
+    dueDate: { type: 'string' },
+    priority: {
+      type: 'string',
+      enum: ['low', 'medium', 'high', 'urgent'],
+    },
+    shoppingListMode: {
+      type: 'string',
+      enum: ['new', 'append', 'ask'],
+    },
     items: {
       type: 'array',
       items: {
@@ -61,11 +102,27 @@ const commandSchema = {
         },
       },
     },
+    estimateItem: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['name', 'description', 'quantity', 'unit', 'unitPrice', 'category'],
+      properties: {
+        name: { type: 'string' },
+        description: { type: 'string' },
+        quantity: { type: 'number' },
+        unit: { type: 'string' },
+        unitPrice: { type: 'number' },
+        category: {
+          type: 'string',
+          enum: ['labor', 'material', 'equipment', 'subcontractor', 'other', 'allowance'],
+        },
+      },
+    },
     missingFields: {
       type: 'array',
       items: {
         type: 'string',
-        enum: ['job', 'items'],
+        enum: ['job', 'customer', 'estimate', 'title', 'content', 'items', 'dueDate'],
       },
     },
     confidence: { type: 'number' },
@@ -100,6 +157,8 @@ module.exports = async function handler(req, res) {
 
   const transcript = typeof body.transcript === 'string' ? body.transcript.trim() : '';
   const jobs = Array.isArray(body.jobs) ? body.jobs.slice(0, 100) : [];
+  const customers = Array.isArray(body.customers) ? body.customers.slice(0, 100) : [];
+  const estimates = Array.isArray(body.estimates) ? body.estimates.slice(0, 100) : [];
 
   if (!transcript) return sendJson(res, 400, { error: 'transcript is required' });
 
@@ -108,10 +167,16 @@ module.exports = async function handler(req, res) {
       role: 'system',
       content: [
         'You parse voice commands for a residential construction operations app.',
-        'Only create shopping-list commands are supported right now.',
+        'Supported intents: create_shopping_list, create_task, add_daily_log, add_note, add_photo_note, add_estimate_item, open_job, open_customer, schedule_follow_up.',
         'Choose jobId only from the provided jobs list. If unsure, leave jobId empty and include missingFields job.',
+        'Choose customerId only from the provided customers list. If unsure for open_customer, leave customerId empty and include missingFields customer.',
+        'Choose estimateId only from the provided estimates list. If an estimate item targets a job with one linked estimate, use that estimateId.',
         'Extract concrete shopping items. Remove filler words and command phrasing.',
         'For unspecified quantities use 1 and unit ea.',
+        'For shoppingListMode: use append only when the speaker clearly says append/add to an existing/current/open list, new only when they clearly ask for a new list, otherwise ask.',
+        'For create_task and schedule_follow_up, put the task title in title and details in content. Use ISO yyyy-mm-dd for dueDate when stated, otherwise empty.',
+        'For add_daily_log, add_note, and add_photo_note, put the spoken note/log details in content.',
+        'For add_estimate_item, fill estimateItem. Use unitPrice 0 when no price is spoken.',
         'Set confidence from 0 to 1.',
       ].join(' '),
     },
@@ -119,7 +184,17 @@ module.exports = async function handler(req, res) {
       role: 'user',
       content: JSON.stringify({
         transcript,
-        supportedIntents: ['create_shopping_list'],
+        supportedIntents: [
+          'create_shopping_list',
+          'create_task',
+          'add_daily_log',
+          'add_note',
+          'add_photo_note',
+          'add_estimate_item',
+          'open_job',
+          'open_customer',
+          'schedule_follow_up',
+        ],
         categories: ['material', 'hardware', 'supply', 'tool', 'rental', 'other'],
         jobs: jobs.map(job => ({
           id: String(job.id || ''),
@@ -127,6 +202,21 @@ module.exports = async function handler(req, res) {
           customer: String(job.customer || ''),
           address: String(job.address || ''),
           status: String(job.status || ''),
+          estimateId: String(job.estimateId || ''),
+          customerId: String(job.customerId || ''),
+        })),
+        customers: customers.map(customer => ({
+          id: String(customer.id || ''),
+          name: String(customer.name || ''),
+          company: String(customer.company || ''),
+          address: String(customer.address || ''),
+        })),
+        estimates: estimates.map(estimate => ({
+          id: String(estimate.id || ''),
+          estimateNumber: String(estimate.estimateNumber || ''),
+          name: String(estimate.name || ''),
+          customerId: String(estimate.customerId || ''),
+          status: String(estimate.status || ''),
         })),
       }),
     },

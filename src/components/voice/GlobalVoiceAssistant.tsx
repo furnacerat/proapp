@@ -1,18 +1,39 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Mic, MicOff, ShoppingCart, X } from 'lucide-react';
+import { Check, ClipboardList, Loader2, Mic, MicOff, ShoppingCart, X } from 'lucide-react';
+import { canAccessRoute } from '../../auth/rbac';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import type { EstimateLineCategory, EstimateLineItem, Job, Priority, ShoppingListItemCategory } from '../../data/types';
 import { useToast } from '../common/Toast';
-import { canUseShoppingListAssistant } from '../../auth/rbac';
-import type { Job, ShoppingListItemCategory } from '../../data/types';
 
-interface ShoppingDraft {
+type VoiceIntent =
+  | 'create_shopping_list'
+  | 'create_task'
+  | 'add_daily_log'
+  | 'add_note'
+  | 'add_photo_note'
+  | 'add_estimate_item'
+  | 'open_job'
+  | 'open_customer'
+  | 'schedule_follow_up'
+  | 'unknown';
+
+interface AssistantDraft {
+  intent: VoiceIntent;
   jobId: string;
+  customerId: string;
+  estimateId: string;
   title: string;
-  itemsText: string;
+  content: string;
+  dueDate: string;
+  priority: Priority;
+  shoppingListMode: 'new' | 'append' | 'ask';
   sourceText: string;
-  items?: ParsedShoppingItem[];
+  itemsText: string;
+  items: ParsedShoppingItem[];
+  estimateItem: ParsedEstimateItem;
+  missingFields: string[];
   message?: string;
   confidence?: number;
 }
@@ -26,13 +47,30 @@ interface ParsedShoppingItem {
   notes: string;
 }
 
+interface ParsedEstimateItem {
+  name: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  category: EstimateLineCategory;
+}
+
 interface ParsedVoiceCommand {
-  intent: 'create_shopping_list' | 'unknown';
+  intent: VoiceIntent;
   jobId: string;
   jobName: string;
+  customerId: string;
+  customerName: string;
+  estimateId: string;
   title: string;
+  content: string;
+  dueDate: string;
+  priority: Priority;
+  shoppingListMode: 'new' | 'append' | 'ask';
   items: ParsedShoppingItem[];
-  missingFields: ('job' | 'items')[];
+  estimateItem: ParsedEstimateItem;
+  missingFields: string[];
   confidence: number;
   message: string;
 }
@@ -46,12 +84,8 @@ const findJobFromCommand = (text: string, jobs: Job[]) => {
   const normalized = normalizeText(text);
   const ranked = jobs
     .map(job => {
-      const name = normalizeText(job.name);
-      const address = normalizeText(job.address || '');
-      const customer = normalizeText(job.customer || '');
-      const tokens = [name, address, customer].filter(Boolean);
+      const tokens = [job.name, job.address || '', job.customer || ''].map(normalizeText).filter(Boolean);
       const score = tokens.reduce((best, token) => {
-        if (!token) return best;
         if (normalized.includes(token)) return Math.max(best, token.length);
         const words = token.split(' ').filter(word => word.length > 2);
         const matched = words.filter(word => normalized.includes(word)).length;
@@ -120,26 +154,71 @@ const chooseAudioMimeType = () => {
   return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
 };
 
+const blankEstimateItem: ParsedEstimateItem = {
+  name: '',
+  description: '',
+  quantity: 1,
+  unit: 'ea',
+  unitPrice: 0,
+  category: 'material',
+};
+
+const intentLabels: Record<VoiceIntent, string> = {
+  create_shopping_list: 'Shopping List',
+  create_task: 'Task',
+  add_daily_log: 'Daily Log',
+  add_note: 'Job Note',
+  add_photo_note: 'Photo Note',
+  add_estimate_item: 'Estimate Item',
+  open_job: 'Open Job',
+  open_customer: 'Open Customer',
+  schedule_follow_up: 'Follow-up',
+  unknown: 'Voice Command',
+};
+
 export function GlobalVoiceAssistant() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { profile, role, session } = useAuth();
-  const { jobs, shoppingLists, addShoppingList, addShoppingListItem } = useApp();
+  const {
+    jobs,
+    customers,
+    estimates,
+    shoppingLists,
+    addShoppingList,
+    addShoppingListItem,
+    addTask,
+    addNote,
+    addJobLog,
+    updateEstimate,
+  } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState('');
-  const [draft, setDraft] = useState<ShoppingDraft | null>(null);
+  const [draft, setDraft] = useState<AssistantDraft | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const canRecord = typeof window !== 'undefined'
     && !!navigator.mediaDevices?.getUserMedia
     && typeof MediaRecorder !== 'undefined';
-  const canUseAssistant = profile?.active !== false && canUseShoppingListAssistant(role);
+  const canUseAssistant = profile?.active !== false && [
+    '/shopping-lists',
+    '/tasks',
+    '/jobs',
+    '/customers',
+    '/estimates',
+    '/schedule',
+  ].some(route => canAccessRoute(role, route));
 
   const openJobs = useMemo(() => jobs.filter(job => !['completed', 'closed'].includes(job.status)), [jobs]);
   const selectedJob = draft?.jobId ? jobs.find(job => job.id === draft.jobId) || null : null;
+  const selectedCustomer = draft?.customerId ? customers.find(customer => customer.id === draft.customerId) || null : null;
+  const selectedEstimate = draft?.estimateId ? estimates.find(estimate => estimate.id === draft.estimateId) || null : null;
+  const openShoppingList = selectedJob
+    ? shoppingLists.find(list => list.jobId === selectedJob.id && ['open', 'shopping'].includes(list.status))
+    : undefined;
   const parsedItems = useMemo(
     () => draft?.items?.length ? draft.items.map(itemToText) : parseShoppingItems(draft?.itemsText || ''),
     [draft?.items, draft?.itemsText],
@@ -152,24 +231,49 @@ export function GlobalVoiceAssistant() {
 
   const authHeader = () => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
-  const buildFallbackDraft = (text: string): ShoppingDraft => {
-    if (!commandIncludesShoppingList(text)) {
-      return { jobId: '', title: 'Builder Assistant Command', itemsText: '', sourceText: text };
-    }
+  const canRunIntent = (intent: VoiceIntent) => {
+    if (intent === 'create_shopping_list') return canAccessRoute(role, '/shopping-lists');
+    if (intent === 'create_task' || intent === 'schedule_follow_up') return canAccessRoute(role, '/tasks');
+    if (intent === 'add_note' || intent === 'add_photo_note' || intent === 'add_daily_log' || intent === 'open_job') return canAccessRoute(role, '/jobs');
+    if (intent === 'open_customer') return canAccessRoute(role, '/customers');
+    if (intent === 'add_estimate_item') return canAccessRoute(role, '/estimates');
+    return false;
+  };
+
+  const emptyDraft = (text: string, intent: VoiceIntent): AssistantDraft => {
     const job = findJobFromCommand(text, jobs);
-    const itemsText = extractItemsText(text, job);
+    const linkedEstimate = job?.estimateId ? estimates.find(estimate => estimate.id === job.estimateId) : undefined;
     return {
+      intent,
       jobId: job?.id || '',
-      title: job ? `${job.name} Shopping List` : 'Job Shopping List',
-      itemsText,
+      customerId: job?.customerId || '',
+      estimateId: linkedEstimate?.id || '',
+      title: intentLabels[intent],
+      content: text,
+      dueDate: '',
+      priority: 'medium',
+      shoppingListMode: 'ask',
       sourceText: text,
+      itemsText: intent === 'create_shopping_list' ? extractItemsText(text, job) : '',
+      items: [],
+      estimateItem: blankEstimateItem,
+      missingFields: [],
     };
+  };
+
+  const buildFallbackDraft = (text: string): AssistantDraft => {
+    if (commandIncludesShoppingList(text)) {
+      const fallback = emptyDraft(text, 'create_shopping_list');
+      const job = fallback.jobId ? jobs.find(item => item.id === fallback.jobId) : undefined;
+      return { ...fallback, title: job ? `${job.name} Shopping List` : 'Job Shopping List' };
+    }
+    return { ...emptyDraft(text, 'unknown'), message: 'Try a command like "create a task", "add a daily log", "open Smith job", or "create a shopping list".' };
   };
 
   const updateDraftFromText = (text: string) => {
     const fallbackDraft = buildFallbackDraft(text);
     setDraft(fallbackDraft);
-    setError(commandIncludesShoppingList(text) ? '' : 'I can create shopping lists right now. Try "create a shopping list for [job] with [items]."');
+    setError(fallbackDraft.intent === 'unknown' ? 'I could not match that to a supported assistant action yet.' : '');
   };
 
   const parseCommand = async (text: string): Promise<ParsedVoiceCommand | null> => {
@@ -182,8 +286,23 @@ export function GlobalVoiceAssistant() {
           id: job.id,
           name: job.name,
           customer: job.customer || '',
+          customerId: job.customerId || '',
           address: job.address || '',
           status: job.status,
+          estimateId: job.estimateId || '',
+        })),
+        customers: customers.map(customer => ({
+          id: customer.id,
+          name: customer.name,
+          company: customer.company || '',
+          address: customer.address || '',
+        })),
+        estimates: estimates.map(estimate => ({
+          id: estimate.id,
+          estimateNumber: estimate.estimateNumber,
+          name: estimate.name,
+          customerId: estimate.customerId,
+          status: estimate.status,
         })),
       }),
     });
@@ -193,22 +312,36 @@ export function GlobalVoiceAssistant() {
   };
 
   const updateDraftFromCommand = (text: string, command: ParsedVoiceCommand | null) => {
-    if (!command || command.intent !== 'create_shopping_list') {
+    if (!command || command.intent === 'unknown') {
       updateDraftFromText(text);
       return;
     }
     const fallbackDraft = buildFallbackDraft(text);
-    const nextDraft: ShoppingDraft = {
+    const job = command.jobId ? jobs.find(item => item.id === command.jobId) : null;
+    const jobEstimate = job?.estimateId ? estimates.find(estimate => estimate.id === job.estimateId) : undefined;
+    const nextDraft: AssistantDraft = {
+      ...fallbackDraft,
+      intent: command.intent,
       jobId: command.jobId || fallbackDraft.jobId,
+      customerId: command.customerId || job?.customerId || fallbackDraft.customerId,
+      estimateId: command.estimateId || jobEstimate?.id || fallbackDraft.estimateId,
       title: command.title || fallbackDraft.title,
+      content: command.content || fallbackDraft.content,
+      dueDate: command.dueDate || '',
+      priority: command.priority || 'medium',
+      shoppingListMode: command.shoppingListMode || 'ask',
       itemsText: command.items.length ? command.items.map(itemToText).join(', ') : fallbackDraft.itemsText,
-      sourceText: text,
       items: command.items,
+      estimateItem: command.estimateItem?.name ? command.estimateItem : fallbackDraft.estimateItem,
+      missingFields: command.missingFields || [],
       message: command.message,
       confidence: command.confidence,
     };
     setDraft(nextDraft);
-    if (command.missingFields.includes('job')) setError('Choose a job before creating the shopping list.');
+    if (!canRunIntent(command.intent)) setError('Your current role cannot run that assistant action.');
+    else if (command.missingFields.includes('job')) setError('Choose a job before continuing.');
+    else if (command.missingFields.includes('customer')) setError('Choose a customer before continuing.');
+    else if (command.missingFields.includes('estimate')) setError('Choose an estimate before continuing.');
     else if (command.missingFields.includes('items')) setError('Add at least one shopping item before creating the list.');
     else setError('');
   };
@@ -240,7 +373,7 @@ export function GlobalVoiceAssistant() {
   const startRecording = async () => {
     setIsOpen(true);
     if (!canUseAssistant) {
-      setError('Your current role cannot create shopping lists.');
+      setError('Your current role cannot use Builder Assistant.');
       return;
     }
     if (!canRecord) {
@@ -300,43 +433,42 @@ export function GlobalVoiceAssistant() {
     setIsOpen(false);
   };
 
-  const createShoppingListFromDraft = () => {
+  const getShoppingItems = () => draft?.items.length
+    ? draft.items
+    : parseShoppingItems(draft?.itemsText || '').map(rawItem => {
+      const parsed = parseQuantity(rawItem);
+      return {
+        name: parsed.name,
+        quantity: parsed.quantity,
+        unit: parsed.unit,
+        category: inferCategory(parsed.name),
+        urgent: false,
+        notes: '',
+      };
+    });
+
+  const runShoppingList = (mode: 'new' | 'append') => {
     if (!draft) return;
-    if (!canUseAssistant) {
-      setError('Your current role cannot create shopping lists.');
-      return;
-    }
     const job = jobs.find(item => item.id === draft.jobId);
     if (!job) {
       setError('Choose a job first.');
       return;
     }
-    const items = draft.items?.length
-      ? draft.items
-      : parseShoppingItems(draft.itemsText).map(rawItem => {
-        const parsed = parseQuantity(rawItem);
-        return {
-          name: parsed.name,
-          quantity: parsed.quantity,
-          unit: parsed.unit,
-          category: inferCategory(parsed.name),
-          urgent: false,
-          notes: '',
-        };
-      });
+    const items = getShoppingItems();
     if (items.length === 0) {
       setError('Add at least one shopping item first.');
       return;
     }
-    const existingOpenList = shoppingLists.find(list => list.jobId === job.id && ['open', 'shopping'].includes(list.status));
-    const listId = existingOpenList?.id || addShoppingList({
-      jobId: job.id,
-      jobName: job.name,
-      title: draft.title.trim() || `${job.name} Shopping List`,
-      status: 'open',
-      notes: `Created by Builder Assistant from: ${draft.sourceText}`,
-      items: [],
-    });
+    const listId = mode === 'append' && openShoppingList
+      ? openShoppingList.id
+      : addShoppingList({
+        jobId: job.id,
+        jobName: job.name,
+        title: draft.title.trim() || `${job.name} Shopping List`,
+        status: 'open',
+        notes: `Created by Builder Assistant from: ${draft.sourceText}`,
+        items: [],
+      });
     items.forEach(item => {
       addShoppingListItem(listId, {
         name: item.name,
@@ -349,12 +481,137 @@ export function GlobalVoiceAssistant() {
         addOnStatus: 'included_expense',
       });
     });
-    showToast(items.length ? `Shopping list updated with ${items.length} item${items.length === 1 ? '' : 's'}` : 'Shopping list created');
+    showToast(`${mode === 'append' ? 'Updated' : 'Created'} shopping list with ${items.length} item${items.length === 1 ? '' : 's'}`);
     setIsOpen(false);
     navigate(`/shopping-lists?jobId=${encodeURIComponent(job.id)}`);
   };
 
+  const runDraft = () => {
+    if (!draft || !canRunIntent(draft.intent)) return;
+    const job = draft.jobId ? jobs.find(item => item.id === draft.jobId) : undefined;
+    if (draft.intent === 'create_shopping_list') {
+      if (openShoppingList && draft.shoppingListMode === 'ask') {
+        setError('This job already has an open shopping list. Choose whether to append to it or create a new list.');
+        return;
+      }
+      runShoppingList(draft.shoppingListMode === 'append' ? 'append' : 'new');
+      return;
+    }
+    if ((draft.intent === 'create_task' || draft.intent === 'schedule_follow_up') && !draft.title.trim()) {
+      setError('Add a task title first.');
+      return;
+    }
+    if (['add_daily_log', 'add_note', 'add_photo_note'].includes(draft.intent) && !job) {
+      setError('Choose a job first.');
+      return;
+    }
+    if (draft.intent === 'create_task' || draft.intent === 'schedule_follow_up') {
+      addTask({
+        title: draft.title.trim(),
+        description: draft.content.trim() || undefined,
+        dueDate: draft.dueDate || undefined,
+        jobId: draft.jobId || undefined,
+        priority: draft.priority,
+        status: 'open',
+        taskType: draft.intent === 'schedule_follow_up' ? 'follow_up' : 'task',
+        sourceType: 'manual',
+      });
+      showToast(draft.intent === 'schedule_follow_up' ? 'Follow-up scheduled' : 'Task created');
+      setIsOpen(false);
+      navigate('/tasks');
+      return;
+    }
+    if (draft.intent === 'add_daily_log' && job) {
+      addJobLog({
+        jobId: job.id,
+        date: new Date().toISOString().split('T')[0],
+        workCompleted: draft.content.trim() || draft.title,
+        workers: [],
+        issues: '',
+        notes: `Created by Builder Assistant from: ${draft.sourceText}`,
+        hoursWorked: 0,
+      });
+      showToast('Daily log added');
+      setIsOpen(false);
+      navigate(`/jobs/${job.id}`);
+      return;
+    }
+    if ((draft.intent === 'add_note' || draft.intent === 'add_photo_note') && job) {
+      addNote({
+        jobId: job.id,
+        content: `${draft.intent === 'add_photo_note' ? 'Photo note: ' : ''}${draft.content.trim() || draft.title}`,
+      });
+      showToast(draft.intent === 'add_photo_note' ? 'Photo note added to job' : 'Note added to job');
+      setIsOpen(false);
+      navigate(`/jobs/${job.id}`);
+      return;
+    }
+    if (draft.intent === 'add_estimate_item') {
+      const estimate = estimates.find(item => item.id === draft.estimateId);
+      const item = draft.estimateItem;
+      if (!estimate || !item.name.trim()) {
+        setError('Choose an estimate and name the item first.');
+        return;
+      }
+      const quantity = item.quantity || 1;
+      const unitPrice = item.unitPrice || 0;
+      const category = item.category || 'material';
+      const nextItem: EstimateLineItem = {
+        id: crypto.randomUUID(),
+        name: item.name.trim(),
+        description: item.description || draft.content,
+        quantity,
+        unit: item.unit || 'ea',
+        unitPrice,
+        category,
+        type: category === 'allowance' ? 'other' : category,
+        isLabor: category === 'labor',
+        total: quantity * unitPrice,
+        priceTotal: quantity * unitPrice,
+        costTotal: 0,
+        sourceType: 'manual',
+      };
+      const sections = estimate.sections?.length ? estimate.sections : [{
+        id: crypto.randomUUID(),
+        name: 'Builder Assistant',
+        lineItems: [],
+        sortOrder: 0,
+      }];
+      updateEstimate(estimate.id, {
+        sections: sections.map((section, index) => index === 0
+          ? { ...section, lineItems: [...(section.lineItems || []), nextItem] }
+          : section),
+      });
+      showToast('Estimate item added');
+      setIsOpen(false);
+      navigate('/estimates');
+      return;
+    }
+    if (draft.intent === 'open_job' && job) {
+      setIsOpen(false);
+      navigate(`/jobs/${job.id}`);
+      return;
+    }
+    if (draft.intent === 'open_customer') {
+      const customer = customers.find(item => item.id === draft.customerId);
+      if (!customer) {
+        setError('Choose a customer first.');
+        return;
+      }
+      setIsOpen(false);
+      navigate('/customers');
+    }
+  };
+
   if (!canUseAssistant) return null;
+
+  const primaryAction = draft?.intent === 'create_shopping_list'
+    ? openShoppingList && draft.shoppingListMode === 'ask'
+      ? 'Choose List Action'
+      : draft.shoppingListMode === 'append'
+        ? 'Append to Shopping List'
+        : 'Create Shopping List'
+    : draft ? `Confirm ${intentLabels[draft.intent]}` : 'Confirm';
 
   return (
     <>
@@ -373,7 +630,7 @@ export function GlobalVoiceAssistant() {
             <div className="assistant-header">
               <div>
                 <span>Builder Assistant</span>
-                <strong>{isRecording ? 'Listening...' : isTranscribing ? 'Transcribing...' : 'Voice Command'}</strong>
+                <strong>{isRecording ? 'Listening...' : isTranscribing ? 'Transcribing...' : draft ? intentLabels[draft.intent] : 'Voice Command'}</strong>
               </div>
               <button onClick={closeAssistant} aria-label="Close Builder Assistant"><X size={18} /></button>
             </div>
@@ -393,47 +650,115 @@ export function GlobalVoiceAssistant() {
                     <textarea value={draft.sourceText} onChange={event => updateDraftFromText(event.target.value)} />
                   </label>
 
-                  <label>
-                    <span>Job</span>
-                    <select value={draft.jobId} onChange={event => setDraft({ ...draft, jobId: event.target.value, title: `${jobs.find(job => job.id === event.target.value)?.name || 'Job'} Shopping List` })}>
-                      <option value="">Choose job...</option>
-                      {openJobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}
-                    </select>
-                  </label>
-
-                  <label>
-                    <span>Shopping Items</span>
-                    <textarea
-                      value={draft.itemsText}
-                      onChange={event => setDraft({ ...draft, itemsText: event.target.value, items: undefined })}
-                      placeholder="Drywall screws, tile spacers, two tubes caulk"
-                    />
-                  </label>
-
-                  {draft.message && (
-                    <div className="assistant-notice">{draft.message}</div>
+                  {['create_shopping_list', 'create_task', 'schedule_follow_up', 'add_daily_log', 'add_note', 'add_photo_note', 'open_job'].includes(draft.intent) && (
+                    <label>
+                      <span>Job</span>
+                      <select value={draft.jobId} onChange={event => setDraft({ ...draft, jobId: event.target.value })}>
+                        <option value="">Choose job...</option>
+                        {openJobs.map(job => <option key={job.id} value={job.id}>{job.name}</option>)}
+                      </select>
+                    </label>
                   )}
 
+                  {draft.intent === 'open_customer' && (
+                    <label>
+                      <span>Customer</span>
+                      <select value={draft.customerId} onChange={event => setDraft({ ...draft, customerId: event.target.value })}>
+                        <option value="">Choose customer...</option>
+                        {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+
+                  {draft.intent === 'add_estimate_item' && (
+                    <label>
+                      <span>Estimate</span>
+                      <select value={draft.estimateId} onChange={event => setDraft({ ...draft, estimateId: event.target.value })}>
+                        <option value="">Choose estimate...</option>
+                        {estimates.map(estimate => <option key={estimate.id} value={estimate.id}>{estimate.estimateNumber} - {estimate.name}</option>)}
+                      </select>
+                    </label>
+                  )}
+
+                  {draft.intent === 'create_shopping_list' && (
+                    <label>
+                      <span>Shopping Items</span>
+                      <textarea
+                        value={draft.itemsText}
+                        onChange={event => setDraft({ ...draft, itemsText: event.target.value, items: [] })}
+                        placeholder="Drywall screws, tile spacers, two tubes caulk"
+                      />
+                    </label>
+                  )}
+
+                  {['create_task', 'schedule_follow_up'].includes(draft.intent) && (
+                    <>
+                      <label>
+                        <span>Title</span>
+                        <textarea value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} />
+                      </label>
+                      <label>
+                        <span>Details</span>
+                        <textarea value={draft.content} onChange={event => setDraft({ ...draft, content: event.target.value })} />
+                      </label>
+                    </>
+                  )}
+
+                  {['add_daily_log', 'add_note', 'add_photo_note'].includes(draft.intent) && (
+                    <label>
+                      <span>Note</span>
+                      <textarea value={draft.content} onChange={event => setDraft({ ...draft, content: event.target.value })} />
+                    </label>
+                  )}
+
+                  {draft.intent === 'add_estimate_item' && (
+                    <label>
+                      <span>Estimate Item</span>
+                      <textarea
+                        value={draft.estimateItem.name}
+                        onChange={event => setDraft({ ...draft, estimateItem: { ...draft.estimateItem, name: event.target.value } })}
+                        placeholder="3 sheets drywall"
+                      />
+                    </label>
+                  )}
+
+                  {draft.message && <div className="assistant-notice">{draft.message}</div>}
+
                   <div className="assistant-preview">
-                    <ShoppingCart size={16} />
-                    <span>{selectedJob?.name || 'No job selected'} - {parsedItems.length} item{parsedItems.length === 1 ? '' : 's'}{draft.confidence !== undefined ? ` - ${Math.round(draft.confidence * 100)}% confidence` : ''}</span>
+                    {draft.intent === 'create_shopping_list' ? <ShoppingCart size={16} /> : <ClipboardList size={16} />}
+                    <span>
+                      {draft.intent === 'open_customer'
+                        ? selectedCustomer?.name || 'No customer selected'
+                        : draft.intent === 'add_estimate_item'
+                          ? selectedEstimate?.name || 'No estimate selected'
+                          : selectedJob?.name || 'No job selected'}
+                      {draft.intent === 'create_shopping_list' ? ` - ${parsedItems.length} item${parsedItems.length === 1 ? '' : 's'}` : ''}
+                      {draft.confidence !== undefined ? ` - ${Math.round(draft.confidence * 100)}% confidence` : ''}
+                    </span>
                   </div>
 
-                  {parsedItems.length > 0 && (
+                  {draft.intent === 'create_shopping_list' && openShoppingList && draft.shoppingListMode === 'ask' && (
+                    <div className="assistant-choice-row">
+                      <button className="assistant-secondary" onClick={() => runShoppingList('append')}>Append Open List</button>
+                      <button className="assistant-secondary" onClick={() => runShoppingList('new')}>Create New List</button>
+                    </div>
+                  )}
+
+                  {parsedItems.length > 0 && draft.intent === 'create_shopping_list' && (
                     <div className="assistant-item-chips">
                       {parsedItems.slice(0, 8).map(item => <span key={item}>{item}</span>)}
                     </div>
                   )}
 
-                  <button className="assistant-create" onClick={createShoppingListFromDraft}>
+                  <button className="assistant-create" onClick={runDraft} disabled={draft.intent === 'unknown'}>
                     <Check size={17} />
-                    <span>Create Shopping List</span>
+                    <span>{primaryAction}</span>
                   </button>
                 </div>
               )}
 
               {!draft && !error && !isRecording && !isTranscribing && (
-                <p className="assistant-hint">Say "Create a shopping list for Smith kitchen with drywall screws and tile spacers."</p>
+                <p className="assistant-hint">Say "Create a task for Smith kitchen", "add a daily log", "open Johnson customer", or "create a shopping list with drywall screws."</p>
               )}
             </div>
           </div>
