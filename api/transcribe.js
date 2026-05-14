@@ -1,4 +1,5 @@
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const { getClientIp, rateLimit, requireAuthenticatedUser, sendJson } = require('./_security');
 
 function readRawBody(req) {
   if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
@@ -39,27 +40,40 @@ function audioFileName(contentType) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method not allowed' });
+    return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI transcription is not configured' });
+    return sendJson(res, 500, { error: 'OpenAI transcription is not configured' });
+  }
+
+  const auth = await requireAuthenticatedUser(req);
+  if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+
+  const limit = rateLimit(auth.userId || getClientIp(req), { name: 'transcribe', windowMs: 60_000, max: 12 });
+  if (!limit.ok) {
+    return sendJson(res, 429, { error: 'Too many voice requests. Try again shortly.' }, { 'Retry-After': String(limit.retryAfter) });
   }
 
   const contentType = req.headers['content-type'] || 'audio/webm';
   if (!String(contentType).startsWith('audio/')) {
-    return res.status(400).json({ error: 'Expected an audio upload' });
+    return sendJson(res, 400, { error: 'Expected an audio upload' });
+  }
+
+  const contentLength = Number(req.headers['content-length'] || 0);
+  if (contentLength > MAX_AUDIO_BYTES) {
+    return sendJson(res, 413, { error: 'Audio file is too large' });
   }
 
   let audioBuffer;
   try {
     audioBuffer = await readRawBody(req);
   } catch (error) {
-    return res.status(400).json({ error: error.message || 'Could not read audio upload' });
+    return sendJson(res, 400, { error: error.message || 'Could not read audio upload' });
   }
 
   if (!audioBuffer.length) {
-    return res.status(400).json({ error: 'Audio upload is empty' });
+    return sendJson(res, 400, { error: 'Audio upload is empty' });
   }
 
   const formData = new FormData();
@@ -82,13 +96,13 @@ module.exports = async function handler(req, res) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      return res.status(response.status === 401 ? 500 : 502).json({
+      return sendJson(res, response.status === 401 ? 500 : 502, {
         error: data.error?.message || 'OpenAI transcription failed',
       });
     }
 
-    return res.status(200).json({ text: data.text || '' });
+    return sendJson(res, 200, { text: data.text || '' });
   } catch {
-    return res.status(502).json({ error: 'OpenAI transcription failed' });
+    return sendJson(res, 502, { error: 'OpenAI transcription failed' });
   }
 };

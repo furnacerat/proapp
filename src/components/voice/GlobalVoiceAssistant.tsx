@@ -123,7 +123,7 @@ const chooseAudioMimeType = () => {
 export function GlobalVoiceAssistant() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { profile, role } = useAuth();
+  const { profile, role, session } = useAuth();
   const { jobs, shoppingLists, addShoppingList, addShoppingListItem } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -150,6 +150,8 @@ export function GlobalVoiceAssistant() {
     streamRef.current = null;
   };
 
+  const authHeader = () => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+
   const buildFallbackDraft = (text: string): ShoppingDraft => {
     if (!commandIncludesShoppingList(text)) {
       return { jobId: '', title: 'Builder Assistant Command', itemsText: '', sourceText: text };
@@ -173,7 +175,7 @@ export function GlobalVoiceAssistant() {
   const parseCommand = async (text: string): Promise<ParsedVoiceCommand | null> => {
     const response = await fetch('/api/voice/command', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({
         transcript: text,
         jobs: jobs.map(job => ({
@@ -217,7 +219,7 @@ export function GlobalVoiceAssistant() {
     try {
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        headers: { 'Content-Type': blob.type || 'audio/webm', ...authHeader() },
         body: blob,
       });
       const data = await response.json().catch(() => ({}));

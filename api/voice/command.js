@@ -1,4 +1,5 @@
 const MAX_BODY_LENGTH = 30_000;
+const { getClientIp, rateLimit, requireAuthenticatedUser, sendJson } = require('../_security');
 
 function readBody(req) {
   if (req.body && typeof req.body === 'object') return Promise.resolve(req.body);
@@ -75,24 +76,32 @@ const commandSchema = {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method not allowed' });
+    return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OpenAI command parsing is not configured' });
+    return sendJson(res, 500, { error: 'OpenAI command parsing is not configured' });
+  }
+
+  const auth = await requireAuthenticatedUser(req);
+  if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+
+  const limit = rateLimit(auth.userId || getClientIp(req), { name: 'voice-command', windowMs: 60_000, max: 30 });
+  if (!limit.ok) {
+    return sendJson(res, 429, { error: 'Too many voice command requests. Try again shortly.' }, { 'Retry-After': String(limit.retryAfter) });
   }
 
   let body;
   try {
     body = await readBody(req);
   } catch (error) {
-    return res.status(400).json({ error: error.message || 'Invalid request body' });
+    return sendJson(res, 400, { error: error.message || 'Invalid request body' });
   }
 
   const transcript = typeof body.transcript === 'string' ? body.transcript.trim() : '';
   const jobs = Array.isArray(body.jobs) ? body.jobs.slice(0, 100) : [];
 
-  if (!transcript) return res.status(400).json({ error: 'transcript is required' });
+  if (!transcript) return sendJson(res, 400, { error: 'transcript is required' });
 
   const input = [
     {
@@ -146,16 +155,16 @@ module.exports = async function handler(req, res) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      return res.status(response.status === 401 ? 500 : 502).json({
+      return sendJson(res, response.status === 401 ? 500 : 502, {
         error: data.error?.message || 'OpenAI command parsing failed',
       });
     }
 
     const outputText = extractOutputText(data);
-    if (!outputText) return res.status(502).json({ error: 'OpenAI command parsing returned no output' });
+    if (!outputText) return sendJson(res, 502, { error: 'OpenAI command parsing returned no output' });
 
-    return res.status(200).json(JSON.parse(outputText));
+    return sendJson(res, 200, JSON.parse(outputText));
   } catch (error) {
-    return res.status(502).json({ error: error instanceof Error ? error.message : 'OpenAI command parsing failed' });
+    return sendJson(res, 502, { error: error instanceof Error ? error.message : 'OpenAI command parsing failed' });
   }
 };

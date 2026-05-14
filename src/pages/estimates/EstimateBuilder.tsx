@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
 import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate, Template, TemplateItem, Allowance, AllowanceCategory, LineItemQuantityMode } from '../../data/types';
@@ -176,6 +177,7 @@ export function EstimateBuilder() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { branding, estimates, customers, materials, laborRates, assemblies, templates, projectTypeTemplates, jobs, expenses, timeEntries, addCustomer, addEstimate, updateEstimate, getEstimateCustomer, convertEstimateToJob, sendEmail, addTemplate, updateTemplate, addAssembly, updateAssembly, updateMaterial } = useApp();
+  const { session } = useAuth();
   const { showToast } = useToast();
 
   const isNew = id === 'new';
@@ -599,7 +601,10 @@ export function EstimateBuilder() {
     try {
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        headers: {
+          'Content-Type': blob.type || 'audio/webm',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: blob,
       });
       const data = await response.json().catch(() => ({}));
