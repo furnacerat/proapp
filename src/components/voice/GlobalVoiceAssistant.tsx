@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Loader2, Mic, MicOff, ShoppingCart, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../common/Toast';
+import { canUseShoppingListAssistant } from '../../auth/rbac';
 import type { Job, ShoppingListItemCategory } from '../../data/types';
 
 interface ShoppingDraft {
@@ -92,6 +94,7 @@ const chooseAudioMimeType = () => {
 export function GlobalVoiceAssistant() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { profile, role } = useAuth();
   const { jobs, shoppingLists, addShoppingList, addShoppingListItem } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -104,6 +107,7 @@ export function GlobalVoiceAssistant() {
   const canRecord = typeof window !== 'undefined'
     && !!navigator.mediaDevices?.getUserMedia
     && typeof MediaRecorder !== 'undefined';
+  const canUseAssistant = profile?.active !== false && canUseShoppingListAssistant(role);
 
   const openJobs = useMemo(() => jobs.filter(job => !['completed', 'closed'].includes(job.status)), [jobs]);
   const selectedJob = draft?.jobId ? jobs.find(job => job.id === draft.jobId) || null : null;
@@ -153,6 +157,10 @@ export function GlobalVoiceAssistant() {
 
   const startRecording = async () => {
     setIsOpen(true);
+    if (!canUseAssistant) {
+      setError('Your current role cannot create shopping lists.');
+      return;
+    }
     if (!canRecord) {
       setError('Audio recording is not available in this browser.');
       return;
@@ -212,6 +220,10 @@ export function GlobalVoiceAssistant() {
 
   const createShoppingListFromDraft = () => {
     if (!draft) return;
+    if (!canUseAssistant) {
+      setError('Your current role cannot create shopping lists.');
+      return;
+    }
     const job = jobs.find(item => item.id === draft.jobId);
     if (!job) {
       setError('Choose a job first.');
@@ -244,6 +256,8 @@ export function GlobalVoiceAssistant() {
     setIsOpen(false);
     navigate(`/shopping-lists?jobId=${encodeURIComponent(job.id)}`);
   };
+
+  if (!canUseAssistant) return null;
 
   return (
     <>

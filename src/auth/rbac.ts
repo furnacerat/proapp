@@ -53,6 +53,8 @@ export const canAccessRoute = (role: UserRole, pathname: string) => {
   });
 };
 
+export const canUseShoppingListAssistant = (role: UserRole) => canAccessRoute(role, '/shopping-lists');
+
 export const getDefaultRouteForRole = (role: UserRole) => role === 'crew' ? '/field' : '/dashboard';
 
 const redactWorkerPay = (worker: Worker): Worker => ({
