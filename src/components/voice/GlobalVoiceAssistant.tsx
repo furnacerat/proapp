@@ -12,6 +12,29 @@ interface ShoppingDraft {
   title: string;
   itemsText: string;
   sourceText: string;
+  items?: ParsedShoppingItem[];
+  message?: string;
+  confidence?: number;
+}
+
+interface ParsedShoppingItem {
+  name: string;
+  quantity: number;
+  unit: string;
+  category: ShoppingListItemCategory;
+  urgent: boolean;
+  notes: string;
+}
+
+interface ParsedVoiceCommand {
+  intent: 'create_shopping_list' | 'unknown';
+  jobId: string;
+  jobName: string;
+  title: string;
+  items: ParsedShoppingItem[];
+  missingFields: ('job' | 'items')[];
+  confidence: number;
+  message: string;
 }
 
 const commandIncludesShoppingList = (text: string) =>
@@ -86,6 +109,12 @@ const parseQuantity = (item: string) => {
   };
 };
 
+const itemToText = (item: ParsedShoppingItem) => {
+  const quantity = item.quantity && item.quantity !== 1 ? `${item.quantity} ` : '';
+  const unit = item.unit && item.unit !== 'ea' ? `${item.unit} ` : '';
+  return `${quantity}${unit}${item.name}`.trim();
+};
+
 const chooseAudioMimeType = () => {
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/mpeg'];
   return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
@@ -111,28 +140,75 @@ export function GlobalVoiceAssistant() {
 
   const openJobs = useMemo(() => jobs.filter(job => !['completed', 'closed'].includes(job.status)), [jobs]);
   const selectedJob = draft?.jobId ? jobs.find(job => job.id === draft.jobId) || null : null;
-  const parsedItems = useMemo(() => parseShoppingItems(draft?.itemsText || ''), [draft?.itemsText]);
+  const parsedItems = useMemo(
+    () => draft?.items?.length ? draft.items.map(itemToText) : parseShoppingItems(draft?.itemsText || ''),
+    [draft?.items, draft?.itemsText],
+  );
 
   const stopStream = () => {
     streamRef.current?.getTracks().forEach(track => track.stop());
     streamRef.current = null;
   };
 
-  const updateDraftFromText = (text: string) => {
+  const buildFallbackDraft = (text: string): ShoppingDraft => {
     if (!commandIncludesShoppingList(text)) {
-      setDraft({ jobId: '', title: 'Builder Assistant Command', itemsText: '', sourceText: text });
-      setError('I can create shopping lists right now. Try "create a shopping list for [job] with [items]."');
-      return;
+      return { jobId: '', title: 'Builder Assistant Command', itemsText: '', sourceText: text };
     }
     const job = findJobFromCommand(text, jobs);
     const itemsText = extractItemsText(text, job);
-    setError('');
-    setDraft({
+    return {
       jobId: job?.id || '',
       title: job ? `${job.name} Shopping List` : 'Job Shopping List',
       itemsText,
       sourceText: text,
+    };
+  };
+
+  const updateDraftFromText = (text: string) => {
+    const fallbackDraft = buildFallbackDraft(text);
+    setDraft(fallbackDraft);
+    setError(commandIncludesShoppingList(text) ? '' : 'I can create shopping lists right now. Try "create a shopping list for [job] with [items]."');
+  };
+
+  const parseCommand = async (text: string): Promise<ParsedVoiceCommand | null> => {
+    const response = await fetch('/api/voice/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcript: text,
+        jobs: jobs.map(job => ({
+          id: job.id,
+          name: job.name,
+          customer: job.customer || '',
+          address: job.address || '',
+          status: job.status,
+        })),
+      }),
     });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Command parsing failed');
+    return data as ParsedVoiceCommand;
+  };
+
+  const updateDraftFromCommand = (text: string, command: ParsedVoiceCommand | null) => {
+    if (!command || command.intent !== 'create_shopping_list') {
+      updateDraftFromText(text);
+      return;
+    }
+    const fallbackDraft = buildFallbackDraft(text);
+    const nextDraft: ShoppingDraft = {
+      jobId: command.jobId || fallbackDraft.jobId,
+      title: command.title || fallbackDraft.title,
+      itemsText: command.items.length ? command.items.map(itemToText).join(', ') : fallbackDraft.itemsText,
+      sourceText: text,
+      items: command.items,
+      message: command.message,
+      confidence: command.confidence,
+    };
+    setDraft(nextDraft);
+    if (command.missingFields.includes('job')) setError('Choose a job before creating the shopping list.');
+    else if (command.missingFields.includes('items')) setError('Add at least one shopping item before creating the list.');
+    else setError('');
   };
 
   const transcribeBlob = async (blob: Blob) => {
@@ -147,7 +223,11 @@ export function GlobalVoiceAssistant() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Transcription failed');
       if (!data.text?.trim()) throw new Error('I did not catch any speech. Try again a little closer to the mic.');
-      updateDraftFromText(data.text || '');
+      try {
+        updateDraftFromCommand(data.text, await parseCommand(data.text));
+      } catch {
+        updateDraftFromText(data.text || '');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Transcription failed.');
     } finally {
@@ -229,7 +309,23 @@ export function GlobalVoiceAssistant() {
       setError('Choose a job first.');
       return;
     }
-    const items = parseShoppingItems(draft.itemsText);
+    const items = draft.items?.length
+      ? draft.items
+      : parseShoppingItems(draft.itemsText).map(rawItem => {
+        const parsed = parseQuantity(rawItem);
+        return {
+          name: parsed.name,
+          quantity: parsed.quantity,
+          unit: parsed.unit,
+          category: inferCategory(parsed.name),
+          urgent: false,
+          notes: '',
+        };
+      });
+    if (items.length === 0) {
+      setError('Add at least one shopping item first.');
+      return;
+    }
     const existingOpenList = shoppingLists.find(list => list.jobId === job.id && ['open', 'shopping'].includes(list.status));
     const listId = existingOpenList?.id || addShoppingList({
       jobId: job.id,
@@ -239,16 +335,15 @@ export function GlobalVoiceAssistant() {
       notes: `Created by Builder Assistant from: ${draft.sourceText}`,
       items: [],
     });
-    items.forEach(rawItem => {
-      const parsed = parseQuantity(rawItem);
+    items.forEach(item => {
       addShoppingListItem(listId, {
-        name: parsed.name,
-        category: inferCategory(parsed.name),
-        quantity: parsed.quantity,
-        unit: parsed.unit,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity || 1,
+        unit: item.unit || 'ea',
         purchased: false,
-        urgent: false,
-        notes: 'Added by Builder Assistant',
+        urgent: item.urgent,
+        notes: item.notes || 'Added by Builder Assistant',
         addOnStatus: 'included_expense',
       });
     });
@@ -308,14 +403,18 @@ export function GlobalVoiceAssistant() {
                     <span>Shopping Items</span>
                     <textarea
                       value={draft.itemsText}
-                      onChange={event => setDraft({ ...draft, itemsText: event.target.value })}
+                      onChange={event => setDraft({ ...draft, itemsText: event.target.value, items: undefined })}
                       placeholder="Drywall screws, tile spacers, two tubes caulk"
                     />
                   </label>
 
+                  {draft.message && (
+                    <div className="assistant-notice">{draft.message}</div>
+                  )}
+
                   <div className="assistant-preview">
                     <ShoppingCart size={16} />
-                    <span>{selectedJob?.name || 'No job selected'} - {parsedItems.length} item{parsedItems.length === 1 ? '' : 's'}</span>
+                    <span>{selectedJob?.name || 'No job selected'} - {parsedItems.length} item{parsedItems.length === 1 ? '' : 's'}{draft.confidence !== undefined ? ` - ${Math.round(draft.confidence * 100)}% confidence` : ''}</span>
                   </div>
 
                   {parsedItems.length > 0 && (
