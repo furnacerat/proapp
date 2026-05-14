@@ -79,7 +79,12 @@ export function MaterialsList() {
   }, [selectedItems]);
 
   const toggleItem = (key: string) => {
-    setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
 
   const selectAll = () => setSelectedKeys(new Set(allItems.map((item, idx) => itemKey(item, idx))));
