@@ -24,6 +24,10 @@ export const initialData: AppData = {
   changeOrders: [],
   portalTokens: [],
   signatureRequests: [],
+  dailyCommandProgress: {
+    streak: 0,
+    completedActionsByDate: {},
+  },
   alerts: [],
   timeline: [],
   jobLogs: [],

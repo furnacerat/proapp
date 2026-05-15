@@ -1,26 +1,31 @@
-import { BrandingSettings } from '../data/types'
+import type { BrandingSettings } from '../data/types'
+
+type PrintStatusType = 'success' | 'error' | 'warning' | 'info'
+
+interface PrintWindowOptions {
+  onStatus?: (message: string, type?: PrintStatusType) => void
+}
 
 export const openPrintWindow = (
   title: string,
   content: string,
-  branding?: BrandingSettings
+  branding?: BrandingSettings,
+  options: PrintWindowOptions = {}
 ): void => {
-  console.log('openPrintWindow called with title:', title, 'content length:', content?.length || 0)
+  const notify = options.onStatus
   let printWindow: Window | null = null
   try {
     printWindow = window.open('', '_blank', 'width=800,height=600')
-  } catch (e) {
-    console.error('Popup blocked:', e)
-    alert('Popup blocked. Please allow pop-ups for this site to print.')
+  } catch {
+    notify?.('Popup blocked. Please allow pop-ups for this site to print.', 'warning')
     return
   }
   if (!printWindow) {
-    alert('Please allow pop-ups to print documents')
+    notify?.('Please allow pop-ups to print documents.', 'warning')
     return
   }
 
   try {
-    console.log('Writing to print window...')
     const brandName = branding?.brandName || ''
     const primaryColor = branding?.primaryColor || '#1a1a1a'
     const fontFamily = branding?.fontFamily || 'ui-sans-serif, system-ui, Arial, sans-serif'
@@ -162,21 +167,17 @@ ${content}
 </html>
 `.trim()
 
-    console.log('HTML string length:', html.length)
-    
     printWindow.document.write(html)
     printWindow.document.close()
-    console.log('Document written and closed')
 
     setTimeout(() => {
       if (printWindow && !printWindow.closed) {
-        console.log('Focusing and printing...')
         printWindow.focus()
         printWindow.print()
+        notify?.('Print preview opened.', 'success')
       }
     }, 500)
   } catch (err) {
-    console.error('Error in openPrintWindow:', err)
-    alert('Error creating print preview: ' + err)
+    notify?.(`Error creating print preview: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
   }
 }

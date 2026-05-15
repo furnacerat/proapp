@@ -180,7 +180,7 @@ export function EstimateBuilder() {
   const { session } = useAuth();
   const { showToast } = useToast();
 
-  const isNew = id === 'new';
+  const isNew = id === 'new' || !id;
   const estimate = (!isNew && id) ? estimates?.find(e => e.id === id) : null;
   const customer = estimate ? getEstimateCustomer(estimate.id) : undefined;
   const requestedCustomerId = isNew ? searchParams.get('customerId') || '' : '';

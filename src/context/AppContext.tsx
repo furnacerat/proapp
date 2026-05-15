@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
-import type { AppData, Job, Worker, TimeEntry, Expense, CompanyExpense, Task, Invoice, Payment, Note, Photo, ChangeOrder, JobTemplate, Alert, Note as NoteType, Photo as PhotoType, ChangeOrder as ChangeOrderType, JobTemplate as JobTemplateType, Alert as AlertType, Customer, Estimate, EstimateLineItem, EstimateScope, LaborRate, Material, Assembly, Template, ProjectTypeTemplate, ProjectTypeTemplateItem, JobType, BrandingSettings, SmtpSettings, JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, Supplier, MaterialOrder, MaterialOrderStatus, ShoppingList, ShoppingListItem, Receipt, Allowance, AllowanceSelection, SignatureRequest } from '../data/types';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
+import { DAILY_COMMAND_PROGRESS_RECORD_ID, type AppData, type DailyCommandProgress, type Job, type Worker, type TimeEntry, type Expense, type CompanyExpense, type Task, type Invoice, type Payment, type Note, type Photo, type ChangeOrder, type JobTemplate, type Alert, type Note as NoteType, type Photo as PhotoType, type ChangeOrder as ChangeOrderType, type JobTemplate as JobTemplateType, type Alert as AlertType, type Customer, type Estimate, type EstimateLineItem, type EstimateScope, type LaborRate, type Material, type Assembly, type Template, type ProjectTypeTemplate, type ProjectTypeTemplateItem, type JobType, type BrandingSettings, type SmtpSettings, type JobTimelineEntry, type JobLog, type PunchListItem, type JobIssue, type FileAttachment, type Supplier, type MaterialOrder, type MaterialOrderStatus, type ShoppingList, type ShoppingListItem, type Receipt, type Allowance, type AllowanceSelection, type SignatureRequest } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
@@ -16,6 +16,8 @@ interface DataServiceStatus {
 }
 
 const LOCAL_RESCUE_DONE_KEY = 'buildops_pro_local_rescue_done';
+const WORKSPACE_SYNC_DEBOUNCE_MS = 2000;
+const QUEUED_WORKSPACE_SYNC_DELAY_MS = 1000;
 
 const looksLikeDemoData = (data: AppData) => {
   const demoSignals = [
@@ -70,6 +72,8 @@ interface AppContextType {
   importLocalDataToSupabase: () => Promise<boolean>;
   branding: BrandingSettings;
   updateBranding: (updates: Partial<BrandingSettings>) => void;
+  dailyCommandProgress: DailyCommandProgress;
+  updateDailyCommandProgress: (updater: React.SetStateAction<DailyCommandProgress>) => void;
   smtpSettings: SmtpSettings;
   updateSmtpSettings: (updates: Partial<SmtpSettings>) => void;
   sendEmail: (payload: { to: string; subject: string; html?: string; text?: string; }) => Promise<boolean>;
@@ -274,11 +278,17 @@ const DEFAULT_SMTP_SETTINGS: SmtpSettings = {
   enabled: false,
 };
 
+const DEFAULT_DAILY_COMMAND_PROGRESS: DailyCommandProgress = {
+  streak: 0,
+  completedActionsByDate: {},
+};
+
 const normalizeAppData = (raw: AppData): AppData => {
   const data = {
     ...raw,
     branding: { ...DEFAULT_BRANDING, ...(raw.branding || {}) },
     smtpSettings: { ...DEFAULT_SMTP_SETTINGS, ...(raw.smtpSettings || {}) },
+    dailyCommandProgress: { ...DEFAULT_DAILY_COMMAND_PROGRESS, ...(raw.dailyCommandProgress || {}) },
     photos: raw.photos || [],
     changeOrders: raw.changeOrders || [],
     portalTokens: raw.portalTokens || [],
@@ -392,6 +402,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isSyncing: false,
   });
   const supabaseInitialLoadComplete = useRef(dataService.mode !== 'supabase');
+  const latestWorkspaceData = useRef(data);
+  const workspaceSyncInFlight = useRef(false);
+  const workspaceSyncQueued = useRef(false);
+
+  latestWorkspaceData.current = data;
 
   useEffect(() => {
     if (dataService.mode === 'supabase' && (!supabaseInitialLoadComplete.current || looksLikeDemoData(data))) return;
@@ -428,12 +443,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       optionalCollection(dataService.changeOrders.getAll()),
       optionalCollection(dataService.portalTokens.getAll()),
       optionalCollection(dataService.signatureRequests.getAll()),
+      optionalCollection(dataService.activityLog.getAll()),
     ])
-      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos, changeOrders, portalTokens, signatureRequests]) => {
+      .then(([customers, estimates, jobs, tasks, workers, expenses, timeEntries, invoices, payments, suppliers, materialOrders, shoppingLists, receipts, allowances, laborRates, materials, assemblies, templates, projectTypeTemplates, notes, photos, changeOrders, portalTokens, signatureRequests, activityLog]) => {
         if (cancelled) return;
         setData(prev => {
           const localData = dataService.local.getAppData();
           const localFallback = localData && !looksLikeDemoData(localData) ? localData : undefined;
+          const dailyProgressRecord = activityLog.find(item => item.id === DAILY_COMMAND_PROGRESS_RECORD_ID);
+          const dailyCommandProgress = (dailyProgressRecord as JobTimelineEntry & { metadata?: { dailyCommandProgress?: DailyCommandProgress } } | undefined)?.metadata?.dailyCommandProgress;
+          const visibleActivityLog = activityLog.filter(item => item.id !== DAILY_COMMAND_PROGRESS_RECORD_ID);
           const loadedData = {
             ...prev,
             customers: mergeLoadedCollection(customers, prev.customers),
@@ -457,11 +476,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             projectTypeTemplates: projectTypeTemplates.length ? projectTypeTemplates : localFallback?.projectTypeTemplates || prev.projectTypeTemplates,
             notes: mergeLoadedCollection(notes, prev.notes),
             photos: mergeLoadedCollection(photos, prev.photos),
+            timeline: mergeLoadedCollection(visibleActivityLog, prev.timeline || []),
             changeOrders: changeOrders.length ? changeOrders : localFallback?.changeOrders || prev.changeOrders,
             portalTokens: portalTokens.length ? portalTokens : localFallback?.portalTokens || prev.portalTokens || [],
             signatureRequests: signatureRequests.length ? signatureRequests : localFallback?.signatureRequests || prev.signatureRequests || [],
             branding: localFallback?.branding || prev.branding,
             smtpSettings: localFallback?.smtpSettings || prev.smtpSettings,
+            dailyCommandProgress: dailyCommandProgress || localFallback?.dailyCommandProgress || prev.dailyCommandProgress,
           };
           return normalizeAppData(loadedData);
         });
@@ -477,31 +498,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [profile?.company_id]);
 
+  const scheduleWorkspaceSync = useCallback(() => {
+    if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured || !supabaseInitialLoadComplete.current) return;
+    if (!profile?.company_id) return;
+    if (looksLikeDemoData(latestWorkspaceData.current)) return;
+
+    if (workspaceSyncInFlight.current) {
+      workspaceSyncQueued.current = true;
+      return;
+    }
+
+    workspaceSyncInFlight.current = true;
+    setDataServiceStatus(prev => ({ ...prev, isSyncing: true }));
+    const snapshot = latestWorkspaceData.current;
+
+    void dataService.syncWorkspaceDataToSupabase(snapshot)
+      .then(() => setDataServiceStatus(prev => ({ ...prev, lastSyncAt: new Date().toISOString(), syncError: undefined })))
+      .catch(error => setDataServiceStatus(prev => ({
+        ...prev,
+        syncError: error instanceof Error ? error.message : 'Supabase sync failed',
+      })))
+      .finally(() => {
+        workspaceSyncInFlight.current = false;
+        setDataServiceStatus(prev => ({ ...prev, isSyncing: false }));
+        if (workspaceSyncQueued.current) {
+          workspaceSyncQueued.current = false;
+          window.setTimeout(() => scheduleWorkspaceSync(), QUEUED_WORKSPACE_SYNC_DELAY_MS);
+        }
+      });
+  }, [profile?.company_id]);
+
   useEffect(() => {
     if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured || !supabaseInitialLoadComplete.current) return;
     if (!profile?.company_id) return;
     if (looksLikeDemoData(data)) return;
-    const sync = () => {
-      void dataService.syncWorkspaceDataToSupabase(data)
-        .then(() => setDataServiceStatus(prev => ({ ...prev, lastSyncAt: new Date().toISOString(), syncError: undefined })))
-        .catch(error => setDataServiceStatus(prev => ({
-          ...prev,
-          syncError: error instanceof Error ? error.message : 'Supabase sync failed',
-        })));
-    };
-    const syncWhenLeaving = () => sync();
+    const timeout = window.setTimeout(() => scheduleWorkspaceSync(), WORKSPACE_SYNC_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [data, profile?.company_id, scheduleWorkspaceSync]);
+
+  useEffect(() => {
+    if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured) return;
+    if (!profile?.company_id) return;
+    const syncWhenLeaving = () => scheduleWorkspaceSync();
     const syncWhenHidden = () => {
-      if (document.visibilityState === 'hidden') sync();
+      if (document.visibilityState === 'hidden') scheduleWorkspaceSync();
     };
-    const timeout = window.setTimeout(sync, 250);
     window.addEventListener('pagehide', syncWhenLeaving);
     document.addEventListener('visibilitychange', syncWhenHidden);
     return () => {
-      window.clearTimeout(timeout);
       window.removeEventListener('pagehide', syncWhenLeaving);
       document.removeEventListener('visibilitychange', syncWhenHidden);
     };
-  }, [data, profile?.company_id]);
+  }, [profile?.company_id, scheduleWorkspaceSync]);
 
   useEffect(() => {
     if (dataService.mode !== 'supabase' || !dataService.isSupabaseConfigured) return;
@@ -546,6 +594,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const nextBranding = { ...DEFAULT_BRANDING, ...(prev.branding || branding), ...updates };
       setBranding(nextBranding);
       return normalizeAppData({ ...prev, branding: nextBranding });
+    });
+  };
+
+  const updateDailyCommandProgress = (updater: React.SetStateAction<DailyCommandProgress>) => {
+    setData(prev => {
+      const current = { ...DEFAULT_DAILY_COMMAND_PROGRESS, ...(prev.dailyCommandProgress || {}) };
+      const nextProgress = typeof updater === 'function'
+        ? (updater as (prev: DailyCommandProgress) => DailyCommandProgress)(current)
+        : updater;
+      return normalizeAppData({
+        ...prev,
+        dailyCommandProgress: {
+          ...DEFAULT_DAILY_COMMAND_PROGRESS,
+          ...nextProgress,
+          updatedAt: new Date().toISOString(),
+        },
+      });
     });
   };
 
@@ -2202,6 +2267,8 @@ const approveChangeOrder = (id: string) => {
       importLocalDataToSupabase,
       branding,
       updateBranding,
+      dailyCommandProgress: visibleData.dailyCommandProgress || DEFAULT_DAILY_COMMAND_PROGRESS,
+      updateDailyCommandProgress,
       smtpSettings,
       updateSmtpSettings,
       sendEmail,

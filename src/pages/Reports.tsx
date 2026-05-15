@@ -67,14 +67,22 @@ export function Reports() {
   const monthly = useMemo(() => {
     const summarize = (key: string) => {
       const monthInvoices = invoices.filter(invoice => monthKey(invoice.dueDate) === key);
+      const monthPayments = payments.filter(payment => monthKey(payment.paymentDate || payment.date) === key);
       const monthExpenses = expenses.filter(expense => monthKey(expense.date) === key);
       const monthTime = timeEntries.filter(entry => monthKey(entry.date) === key);
-      const revenue = monthInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+      const invoicedRevenue = monthInvoices.reduce((sum, invoice) => sum + (invoice.total ?? invoice.amount), 0);
+      const cashRevenue = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
       const cost = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0) + monthTime.reduce((sum, entry) => sum + entry.laborCost, 0);
-      return { revenue, cost, profit: revenue - cost };
+      return {
+        cashRevenue,
+        invoicedRevenue,
+        cost,
+        cashProfit: cashRevenue - cost,
+        invoicedProfit: invoicedRevenue - cost,
+      };
     };
     return { current: summarize(thisMonth), previous: summarize(lastMonth) };
-  }, [expenses, invoices, lastMonth, thisMonth, timeEntries]);
+  }, [expenses, invoices, lastMonth, payments, thisMonth, timeEntries]);
 
   const totals = {
     revenue: jobReports.reduce((sum, job) => sum + job.revenue, 0),
@@ -85,9 +93,9 @@ export function Reports() {
   };
   const totalMargin = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
   const costVariance = totals.cost - totals.estimatedCost;
-  const revenueTrend = percentChange(monthly.current.revenue, monthly.previous.revenue);
+  const cashRevenueTrend = percentChange(monthly.current.cashRevenue, monthly.previous.cashRevenue);
   const costTrend = percentChange(monthly.current.cost, monthly.previous.cost);
-  const profitTrend = percentChange(monthly.current.profit, monthly.previous.profit);
+  const cashProfitTrend = percentChange(monthly.current.cashProfit, monthly.previous.cashProfit);
 
   const lowMarginJobs = jobReports.filter(job => job.margin < 18).slice(0, 5);
   const overBudgetJobs = jobReports.filter(job => job.variance > 0).sort((a, b) => b.variance - a.variance).slice(0, 5);
@@ -137,9 +145,9 @@ export function Reports() {
       </section>
 
       <section className="reports-kpi-grid">
-        {trendCard('Revenue', comparisonMode === 'monthMonth' ? monthly.current.revenue : totals.revenue, revenueTrend, true, <DollarSign size={20} />)}
+        {trendCard(comparisonMode === 'monthMonth' ? 'Cash Revenue' : 'Contract Revenue', comparisonMode === 'monthMonth' ? monthly.current.cashRevenue : totals.revenue, cashRevenueTrend, true, <DollarSign size={20} />)}
         {trendCard('Cost', comparisonMode === 'monthMonth' ? monthly.current.cost : totals.cost, comparisonMode === 'monthMonth' ? costTrend : percentChange(totals.cost, totals.estimatedCost), false, <PieChart size={20} />)}
-        {trendCard('Profit', comparisonMode === 'monthMonth' ? monthly.current.profit : totals.profit, comparisonMode === 'monthMonth' ? profitTrend : percentChange(totals.profit, totals.estimatedProfit), true, <TrendingUp size={20} />)}
+        {trendCard('Profit', comparisonMode === 'monthMonth' ? monthly.current.cashProfit : totals.profit, comparisonMode === 'monthMonth' ? cashProfitTrend : percentChange(totals.profit, totals.estimatedProfit), true, <TrendingUp size={20} />)}
         <div className={`reports-kpi ${totalMargin >= 25 ? 'good' : totalMargin < 15 ? 'bad' : ''}`}>
           <BarChart3 size={20} />
           <span>Margin</span>
@@ -152,9 +160,10 @@ export function Reports() {
         <div className="reports-trend-panel">
           <h2>Trends</h2>
           {[
-            { label: 'Revenue trend', value: monthly.current.revenue, previous: monthly.previous.revenue, className: 'revenue' },
+            { label: 'Cash revenue trend', value: monthly.current.cashRevenue, previous: monthly.previous.cashRevenue, className: 'revenue' },
+            { label: 'Invoiced revenue trend', value: monthly.current.invoicedRevenue, previous: monthly.previous.invoicedRevenue, className: 'revenue' },
             { label: 'Cost trend', value: monthly.current.cost, previous: monthly.previous.cost, className: 'cost' },
-            { label: 'Profit trend', value: monthly.current.profit, previous: monthly.previous.profit, className: 'profit' },
+            { label: 'Cash profit trend', value: monthly.current.cashProfit, previous: monthly.previous.cashProfit, className: 'profit' },
           ].map(item => {
             const max = Math.max(item.value, item.previous, 1);
             return (

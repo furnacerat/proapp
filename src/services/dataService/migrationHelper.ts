@@ -1,4 +1,4 @@
-import type { AppData } from '../../data/types';
+import { DAILY_COMMAND_PROGRESS_RECORD_ID, type AppData } from '../../data/types';
 import { getDataServiceUserId, getLocalAppData, upsertSupabaseRecords, type RecordWithId } from './baseService';
 import { TABLES } from './tables';
 
@@ -122,7 +122,17 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
   }
 
   if (key === 'jobPhotos') return (data.photos || []) as RecordWithId[];
-  if (key === 'activityLog') return (data.timeline || []) as RecordWithId[];
+  if (key === 'activityLog') {
+    const dailyProgressRecord = data.dailyCommandProgress ? [{
+      id: DAILY_COMMAND_PROGRESS_RECORD_ID,
+      type: 'update',
+      title: 'Daily Command Center Progress',
+      description: 'Shared daily workflow progress and streak state.',
+      timestamp: data.dailyCommandProgress.updatedAt || new Date().toISOString(),
+      metadata: { dailyCommandProgress: data.dailyCommandProgress },
+    }] : [];
+    return [...(data.timeline || []), ...dailyProgressRecord] as RecordWithId[];
+  }
   if (key === 'materialOrders') return (data.materialOrders || []) as RecordWithId[];
   if (key === 'timeEntries') return data.timeEntries as RecordWithId[];
 

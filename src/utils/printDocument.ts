@@ -320,13 +320,14 @@ const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): s
 
 export const printInvoice = (
   data: PrintInvoiceData,
-  settings: PrintSettings = DEFAULT_PRINT_SETTINGS
+  settings: PrintSettings = DEFAULT_PRINT_SETTINGS,
+  onStatus?: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void
 ): void => {
   const html = generateInvoiceHTML(data, settings)
   
   const printWindow = window.open('', '_blank', 'width=800,height=600')
   if (!printWindow) {
-    alert('Please allow pop-ups to print')
+    onStatus?.('Please allow pop-ups to print.', 'warning')
     return
   }
 
@@ -336,5 +337,6 @@ export const printInvoice = (
   setTimeout(() => {
     printWindow.focus()
     printWindow.print()
+    onStatus?.('Print preview opened.', 'success')
   }, 250)
 }

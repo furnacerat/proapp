@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export function Dashboard() {
-  const { jobs, workers, tasks, timeEntries, expenses, invoices, payments, estimates, jobTemplates, createJobFromTemplate, alerts, clearAllAlerts, branding, materialOrders, shoppingLists, allowances } = useApp();
+  const { jobs, workers, tasks, timeEntries, expenses, companyExpenses, invoices, payments, estimates, jobTemplates, createJobFromTemplate, alerts, clearAllAlerts, branding, materialOrders, shoppingLists, allowances } = useApp();
   const { showToast } = useToast();
   
   const [quickAddType, setQuickAddType] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export function Dashboard() {
   const smartEnabled = branding.smartFeaturesEnabled !== false;
   const insights = useMemo(() => smartEnabled ? generateInsights(jobs, expenses, timeEntries, workers, invoices, payments, tasks) : [], [smartEnabled, jobs, expenses, timeEntries, workers, invoices, payments, tasks]);
   const smartActions = useMemo(() => smartEnabled ? generateSmartNextActions(estimates, jobs, expenses, timeEntries, invoices, payments, tasks, materialOrders, shoppingLists, allowances) : [], [smartEnabled, estimates, jobs, expenses, timeEntries, invoices, payments, tasks, materialOrders, shoppingLists, allowances]);
-  const performance = useMemo(() => getPerformanceInsights(estimates, jobs, expenses, timeEntries, invoices, payments), [estimates, jobs, expenses, timeEntries, invoices, payments]);
+  const performance = useMemo(() => getPerformanceInsights(estimates, jobs, expenses, timeEntries, invoices, payments, companyExpenses, materialOrders), [estimates, jobs, expenses, timeEntries, invoices, payments, companyExpenses, materialOrders]);
   const weekly = useMemo(() => getWeeklySummary(jobs, timeEntries, expenses, payments), [jobs, timeEntries, expenses, payments]);
   const kpis = useMemo(() => getKPIS(jobs, expenses, timeEntries, invoices, payments), [jobs, expenses, timeEntries, invoices, payments]);
 

@@ -1,4 +1,4 @@
-import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance } from '../data/types';
+import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance, CompanyExpense } from '../data/types';
 import { formatCurrency, parseDateString } from './formatters';
 import { expenseAffectsJobCost } from './timeEntries';
 
@@ -30,6 +30,17 @@ export interface PerformanceInsight {
   expenseBreakdown: { category: string; amount: number; percent: number }[];
   underpricingWarnings: string[];
   cashFlowBalance: number;
+  cashFlowForecast: CashFlowForecast;
+}
+
+export interface CashFlowForecast {
+  horizonDays: number;
+  expectedReceipts: number;
+  expectedPayroll: number;
+  scheduledMaterialOrders: number;
+  recurringCompanyExpenses: number;
+  knownJobExpenses: number;
+  netCashFlow: number;
 }
 
 export interface EstimateSuggestion {
@@ -65,6 +76,106 @@ function getActualJobCost(job: Job, expenses: Expense[], timeEntries: TimeEntry[
   const expenseTotal = expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense)).reduce((sum, expense) => sum + expense.amount, 0);
   const laborTotal = timeEntries.filter(entry => entry.jobId === job.id).reduce((sum, entry) => sum + entry.laborCost, 0);
   return expenseTotal + laborTotal;
+}
+
+const startOfToday = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const addRecurringInterval = (date: Date, frequency: CompanyExpense['frequency']) => {
+  const next = new Date(date);
+  if (frequency === 'weekly') next.setDate(next.getDate() + 7);
+  else if (frequency === 'quarterly') next.setMonth(next.getMonth() + 3);
+  else if (frequency === 'annually') next.setFullYear(next.getFullYear() + 1);
+  else next.setMonth(next.getMonth() + 1);
+  return next;
+};
+
+const isDueBy = (date: string | undefined, forecastEnd: Date) => {
+  if (!date) return false;
+  return parseDateString(date) <= forecastEnd;
+};
+
+const isWithinForecastWindow = (date: string | undefined, forecastStart: Date, forecastEnd: Date) => {
+  if (!date) return false;
+  const parsed = parseDateString(date);
+  return parsed >= forecastStart && parsed <= forecastEnd;
+};
+
+function getCompanyExpenseForecast(expenses: CompanyExpense[], forecastStart: Date, forecastEnd: Date) {
+  return expenses
+    .filter(expense => expense.status !== 'paid')
+    .reduce((sum, expense) => {
+      if (!expense.recurring) {
+        return isDueBy(expense.dueDate, forecastEnd) ? sum + expense.amount : sum;
+      }
+
+      let dueDate = parseDateString(expense.dueDate);
+      while (dueDate < forecastStart) {
+        dueDate = addRecurringInterval(dueDate, expense.frequency);
+      }
+
+      let total = 0;
+      while (dueDate <= forecastEnd) {
+        total += expense.amount;
+        dueDate = addRecurringInterval(dueDate, expense.frequency);
+      }
+      return sum + total;
+    }, 0);
+}
+
+function getCashFlowForecast(
+  invoices: Invoice[],
+  payments: Payment[],
+  expenses: Expense[],
+  timeEntries: TimeEntry[],
+  companyExpenses: CompanyExpense[] = [],
+  materialOrders: MaterialOrder[] = [],
+  horizonDays = 30,
+): CashFlowForecast {
+  const forecastStart = startOfToday();
+  const forecastEnd = addDays(forecastStart, horizonDays);
+  const paidByInvoice = getPaidByInvoice(payments);
+
+  const expectedReceipts = invoices
+    .filter(invoice => invoice.status !== 'paid' && isDueBy(invoice.dueDate, forecastEnd))
+    .reduce((sum, invoice) => sum + Math.max(0, (invoice.total ?? invoice.amount) - (paidByInvoice.get(invoice.id) || 0)), 0);
+
+  const expectedPayroll = timeEntries
+    .filter(entry => isDueBy(entry.date, forecastEnd))
+    .reduce((sum, entry) => sum + Number(entry.laborCost || 0), 0);
+
+  const scheduledMaterialOrders = materialOrders
+    .filter(order => !['received', 'cancelled'].includes(order.status))
+    .filter(order => isDueBy(order.expectedDate || order.sentDate || order.createdAt, forecastEnd))
+    .reduce((sum, order) => sum + Number(order.total || order.subtotal || 0), 0);
+
+  const recurringCompanyExpenses = getCompanyExpenseForecast(companyExpenses, forecastStart, forecastEnd);
+
+  const knownJobExpenses = expenses
+    .filter(expense => expenseAffectsJobCost(expense))
+    .filter(expense => isWithinForecastWindow(expense.date, forecastStart, forecastEnd))
+    .reduce((sum, expense) => sum + expense.amount, 0);
+
+  const netCashFlow = expectedReceipts - expectedPayroll - scheduledMaterialOrders - recurringCompanyExpenses - knownJobExpenses;
+
+  return {
+    horizonDays,
+    expectedReceipts,
+    expectedPayroll,
+    scheduledMaterialOrders,
+    recurringCompanyExpenses,
+    knownJobExpenses,
+    netCashFlow,
+  };
 }
 
 export function generateSmartNextActions(
@@ -296,7 +407,9 @@ export function getPerformanceInsights(
   expenses: Expense[],
   timeEntries: TimeEntry[],
   invoices: Invoice[],
-  payments: Payment[]
+  payments: Payment[],
+  companyExpenses: CompanyExpense[] = [],
+  materialOrders: MaterialOrder[] = []
 ): PerformanceInsight {
   const jobSummaries = jobs.map(job => {
     const actualCost = getActualJobCost(job, expenses, timeEntries) || job.actualCost || 0;
@@ -346,11 +459,7 @@ export function getPerformanceInsights(
     .slice(0, 4)
     .map(item => `${item.job.name}: ${Math.round(item.margin)}% margin, ${formatCurrency(item.actualCost)} actual cost.`);
 
-  const paidByInvoice = getPaidByInvoice(payments);
-  const expectedPayments = invoices.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - (paidByInvoice.get(invoice.id) || 0)), 0);
-  const upcomingExpenses = expenses
-    .filter(expense => Math.abs(daysSince(expense.date)) <= 14)
-    .reduce((sum, expense) => sum + expense.amount, 0);
+  const cashFlowForecast = getCashFlowForecast(invoices, payments, expenses, timeEntries, companyExpenses, materialOrders);
 
   return {
     averageProfitMargin,
@@ -358,7 +467,8 @@ export function getPerformanceInsights(
     closeRate,
     expenseBreakdown,
     underpricingWarnings,
-    cashFlowBalance: expectedPayments - upcomingExpenses,
+    cashFlowBalance: cashFlowForecast.netCashFlow,
+    cashFlowForecast,
   };
 }
 

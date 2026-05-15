@@ -916,11 +916,21 @@ export interface Alert {
   createdAt: string;
 }
 
+export interface DailyCommandProgress {
+  lastCompletedDate?: string;
+  streak: number;
+  completedActionsByDate: Record<string, string[]>;
+  updatedAt?: string;
+}
+
+export const DAILY_COMMAND_PROGRESS_RECORD_ID = 'daily-command-progress';
+
 // ============ APP DATA ============
 
 export interface AppData {
   branding?: BrandingSettings;
   smtpSettings?: SmtpSettings;
+  dailyCommandProgress?: DailyCommandProgress;
   customers: Customer[];
   workers: Worker[];
   laborRates: LaborRate[];

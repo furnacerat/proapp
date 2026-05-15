@@ -51,7 +51,7 @@ export function EstimatesDashboard() {
     };
     if (stats.approved > 0) return {
       headline: `${stats.approved} approved estimate${stats.approved > 1 ? 's' : ''}`,
-      sub: `$${formatCurrency(stats.approvedValue)} in approved value ready to convert to jobs.`,
+      sub: `${formatCurrency(stats.approvedValue)} in approved value ready to convert to jobs.`,
       primary: { label: 'Convert to Job', to: '/estimates' },
       secondary: null,
     };

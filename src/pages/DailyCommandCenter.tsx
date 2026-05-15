@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../components/common/Toast';
@@ -26,29 +26,7 @@ import {
 
 type WorkflowStep = 'tasks' | 'jobs' | 'materials' | 'time' | 'invoices';
 
-interface DailyProgressState {
-  lastCompletedDate?: string;
-  streak: number;
-  completedActionsByDate: Record<string, string[]>;
-}
-
-const STORAGE_KEY = 'buildops_daily_command_center';
-
 const todayKey = () => new Date().toISOString().split('T')[0];
-
-const defaultProgress: DailyProgressState = {
-  streak: 0,
-  completedActionsByDate: {},
-};
-
-function loadProgress(): DailyProgressState {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? { ...defaultProgress, ...JSON.parse(stored) } : defaultProgress;
-  } catch {
-    return defaultProgress;
-  }
-}
 
 function getYesterdayKey() {
   const date = new Date();
@@ -68,6 +46,9 @@ export function DailyCommandCenter() {
     expenses,
     estimates,
     allowances,
+    branding,
+    dailyCommandProgress,
+    updateDailyCommandProgress,
     updateTask,
     updateInvoice,
   } = useApp();
@@ -75,11 +56,7 @@ export function DailyCommandCenter() {
   const today = todayKey();
   const [started, setStarted] = useState(false);
   const [activeStep, setActiveStep] = useState<WorkflowStep>('tasks');
-  const [progress, setProgress] = useState<DailyProgressState>(() => loadProgress());
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-  }, [progress]);
+  const progress = dailyCommandProgress;
 
   const paidByInvoice = useMemo(() => payments.reduce((acc, payment) => {
     acc[payment.invoiceId] = (acc[payment.invoiceId] || 0) + payment.amount;
@@ -101,7 +78,8 @@ export function DailyCommandCenter() {
     return !jobOpenTasks || !hasMaterials || dueSoon;
   });
 
-  const smartActions = useMemo(() => generateSmartNextActions(
+  const smartEnabled = branding.smartFeaturesEnabled !== false;
+  const smartActions = useMemo(() => smartEnabled ? generateSmartNextActions(
     estimates,
     jobs,
     expenses,
@@ -112,7 +90,7 @@ export function DailyCommandCenter() {
     materialOrders,
     shoppingLists,
     allowances
-  ).slice(0, 6), [allowances, estimates, expenses, invoices, jobs, materialOrders, payments, shoppingLists, tasks, timeEntries]);
+  ).slice(0, 6) : [], [allowances, estimates, expenses, invoices, jobs, materialOrders, payments, shoppingLists, smartEnabled, tasks, timeEntries]);
 
   const completedActionIds = progress.completedActionsByDate[today] || [];
   const workflow = [
@@ -132,7 +110,7 @@ export function DailyCommandCenter() {
   }, 0);
 
   const markActionDone = (id: string, message: string) => {
-    setProgress(prev => {
+    updateDailyCommandProgress(prev => {
       const existing = prev.completedActionsByDate[today] || [];
       if (existing.includes(id)) return prev;
       return {
@@ -163,7 +141,7 @@ export function DailyCommandCenter() {
   };
 
   const finishDay = () => {
-    setProgress(prev => {
+    updateDailyCommandProgress(prev => {
       if (prev.lastCompletedDate === today) return prev;
       const nextStreak = prev.lastCompletedDate === getYesterdayKey() ? prev.streak + 1 : 1;
       return { ...prev, lastCompletedDate: today, streak: nextStreak };
@@ -313,13 +291,17 @@ export function DailyCommandCenter() {
         <aside className="daily-side-panel">
           <div className="daily-section-heading"><h2>Next Best Actions</h2><Sparkles size={18} /></div>
           <div className="daily-smart-list">
-            {smartActions.map(action => (
-              <Link key={action.id} to={action.to} className={`daily-smart-action ${action.priority}`}>
-                <span>{action.priority}</span>
-                <div><strong>{action.title}</strong><small>{action.description}</small></div>
-                <ArrowRight size={16} />
-              </Link>
-            ))}
+            {smartEnabled ? (
+              smartActions.map(action => (
+                <Link key={action.id} to={action.to} className={`daily-smart-action ${action.priority}`}>
+                  <span>{action.priority}</span>
+                  <div><strong>{action.title}</strong><small>{action.description}</small></div>
+                  <ArrowRight size={16} />
+                </Link>
+              ))
+            ) : (
+              <div className="daily-empty">Smart Mode is off. Enable smart features in Settings to see recommendations.</div>
+            )}
           </div>
           <div className="daily-momentum-card">
             <h3>Visual Momentum</h3>

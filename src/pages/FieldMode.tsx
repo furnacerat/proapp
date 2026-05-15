@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Camera,
@@ -17,13 +17,25 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/Toast';
 import { formatDate } from '../utils/formatters';
-import type { Photo, ShoppingListItemCategory, Task } from '../data/types';
+import type { Photo, ShoppingListItemCategory, Task, Worker } from '../data/types';
+import type { UserProfile, UserRole } from '../auth/rbac';
 
 const todayString = () => new Date().toISOString().split('T')[0];
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 
-const workerMatchesProfile = (worker: { id: string; email?: string }, profileEmail?: string, profileWorkerId?: string | null) =>
-  worker.id === profileWorkerId || Boolean(profileEmail && worker.email?.toLowerCase() === profileEmail.toLowerCase());
+export const workerMatchesProfile = (worker: Worker, profile?: UserProfile | null) =>
+  worker.id === profile?.worker_id ||
+  Boolean(profile?.email && worker.email?.toLowerCase() === profile.email.toLowerCase()) ||
+  Boolean(profile?.user_id && (
+    (worker as Worker & { userId?: string; user_id?: string }).userId === profile.user_id ||
+    (worker as Worker & { userId?: string; user_id?: string }).user_id === profile.user_id
+  ));
+
+export const getFieldModeWorkerId = (workers: Worker[], matchedWorker: Worker | undefined, role: UserRole, selectedWorkerId = '') => {
+  if (role === 'crew') return matchedWorker?.id || '';
+  if (selectedWorkerId && workers.some(worker => worker.id === selectedWorkerId)) return selectedWorkerId;
+  return matchedWorker?.id || workers[0]?.id || '';
+};
 
 export function FieldMode() {
   const {
@@ -48,8 +60,8 @@ export function FieldMode() {
   const { showToast } = useToast();
   const today = todayString();
 
-  const matchedWorker = workers.find(worker => workerMatchesProfile(worker, profile?.email, profile?.worker_id));
-  const [selectedWorkerId, setSelectedWorkerId] = useState(matchedWorker?.id || workers[0]?.id || '');
+  const matchedWorker = workers.find(worker => workerMatchesProfile(worker, profile));
+  const [selectedWorkerId, setSelectedWorkerId] = useState(() => getFieldModeWorkerId(workers, matchedWorker, role));
   const selectedWorker = workers.find(worker => worker.id === selectedWorkerId);
   const [selectedJobId, setSelectedJobId] = useState('');
   const [timeHours, setTimeHours] = useState('8');
@@ -61,14 +73,20 @@ export function FieldMode() {
   const [punchText, setPunchText] = useState('');
   const [photoCategory, setPhotoCategory] = useState<Photo['category']>('progress');
 
+  useEffect(() => {
+    setSelectedWorkerId(current => getFieldModeWorkerId(workers, matchedWorker, role, current));
+  }, [matchedWorker?.id, role, workers]);
+
   const selectedJob = jobs.find(job => job.id === selectedJobId);
+  const crewNeedsWorkerMatch = role === 'crew' && !matchedWorker;
   const workerTaskJobIds = new Set(tasks.filter(task => task.assignedTo === selectedWorkerId).map(task => task.jobId).filter(Boolean));
   const fieldJobs = useMemo(() => {
+    if (crewNeedsWorkerMatch) return [];
     const activeStatuses = ['approved', 'scheduled', 'active', 'awaiting_materials'];
     return jobs
       .filter(job => activeStatuses.includes(job.status) || workerTaskJobIds.has(job.id))
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [jobs, workerTaskJobIds]);
+  }, [crewNeedsWorkerMatch, jobs, workerTaskJobIds]);
 
   const activeJobId = selectedJobId || fieldJobs[0]?.id || '';
   const activeJob = jobs.find(job => job.id === activeJobId);
@@ -99,6 +117,10 @@ export function FieldMode() {
   };
 
   const logTime = () => {
+    if (crewNeedsWorkerMatch) {
+      showToast('Your user profile is not linked to a worker. Ask an admin to connect your crew account before logging time.', 'error');
+      return;
+    }
     if (!activeJob || !selectedWorker) {
       showToast('Select a job and worker before logging time', 'error');
       return;
@@ -235,6 +257,14 @@ export function FieldMode() {
           </select>
         </label>
       </section>
+
+      {crewNeedsWorkerMatch && (
+        <section className="field-empty small">
+          <UserRound size={24} />
+          <p>Your crew account is not linked to a worker record yet. Ask an admin to connect your profile before logging time.</p>
+          <Link className="btn btn-secondary" to="/tasks">Open Tasks</Link>
+        </section>
+      )}
 
       <section className="field-kpis">
         <FieldMetric icon={ClipboardCheck} label="Open tasks" value={visibleTasks.length} />
