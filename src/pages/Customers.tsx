@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
@@ -13,6 +14,7 @@ import {
   BadgeDollarSign,
   BriefcaseBusiness,
   ClipboardList,
+  Copy,
   Edit,
   FilePlus2,
   FileSignature,
@@ -26,6 +28,7 @@ import {
   Plus,
   Receipt,
   Search,
+  Send,
   Sparkles,
   Trash2,
   UserRound,
@@ -34,6 +37,27 @@ import {
 
 type SegmentKey = 'all' | 'leads' | 'active' | 'past' | 'open_estimate' | 'balance_due';
 type DetailTab = 'overview' | 'estimates' | 'jobs' | 'invoices' | 'documents' | 'notes';
+type CommunicationPurpose = 'general_update' | 'estimate_follow_up' | 'job_update' | 'invoice_reminder' | 'schedule_confirmation' | 'delay_notice' | 'portal_invite';
+type CommunicationChannel = 'email' | 'sms';
+
+interface CommunicationDraft {
+  subject: string;
+  body: string;
+  sms: string;
+  tone: string;
+  callToAction: string;
+  warnings: string[];
+}
+
+const communicationPurposes: { value: CommunicationPurpose; label: string }[] = [
+  { value: 'general_update', label: 'General update' },
+  { value: 'estimate_follow_up', label: 'Estimate follow-up' },
+  { value: 'job_update', label: 'Job update' },
+  { value: 'invoice_reminder', label: 'Invoice reminder' },
+  { value: 'schedule_confirmation', label: 'Schedule confirmation' },
+  { value: 'delay_notice', label: 'Delay notice' },
+  { value: 'portal_invite', label: 'Portal invite' },
+];
 
 interface CustomerSummary {
   customer: Customer;
@@ -103,12 +127,15 @@ export function Customers() {
     jobs,
     invoices,
     payments,
+    branding,
+    sendEmail,
     convertEstimateToJob,
     getJobProgress,
     getJobProfit,
     signatureRequests,
     addSignatureRequest,
   } = useApp();
+  const { session } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -138,6 +165,14 @@ export function Customers() {
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '', address: '', notes: ''
   });
+  const [communicationForm, setCommunicationForm] = useState({
+    purpose: 'general_update' as CommunicationPurpose,
+    channel: 'email' as CommunicationChannel,
+    customPrompt: '',
+  });
+  const [communicationDraft, setCommunicationDraft] = useState<CommunicationDraft | null>(null);
+  const [isGeneratingCommunication, setIsGeneratingCommunication] = useState(false);
+  const [isSendingCommunication, setIsSendingCommunication] = useState(false);
 
   const refreshCustomers = async () => {
     setIsLoadingCustomers(true);
@@ -440,6 +475,134 @@ export function Customers() {
     }
   };
 
+  const appendCustomerNote = async (text: string, successMessage = 'Note added') => {
+    if (!selectedCustomer || !text.trim()) return;
+    const timestamp = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const nextNotes = [selectedCustomer.notes, `[${timestamp}] ${text.trim()}`].filter(Boolean).join('\n');
+    try {
+      const updated = await dataService.customers.update(selectedCustomer.id, { notes: nextNotes });
+      if (!updated) return;
+      setCustomers(prev => prev.map(customer => customer.id === selectedCustomer.id ? updated : customer));
+      setData(prev => ({ ...prev, customers: prev.customers.map(customer => customer.id === selectedCustomer.id ? updated : customer) }));
+      showToast(successMessage);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Note save failed', 'error');
+    }
+  };
+
+  const generateCommunication = async () => {
+    if (!selectedCustomer || !selectedSummary) return;
+    if (branding.smartFeaturesEnabled === false) {
+      showToast('Smart Mode is turned off in settings', 'warning');
+      return;
+    }
+    setIsGeneratingCommunication(true);
+    setCommunicationDraft(null);
+    try {
+      const response = await fetch('/api/customers/communication', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          purpose: communicationForm.purpose,
+          channel: communicationForm.channel,
+          customPrompt: communicationForm.customPrompt,
+          company: {
+            name: branding.brandName || 'Allens',
+            phone: '',
+            email: branding.emailFromAddress,
+          },
+          customer: selectedCustomer,
+          context: {
+            status: selectedSummary.status,
+            balanceDue: selectedSummary.balanceDue,
+            lifetimeValue: selectedSummary.lifetimeValue,
+            portalLink,
+            jobs: selectedSummary.jobs.map(job => ({
+              name: job.name,
+              status: job.status,
+              address: job.address,
+              startDate: job.startDate,
+              dueDate: job.dueDate,
+              contractAmount: job.contractAmount,
+              notes: job.notes,
+            })),
+            estimates: selectedSummary.estimates.map(estimate => ({
+              name: estimate.name,
+              status: estimate.status,
+              total: estimate.total,
+              validUntil: estimate.validUntil,
+              updatedAt: estimate.updatedAt,
+            })),
+            invoices: selectedSummary.invoices.map(invoice => ({
+              invoiceNumber: invoice.invoiceNumber,
+              status: invoice.status,
+              amount: invoice.amount,
+              dueDate: invoice.dueDate,
+              balance: getInvoiceBalance(invoice, payments),
+            })),
+            recentNotes: noteEntries.slice(-8),
+          },
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Communication generation failed');
+      setCommunicationDraft(data as CommunicationDraft);
+      showToast('Customer message draft ready');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Communication generation failed', 'error');
+    } finally {
+      setIsGeneratingCommunication(false);
+    }
+  };
+
+  const copyCommunication = async () => {
+    if (!communicationDraft) return;
+    const text = communicationForm.channel === 'sms'
+      ? communicationDraft.sms
+      : `Subject: ${communicationDraft.subject}\n\n${communicationDraft.body}`;
+    await navigator.clipboard?.writeText(text).catch(() => undefined);
+    showToast('Message copied');
+  };
+
+  const sendCommunication = async () => {
+    if (!selectedCustomer || !communicationDraft) return;
+    if (communicationForm.channel === 'sms') {
+      if (!selectedCustomer.phone) {
+        showToast('Add a customer phone number before texting', 'warning');
+        return;
+      }
+      const separator = navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad') ? '&' : '?';
+      window.location.href = `sms:${selectedCustomer.phone}${separator}body=${encodeURIComponent(communicationDraft.sms)}`;
+      await appendCustomerNote(`Text draft opened: ${communicationDraft.sms}`, 'Customer text logged');
+      return;
+    }
+
+    if (!selectedCustomer.email) {
+      showToast('Add a customer email before sending', 'warning');
+      return;
+    }
+    setIsSendingCommunication(true);
+    const html = communicationDraft.body
+      .split('\n')
+      .filter(Boolean)
+      .map(line => `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+      .join('');
+    try {
+      const delivered = await sendEmail({
+        to: selectedCustomer.email,
+        subject: communicationDraft.subject,
+        text: communicationDraft.body,
+        html,
+      });
+      await appendCustomerNote(`${delivered ? 'Email sent' : 'Email draft opened'}: ${communicationDraft.subject}`, delivered ? 'Customer email sent and logged' : 'Customer email draft logged');
+    } finally {
+      setIsSendingCommunication(false);
+    }
+  };
+
   if (isLoadingCustomers) {
     return (
       <div>
@@ -629,6 +792,79 @@ export function Customers() {
                 <button className="btn btn-secondary btn-sm" onClick={openSignatureRequest}><FileSignature size={16} /> Request Signature</button>
                 <button className="btn btn-secondary btn-sm" onClick={logContact}><Phone size={16} /> Log Contact</button>
                 <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('notes')}><MessageSquarePlus size={16} /> Add Note</button>
+              </div>
+
+              <div className="customer-communication-generator">
+                <div className="customer-communication-head">
+                  <div>
+                    <span><Sparkles size={15} /> Customer Communication Generator</span>
+                    <strong>Draft a polished email or text</strong>
+                  </div>
+                  <span className="customer-communication-pill">{branding.smartFeaturesEnabled === false ? 'Smart Mode Off' : 'AI Ready'}</span>
+                </div>
+                <div className="customer-communication-form">
+                  <label>
+                    <span>Purpose</span>
+                    <select value={communicationForm.purpose} onChange={event => setCommunicationForm({ ...communicationForm, purpose: event.target.value as CommunicationPurpose })}>
+                      {communicationPurposes.map(purpose => <option key={purpose.value} value={purpose.value}>{purpose.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Channel</span>
+                    <select value={communicationForm.channel} onChange={event => setCommunicationForm({ ...communicationForm, channel: event.target.value as CommunicationChannel })}>
+                      <option value="email">Email</option>
+                      <option value="sms">Text</option>
+                    </select>
+                  </label>
+                </div>
+                <textarea
+                  className="customer-communication-prompt"
+                  value={communicationForm.customPrompt}
+                  onChange={event => setCommunicationForm({ ...communicationForm, customPrompt: event.target.value })}
+                  placeholder="Optional direction: mention schedule change, ask for approval, keep it short, explain next steps..."
+                />
+                <div className="customer-communication-actions">
+                  <button className="btn btn-primary btn-sm" onClick={generateCommunication} disabled={branding.smartFeaturesEnabled === false || isGeneratingCommunication}>
+                    <Sparkles size={16} /> {isGeneratingCommunication ? 'Drafting...' : 'Generate'}
+                  </button>
+                  {communicationDraft && (
+                    <>
+                      <button className="btn btn-secondary btn-sm" onClick={copyCommunication}><Copy size={16} /> Copy</button>
+                      <button className="btn btn-secondary btn-sm" onClick={sendCommunication} disabled={isSendingCommunication}>
+                        <Send size={16} /> {communicationForm.channel === 'sms' ? 'Open Text' : isSendingCommunication ? 'Sending...' : 'Send Email'}
+                      </button>
+                    </>
+                  )}
+                </div>
+                {branding.smartFeaturesEnabled === false && (
+                  <div className="customer-communication-warning">Turn Smart Mode on in Settings to generate customer messages.</div>
+                )}
+                {communicationDraft && (
+                  <div className="customer-communication-draft">
+                    {communicationForm.channel === 'email' && (
+                      <label>
+                        <span>Subject</span>
+                        <input value={communicationDraft.subject} onChange={event => setCommunicationDraft({ ...communicationDraft, subject: event.target.value })} />
+                      </label>
+                    )}
+                    <label>
+                      <span>{communicationForm.channel === 'sms' ? 'Text message' : 'Email body'}</span>
+                      <textarea
+                        value={communicationForm.channel === 'sms' ? communicationDraft.sms : communicationDraft.body}
+                        onChange={event => setCommunicationDraft(communicationForm.channel === 'sms'
+                          ? { ...communicationDraft, sms: event.target.value }
+                          : { ...communicationDraft, body: event.target.value })}
+                      />
+                    </label>
+                    <div className="customer-communication-meta">
+                      <span>{communicationDraft.tone}</span>
+                      <span>{communicationDraft.callToAction}</span>
+                    </div>
+                    {communicationDraft.warnings.length > 0 && (
+                      <div className="customer-communication-warning">{communicationDraft.warnings.join(' ')}</div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {portalLink && (

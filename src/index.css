@@ -4387,6 +4387,132 @@ body {
   margin: 16px 0;
 }
 
+.customer-communication-generator {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(79, 70, 229, 0.22), rgba(14, 165, 233, 0.1)),
+    rgba(2, 6, 23, 0.24);
+}
+
+.customer-communication-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customer-communication-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.customer-communication-head span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #93c5fd;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.customer-communication-head strong {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.customer-communication-pill,
+.customer-communication-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.2);
+  font-size: 0.74rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.customer-communication-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 10px;
+}
+
+.customer-communication-form label,
+.customer-communication-draft label {
+  display: grid;
+  gap: 6px;
+}
+
+.customer-communication-form label span,
+.customer-communication-draft label span {
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.customer-communication-form select,
+.customer-communication-draft input,
+.customer-communication-prompt,
+.customer-communication-draft textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 13px;
+  outline: 0;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.68);
+  font: inherit;
+}
+
+.customer-communication-prompt,
+.customer-communication-draft textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.customer-communication-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.customer-communication-draft {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.customer-communication-draft textarea {
+  min-height: 168px;
+}
+
+.customer-communication-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.customer-communication-warning {
+  padding: 9px 11px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 12px;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.1);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
 .customer-detail-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4688,8 +4814,13 @@ body {
   .customer-card-contact,
   .customer-card-stats,
   .customer-detail-metrics,
+  .customer-communication-form,
   .customer-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .customer-communication-head {
+    flex-direction: column;
   }
 
   .customer-recommendation {
