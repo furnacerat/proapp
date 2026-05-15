@@ -3206,6 +3206,121 @@ body {
   font-size: 0.82rem;
 }
 
+.smart-cleanup-card .card-header {
+  align-items: flex-start;
+}
+
+.cleanup-score-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.cleanup-score-row.needs-work {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.cleanup-score-ring {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, var(--bg-secondary) 58%, transparent 59%),
+    conic-gradient(var(--success) var(--score), var(--border-light) 0);
+}
+
+.cleanup-score-row.needs-work .cleanup-score-ring {
+  background:
+    radial-gradient(circle at center, var(--bg-secondary) 58%, transparent 59%),
+    conic-gradient(var(--warning) var(--score), var(--border-light) 0);
+}
+
+.cleanup-score-ring strong {
+  font-size: 1.35rem;
+}
+
+.cleanup-score-row h3 {
+  margin: 3px 0;
+}
+
+.cleanup-score-row p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.cleanup-score-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cleanup-score-stats span,
+.cleanup-review-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.cleanup-score-stats strong {
+  color: var(--text-primary);
+}
+
+.cleanup-suggestions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.cleanup-suggestion {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+}
+
+.cleanup-suggestion.warning {
+  border-left-color: var(--warning);
+}
+
+.cleanup-suggestion.critical {
+  border-left-color: var(--danger);
+}
+
+.cleanup-suggestion h4 {
+  margin: 8px 0 5px;
+  font-size: 1rem;
+}
+
+.cleanup-suggestion p {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+}
+
+.cleanup-suggestion small {
+  color: var(--text-muted);
+}
+
 .chart-bar-row {
   margin-bottom: 14px;
 }

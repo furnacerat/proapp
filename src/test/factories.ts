@@ -1,5 +1,6 @@
 import type {
   AppData,
+  Customer,
   Estimate,
   EstimateLineItem,
   Expense,
@@ -114,6 +115,17 @@ export const makeEstimate = (overrides: Partial<Estimate> = {}): Estimate => ({
   projectedMaterialCost: 100,
   projectedLaborCost: 0,
   taxable: 'none',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  ...overrides,
+});
+
+export const makeCustomer = (overrides: Partial<Customer> = {}): Customer => ({
+  id: 'customer-1',
+  name: 'Jane Client',
+  email: 'jane@example.com',
+  phone: '555-1010',
+  address: '100 Main St',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...overrides,

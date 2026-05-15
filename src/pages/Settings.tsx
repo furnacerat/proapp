@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { dataService } from '../services/dataService';
 import { useToast } from '../components/common/Toast';
+import { applySmartDataCleanup, getSmartDataCleanupReport } from '../utils/dataCleanup';
 
 type SettingsTab = 'branding' | 'smart' | 'markups' | 'email' | 'smtp' | 'database' | 'import';
 
@@ -15,6 +16,7 @@ export function Settings() {
     syncCoreDataToSupabase,
     importLocalDataToSupabase,
     data,
+    setData,
   } = useApp();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<SettingsTab>('branding');
@@ -25,6 +27,8 @@ export function Settings() {
   const [brandingSavedAt, setBrandingSavedAt] = useState('');
   const migrationPreview = dataService.previewLocalMigration(data);
   const hasBrandingChanges = JSON.stringify(brandingDraft) !== JSON.stringify(branding);
+  const cleanupReport = useMemo(() => getSmartDataCleanupReport(data), [data]);
+  const safeCleanupIds = cleanupReport.suggestions.filter(item => item.autoFixAvailable).map(item => item.id);
 
   useEffect(() => {
     setBrandingDraft(branding);
@@ -120,6 +124,20 @@ export function Settings() {
     setConnectionMessage(result.message);
   };
 
+  const applyCleanup = (suggestionIds: string[] | string) => {
+    if (branding.smartFeaturesEnabled === false) {
+      showToast('Turn Smart Mode on to use Smart Data Cleanup', 'error');
+      return;
+    }
+    const result = applySmartDataCleanup(data, suggestionIds);
+    if (result.applied === 0) {
+      showToast('No safe cleanup changes were needed', 'info');
+      return;
+    }
+    setData(result.data);
+    showToast(`Applied ${result.applied} smart cleanup fix${result.applied === 1 ? '' : 'es'}`);
+  };
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -205,48 +223,108 @@ export function Settings() {
       )}
 
       {activeTab === 'smart' && (
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <h3 className="card-title">Smart Features</h3>
-              <p className="text-sm text-muted">Enable the Intelligence Engine for recommendations, alerts, and estimate assistance.</p>
-            </div>
-            <span className={`badge ${branding.smartFeaturesEnabled !== false ? 'badge-green' : 'badge-gray'}`}>
-              {branding.smartFeaturesEnabled !== false ? 'On' : 'Off'}
-            </span>
-          </div>
-          <div className="card-body">
-            <label className="smart-toggle-row">
+        <>
+          <div className="card">
+            <div className="card-header">
               <div>
-                <div className="font-bold">Smart Mode</div>
-                <div className="text-sm text-muted">Show priority next actions, profit intelligence, delay detection, cash-flow alerts, and estimate suggestions.</div>
+                <h3 className="card-title">Smart Features</h3>
+                <p className="text-sm text-muted">Enable the Intelligence Engine for recommendations, alerts, and estimate assistance.</p>
               </div>
-              <input
-                type="checkbox"
-                checked={branding.smartFeaturesEnabled !== false}
-                onChange={e => setBrand('smartFeaturesEnabled', e.target.checked)}
-              />
-            </label>
-            <div className="smart-settings-grid mt-4">
-              <div className="smart-setting-tile">
-                <strong>Next Actions</strong>
-                <span>Follow-ups, job actions, and payment reminders.</span>
-              </div>
-              <div className="smart-setting-tile">
-                <strong>Profit Intelligence</strong>
-                <span>Underpricing, margin, and over-budget warnings.</span>
-              </div>
-              <div className="smart-setting-tile">
-                <strong>Estimate Assistance</strong>
-                <span>Project-type suggestions from templates and historical work.</span>
-              </div>
-              <div className="smart-setting-tile">
-                <strong>Delay & Cash Flow</strong>
-                <span>Inactive jobs, overdue tasks, and payment shortfall alerts.</span>
+              <span className={`badge ${branding.smartFeaturesEnabled !== false ? 'badge-green' : 'badge-gray'}`}>
+                {branding.smartFeaturesEnabled !== false ? 'On' : 'Off'}
+              </span>
+            </div>
+            <div className="card-body">
+              <label className="smart-toggle-row">
+                <div>
+                  <div className="font-bold">Smart Mode</div>
+                  <div className="text-sm text-muted">Show priority next actions, profit intelligence, delay detection, cash-flow alerts, and estimate suggestions.</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={branding.smartFeaturesEnabled !== false}
+                  onChange={e => setBrand('smartFeaturesEnabled', e.target.checked)}
+                />
+              </label>
+              <div className="smart-settings-grid mt-4">
+                <div className="smart-setting-tile">
+                  <strong>Next Actions</strong>
+                  <span>Follow-ups, job actions, and payment reminders.</span>
+                </div>
+                <div className="smart-setting-tile">
+                  <strong>Profit Intelligence</strong>
+                  <span>Underpricing, margin, and over-budget warnings.</span>
+                </div>
+                <div className="smart-setting-tile">
+                  <strong>Estimate Assistance</strong>
+                  <span>Project-type suggestions from templates and historical work.</span>
+                </div>
+                <div className="smart-setting-tile">
+                  <strong>Delay & Cash Flow</strong>
+                  <span>Inactive jobs, overdue tasks, and payment shortfall alerts.</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+
+          <div className="card mt-4 smart-cleanup-card">
+            <div className="card-header">
+              <div>
+                <h3 className="card-title">Smart Data Cleanup</h3>
+                <p className="text-sm text-muted">Review duplicate, stale, orphaned, and mismatched records before they distort reports.</p>
+              </div>
+              <button className="btn btn-primary" onClick={() => applyCleanup(safeCleanupIds)} disabled={branding.smartFeaturesEnabled === false || safeCleanupIds.length === 0}>
+                Apply Safe Fixes
+              </button>
+            </div>
+            <div className="card-body">
+              <div className={`cleanup-score-row ${cleanupReport.score < 70 ? 'needs-work' : ''}`}>
+                <div className="cleanup-score-ring" style={{ '--score': `${cleanupReport.score}%` } as React.CSSProperties}>
+                  <strong>{cleanupReport.score}</strong>
+                </div>
+                <div>
+                  <div className="text-xs text-muted uppercase">Workspace Data Score</div>
+                  <h3>{cleanupReport.score >= 90 ? 'Clean' : cleanupReport.score >= 70 ? 'Needs Review' : 'Needs Cleanup'}</h3>
+                  <p>{cleanupReport.summary}</p>
+                </div>
+                <div className="cleanup-score-stats">
+                  <span><strong>{cleanupReport.totals.critical}</strong> critical</span>
+                  <span><strong>{cleanupReport.totals.warning}</strong> warnings</span>
+                  <span><strong>{cleanupReport.totals.autoFixable}</strong> safe fixes</span>
+                </div>
+              </div>
+
+              {branding.smartFeaturesEnabled === false ? (
+                <div className="customer-communication-warning mt-4">Turn Smart Mode on to use Smart Data Cleanup.</div>
+              ) : cleanupReport.suggestions.length === 0 ? (
+                <div className="empty-state compact mt-4">
+                  <h3>No cleanup needed</h3>
+                  <p>Customer links, invoice balances, and operational references look healthy.</p>
+                </div>
+              ) : (
+                <div className="cleanup-suggestions">
+                  {cleanupReport.suggestions.map(suggestion => (
+                    <div key={suggestion.id} className={`cleanup-suggestion ${suggestion.severity}`}>
+                      <div>
+                        <span className={`badge ${suggestion.severity === 'critical' ? 'badge-red' : suggestion.severity === 'warning' ? 'badge-yellow' : 'badge-blue'}`}>{suggestion.severity}</span>
+                        <h4>{suggestion.title}</h4>
+                        <p>{suggestion.description}</p>
+                        <small>{suggestion.affectedRecords} affected record{suggestion.affectedRecords === 1 ? '' : 's'} · {suggestion.category.replace('_', ' ')}</small>
+                      </div>
+                      {suggestion.autoFixAvailable ? (
+                        <button className="btn btn-sm btn-secondary" onClick={() => applyCleanup(suggestion.id)}>
+                          {suggestion.applyLabel || 'Apply fix'}
+                        </button>
+                      ) : (
+                        <span className="cleanup-review-pill">Review manually</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {activeTab === 'markups' && (
