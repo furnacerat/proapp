@@ -3100,8 +3100,8 @@ body {
   justify-content: space-between;
   gap: 18px;
   padding: 16px;
-  background: linear-gradient(135deg, rgba(18, 58, 95, 0.08), rgba(16, 185, 129, 0.06));
-  border: 1px solid rgba(18, 58, 95, 0.16);
+  background: linear-gradient(180deg, #f8fafc, #eef6ff);
+  border: 1px solid #cbd5e1;
   border-radius: 14px;
 }
 
@@ -3245,16 +3245,29 @@ body {
 }
 
 .cleanup-score-ring strong {
+  color: #0f172a;
   font-size: 1.35rem;
 }
 
 .cleanup-score-row h3 {
   margin: 3px 0;
+  color: #0f172a;
+  font-weight: 800;
 }
 
 .cleanup-score-row p {
   margin: 0;
   color: #475569;
+}
+
+.cleanup-score-row .text-muted {
+  color: #334155 !important;
+}
+
+.smart-cleanup-card .btn-primary:disabled {
+  opacity: 1;
+  color: #e2e8f0;
+  background: linear-gradient(135deg, #334155, #475569);
 }
 
 .cleanup-score-stats {
