@@ -510,8 +510,8 @@ export function Customers() {
           channel: communicationForm.channel,
           customPrompt: communicationForm.customPrompt,
           company: {
-            name: branding.brandName || 'Allens',
-            phone: '',
+            name: branding.brandName || 'Your Company',
+            phone: branding.phone || '',
             email: branding.emailFromAddress,
           },
           customer: selectedCustomer,

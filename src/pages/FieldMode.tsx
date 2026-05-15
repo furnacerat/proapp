@@ -168,7 +168,7 @@ export function FieldMode() {
     && !!navigator.mediaDevices?.getUserMedia
     && typeof MediaRecorder !== 'undefined';
   const canUseFieldVoice = branding.smartFeaturesEnabled !== false;
-  const authHeader = () => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  const authHeader = (): Record<string, string> => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
   const stopVoiceStream = () => {
     voiceStreamRef.current?.getTracks().forEach(track => track.stop());

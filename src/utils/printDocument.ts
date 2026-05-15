@@ -4,8 +4,9 @@ import { formatDate } from './formatters'
 const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): string => {
   const { company, client, project, lineItems, payments, balanceDue, notes, paymentTerms } = data
 
-  const logoImg = settings.showLogo && company.logoDataUrl 
-    ? `<img src="${company.logoDataUrl}" alt="${company.brandName}" style="max-height:60px;max-width:200px;margin-bottom:8px;" />` 
+  const logo = company.logoDataUrl || company.logoUrl
+  const logoImg = settings.showLogo && logo
+    ? `<img src="${logo}" alt="${company.brandName}" style="max-height:60px;max-width:200px;margin-bottom:8px;" />` 
     : ''
 
   const lineItemsHTML = lineItems.map(item => `
@@ -215,7 +216,10 @@ const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): s
   <div class="invoice-header">
     ${logoImg}
     <div class="company-name">${company.brandName}</div>
+    ${company.phone ? `<div class="company-contact">${company.phone}</div>` : ''}
     ${company.emailFromAddress ? `<div class="company-contact">${company.emailFromAddress}</div>` : ''}
+    ${company.website ? `<div class="company-contact">${company.website}</div>` : ''}
+    ${company.address ? `<div class="company-contact">${company.address}</div>` : ''}
   </div>
 
   <!-- Title -->
@@ -247,7 +251,10 @@ const generateInvoiceHTML = (data: PrintInvoiceData, settings: PrintSettings): s
     <div class="party">
       <div class="party-label">From</div>
       <div class="party-name">${company.brandName}</div>
+      ${company.phone ? `<div class="party-detail">${company.phone}</div>` : ''}
       ${company.emailFromAddress ? `<div class="party-detail">${company.emailFromAddress}</div>` : ''}
+      ${company.website ? `<div class="party-detail">${company.website}</div>` : ''}
+      ${company.address ? `<div class="party-detail">${company.address}</div>` : ''}
     </div>
     <div class="party">
       <div class="party-label">Bill To</div>

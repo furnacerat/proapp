@@ -13,7 +13,7 @@ interface AuthPageProps {
 const content = {
   login: {
     eyebrow: 'Secure workspace',
-    title: 'Log in to Allen\'s Contractor\'s',
+    title: 'Log in to your workspace',
     subtitle: 'Access your synced contractor operating system.',
     action: 'Log In',
   },

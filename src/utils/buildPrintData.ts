@@ -49,8 +49,9 @@ const parseAddress = (address?: string): PrintAddress | undefined => {
 const buildBranding = (branding?: BrandingSettings): PrintBranding => ({
   brandName: branding?.brandName || 'Your Company',
   emailFromAddress: branding?.emailFromAddress,
-  phone: (branding as any)?.phone,
-  address: (branding as any)?.address,
+  phone: branding?.phone,
+  address: branding?.address,
+  website: branding?.website,
   primaryColor: branding?.primaryColor,
   fontFamily: branding?.fontFamily,
   logoDataUrl: branding?.logoDataUrl,
@@ -167,7 +168,7 @@ export const buildClientEstimatePrintData = (
           detail: settings.showItemDescriptions            // ✅ visible if enabled
             ? item.description
             : undefined,
-          quantity: item.quantity,                         // ✅ visible
+          quantity: item.quantity || 0,                     // ✅ visible
           unit: item.unit,                                 // ✅ visible
           unitPrice: item.unitPrice,                       // ✅ visible (post-markup price)
           total: item.total,                               // ✅ visible (post-markup total)
@@ -191,7 +192,7 @@ export const buildClientEstimatePrintData = (
       const printItem: PrintLineItem = {
         description: item.name,
         detail: settings.showItemDescriptions ? item.description : undefined,
-        quantity: item.quantity,
+        quantity: item.quantity || 0,
         unit: item.unit,
         unitPrice: item.unitPrice,
         total: item.total,

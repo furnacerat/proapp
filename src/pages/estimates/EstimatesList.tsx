@@ -270,12 +270,14 @@ export function EstimatesList() {
             <span>Smart next action</span>
             <strong>{smartAction.title}</strong>
           </div>
-          {'to' in smartAction ? (
+          {'to' in smartAction && smartAction.to ? (
             <Link className="estimates-secondary-btn" to={smartAction.to}>{smartAction.cta}</Link>
           ) : smartAction.create ? (
             <button className="estimates-secondary-btn" onClick={() => setShowNewModal(true)}>{smartAction.cta}</button>
-          ) : (
+          ) : smartAction.filter ? (
             <button className="estimates-secondary-btn" onClick={() => setPipelineFilter(smartAction.filter)}>{smartAction.cta}</button>
+          ) : (
+            <button className="estimates-secondary-btn" onClick={() => setShowNewModal(true)}>{smartAction.cta}</button>
           )}
         </section>
 

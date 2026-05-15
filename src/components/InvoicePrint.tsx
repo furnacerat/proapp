@@ -15,13 +15,14 @@ type Props = {
 const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
   const balance = invoice.amount - totalPaid
-  const brandName = branding?.brandName || 'Your Contractor'
+  const brandName = branding?.brandName || 'Your Company'
+  const logo = branding?.logoDataUrl || branding?.logoUrl
 
   return (
     <div className="invoice-print" style={{ fontFamily: branding?.fontFamily || 'ui-sans-serif, system-ui, Arial', padding: 24, maxWidth: 800, margin: '0 auto' }}>
-      {branding?.logoDataUrl && (
+      {logo && (
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <img src={branding.logoDataUrl} alt={brandName} style={{ maxHeight: 60, maxWidth: 200 }} />
+          <img src={logo} alt={brandName} style={{ maxHeight: 60, maxWidth: 200 }} />
         </div>
       )}
 
@@ -34,7 +35,10 @@ const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => 
         <div>
           <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase' }}>From</div>
           <div style={{ fontWeight: 600 }}>{brandName}</div>
+          {branding?.phone && <div style={{ fontSize: 14, color: '#555' }}>{branding.phone}</div>}
           {branding?.emailFromAddress && <div style={{ fontSize: 14, color: '#555' }}>{branding.emailFromAddress}</div>}
+          {branding?.website && <div style={{ fontSize: 14, color: '#555' }}>{branding.website}</div>}
+          {branding?.address && <div style={{ fontSize: 14, color: '#555', whiteSpace: 'pre-line' }}>{branding.address}</div>}
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 12, color: '#777', textTransform: 'uppercase' }}>Date</div>

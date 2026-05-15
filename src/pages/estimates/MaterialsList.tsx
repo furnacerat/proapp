@@ -334,7 +334,7 @@ export function MaterialsList() {
         <div className="print-preview p-8 bg-white">
           <div className="flex items-start justify-between border-b pb-4 mb-6">
             <div>
-              <h2 className="text-2xl font-bold">{branding?.brandName || "Allen's Contractor's"}</h2>
+              <h2 className="text-2xl font-bold">{branding?.brandName || 'Your Company'}</h2>
               <p className="text-muted text-sm mt-1">Purchase Order: {orderDraft.poNumber}</p>
             </div>
             <div className="text-right text-sm">

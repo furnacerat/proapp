@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
+import { SkeletonScreen } from '../common/SkeletonScreen';
 
 export function ProtectedApp({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -10,14 +11,7 @@ export function ProtectedApp({ children }: { children: React.ReactNode }) {
   if (dataService.mode !== 'supabase') return <>{children}</>;
 
   if (loading) {
-    return (
-      <main className="auth-page">
-        <section className="auth-panel auth-panel-compact">
-          <p className="auth-eyebrow">Checking session</p>
-          <h1>Loading workspace...</h1>
-        </section>
-      </main>
-    );
+    return <SkeletonScreen variant="auth" />;
   }
 
   if (!user) {

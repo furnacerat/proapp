@@ -1,7 +1,9 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { SkeletonScreen } from './components/common/SkeletonScreen';
 import { ToastProvider } from './components/common/Toast';
 import { ProtectedApp } from './components/auth/ProtectedApp';
 import { Layout } from './components/layout/Layout';
@@ -45,13 +47,7 @@ const CustomerPortal = lazyNamed(() => import('./pages/CustomerPortal'), 'Custom
 const Team = lazyNamed(() => import('./pages/admin/Team'), 'Team');
 
 function RouteLoading() {
-  return (
-    <div className="page-content">
-      <div className="empty-state">
-        <h3>Loading...</h3>
-      </div>
-    </div>
-  );
+  return <SkeletonScreen />;
 }
 
 function AccessDenied() {
@@ -67,6 +63,22 @@ function AccessDenied() {
   );
 }
 
+function NotFound() {
+  const { role } = useAuth();
+  const location = useLocation();
+  const homeRoute = getDefaultRouteForRole(role);
+
+  return (
+    <div className="page-content">
+      <div className="empty-state">
+        <h3>Page not found</h3>
+        <p>No workspace page matches <strong>{location.pathname}</strong>.</p>
+        <Link className="btn btn-primary" to={homeRoute}>Back to workspace</Link>
+      </div>
+    </div>
+  );
+}
+
 function GuardedRoute({ children }: { children: ReactNode }) {
   const { role, profile } = useAuth();
   const path = window.location.pathname;
@@ -74,6 +86,34 @@ function GuardedRoute({ children }: { children: ReactNode }) {
   if (!canAccessRoute(role, path)) return <AccessDenied />;
   return <>{children}</>;
 }
+
+function RouteErrorFallback() {
+  return (
+    <div className="page-content">
+      <div className="empty-state">
+        <h3>Something went wrong</h3>
+        <p>This page hit an unexpected error. The rest of the workspace is still available.</p>
+        <Link className="btn btn-primary" to="/">Back to workspace</Link>
+      </div>
+    </div>
+  );
+}
+
+function RouteBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+
+  return (
+    <ErrorBoundary key={location.pathname} fallback={<RouteErrorFallback />}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+const guardedRoute = (children: ReactNode) => (
+  <RouteBoundary>
+    <GuardedRoute>{children}</GuardedRoute>
+  </RouteBoundary>
+);
 
 function AppRoutes() {
   return (
@@ -83,34 +123,35 @@ function AppRoutes() {
           <Layout>
             <Suspense fallback={<RouteLoading />}>
               <Routes>
-                <Route path="/" element={<GuardedRoute><DailyCommandCenter /></GuardedRoute>} />
-                <Route path="/dashboard" element={<GuardedRoute><Dashboard /></GuardedRoute>} />
-                <Route path="/jobs" element={<GuardedRoute><Jobs /></GuardedRoute>} />
-                <Route path="/jobs/:id" element={<GuardedRoute><JobDetail /></GuardedRoute>} />
-                <Route path="/field" element={<GuardedRoute><FieldMode /></GuardedRoute>} />
-                <Route path="/estimates" element={<GuardedRoute><EstimatesDashboard /></GuardedRoute>} />
-                <Route path="/estimates/list" element={<GuardedRoute><EstimatesList /></GuardedRoute>} />
-                <Route path="/estimates/new" element={<GuardedRoute><EstimateBuilder /></GuardedRoute>} />
-                <Route path="/estimates/:id" element={<GuardedRoute><EstimateBuilder /></GuardedRoute>} />
-                <Route path="/estimates/templates" element={<GuardedRoute><TemplatesLibrary /></GuardedRoute>} />
-                <Route path="/estimates/assemblies" element={<GuardedRoute><AssembliesLibrary /></GuardedRoute>} />
-                <Route path="/estimates/pricebook" element={<GuardedRoute><PriceBook /></GuardedRoute>} />
-                <Route path="/estimates/:id/materials" element={<GuardedRoute><MaterialsList /></GuardedRoute>} />
-                <Route path="/estimates/suppliers" element={<GuardedRoute><Suppliers /></GuardedRoute>} />
-                <Route path="/estimates/orders" element={<GuardedRoute><MaterialOrders /></GuardedRoute>} />
-                <Route path="/workers" element={<GuardedRoute><Workers /></GuardedRoute>} />
-                <Route path="/time-entries" element={<GuardedRoute><TimeEntries /></GuardedRoute>} />
-                <Route path="/expenses" element={<GuardedRoute><Expenses /></GuardedRoute>} />
-                <Route path="/company-expenses" element={<GuardedRoute><CompanyExpenses /></GuardedRoute>} />
-                <Route path="/shopping-lists" element={<GuardedRoute><ShoppingLists /></GuardedRoute>} />
-                <Route path="/tasks" element={<GuardedRoute><Tasks /></GuardedRoute>} />
-                <Route path="/invoices" element={<GuardedRoute><Invoices /></GuardedRoute>} />
-                <Route path="/customers" element={<GuardedRoute><Customers /></GuardedRoute>} />
-                <Route path="/settings" element={<GuardedRoute><Settings /></GuardedRoute>} />
-                <Route path="/admin/team" element={<GuardedRoute><Team /></GuardedRoute>} />
-                <Route path="/schedule" element={<GuardedRoute><Calendar /></GuardedRoute>} />
-                <Route path="/reports" element={<GuardedRoute><Reports /></GuardedRoute>} />
-                <Route path="/marketing" element={<GuardedRoute><MarketingStudio /></GuardedRoute>} />
+                <Route path="/" element={guardedRoute(<DailyCommandCenter />)} />
+                <Route path="/dashboard" element={guardedRoute(<Dashboard />)} />
+                <Route path="/jobs" element={guardedRoute(<Jobs />)} />
+                <Route path="/jobs/:id" element={guardedRoute(<JobDetail />)} />
+                <Route path="/field" element={guardedRoute(<FieldMode />)} />
+                <Route path="/estimates" element={guardedRoute(<EstimatesDashboard />)} />
+                <Route path="/estimates/list" element={guardedRoute(<EstimatesList />)} />
+                <Route path="/estimates/new" element={guardedRoute(<EstimateBuilder />)} />
+                <Route path="/estimates/:id" element={guardedRoute(<EstimateBuilder />)} />
+                <Route path="/estimates/templates" element={guardedRoute(<TemplatesLibrary />)} />
+                <Route path="/estimates/assemblies" element={guardedRoute(<AssembliesLibrary />)} />
+                <Route path="/estimates/pricebook" element={guardedRoute(<PriceBook />)} />
+                <Route path="/estimates/:id/materials" element={guardedRoute(<MaterialsList />)} />
+                <Route path="/estimates/suppliers" element={guardedRoute(<Suppliers />)} />
+                <Route path="/estimates/orders" element={guardedRoute(<MaterialOrders />)} />
+                <Route path="/workers" element={guardedRoute(<Workers />)} />
+                <Route path="/time-entries" element={guardedRoute(<TimeEntries />)} />
+                <Route path="/expenses" element={guardedRoute(<Expenses />)} />
+                <Route path="/company-expenses" element={guardedRoute(<CompanyExpenses />)} />
+                <Route path="/shopping-lists" element={guardedRoute(<ShoppingLists />)} />
+                <Route path="/tasks" element={guardedRoute(<Tasks />)} />
+                <Route path="/invoices" element={guardedRoute(<Invoices />)} />
+                <Route path="/customers" element={guardedRoute(<Customers />)} />
+                <Route path="/settings" element={guardedRoute(<Settings />)} />
+                <Route path="/admin/team" element={guardedRoute(<Team />)} />
+                <Route path="/schedule" element={guardedRoute(<Calendar />)} />
+                <Route path="/reports" element={guardedRoute(<Reports />)} />
+                <Route path="/marketing" element={guardedRoute(<MarketingStudio />)} />
+                <Route path="*" element={<RouteBoundary><NotFound /></RouteBoundary>} />
               </Routes>
             </Suspense>
           </Layout>
@@ -126,11 +167,11 @@ function App() {
       <AuthProvider>
         <Suspense fallback={<RouteLoading />}>
           <Routes>
-            <Route path="/login" element={<AuthPage mode="login" />} />
-            <Route path="/signup" element={<AuthPage mode="signup" />} />
-            <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
-            <Route path="/portal/:token" element={<ToastProvider><CustomerPortal /></ToastProvider>} />
-            <Route path="/*" element={<AppRoutes />} />
+            <Route path="/login" element={<RouteBoundary><AuthPage mode="login" /></RouteBoundary>} />
+            <Route path="/signup" element={<RouteBoundary><AuthPage mode="signup" /></RouteBoundary>} />
+            <Route path="/forgot-password" element={<RouteBoundary><AuthPage mode="forgot" /></RouteBoundary>} />
+            <Route path="/portal/:token" element={<RouteBoundary><ToastProvider><CustomerPortal /></ToastProvider></RouteBoundary>} />
+            <Route path="/*" element={<RouteBoundary><AppRoutes /></RouteBoundary>} />
           </Routes>
         </Suspense>
       </AuthProvider>

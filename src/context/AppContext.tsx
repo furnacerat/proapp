@@ -1,11 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
-import { DAILY_COMMAND_PROGRESS_RECORD_ID, type AppData, type DailyCommandProgress, type Job, type Worker, type TimeEntry, type Expense, type CompanyExpense, type Task, type Invoice, type Payment, type Note, type Photo, type ChangeOrder, type JobTemplate, type Alert, type Note as NoteType, type Photo as PhotoType, type ChangeOrder as ChangeOrderType, type JobTemplate as JobTemplateType, type Alert as AlertType, type Customer, type Estimate, type EstimateLineItem, type EstimateScope, type LaborRate, type Material, type Assembly, type Template, type ProjectTypeTemplate, type ProjectTypeTemplateItem, type JobType, type BrandingSettings, type SmtpSettings, type JobTimelineEntry, type JobLog, type PunchListItem, type JobIssue, type FileAttachment, type Supplier, type MaterialOrder, type MaterialOrderStatus, type ShoppingList, type ShoppingListItem, type Receipt, type Allowance, type AllowanceSelection, type SignatureRequest } from '../data/types';
+import { DAILY_COMMAND_PROGRESS_RECORD_ID, type AppData, type DailyCommandProgress, type Job, type Worker, type TimeEntry, type Expense, type CompanyExpense, type Task, type Invoice, type Payment, type Note, type Photo, type ChangeOrder, type JobTemplate, type Alert, type Note as NoteType, type Photo as PhotoType, type ChangeOrder as ChangeOrderType, type JobTemplate as JobTemplateType, type Alert as AlertType, type Customer, type Estimate, type EstimateScope, type LaborRate, type Material, type Assembly, type Template, type ProjectTypeTemplate, type ProjectTypeTemplateItem, type JobType, type BrandingSettings, type SmtpSettings, type JobTimelineEntry, type JobLog, type PunchListItem, type JobIssue, type FileAttachment, type Supplier, type MaterialOrder, type MaterialOrderStatus, type ShoppingList, type ShoppingListItem, type Receipt, type Allowance, type AllowanceSelection, type SignatureRequest } from '../data/types';
 import { generateCompleteSeedData } from '../data/seedData';
 import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
 import { canViewOwnerFinancials, sanitizeAppDataForRole } from '../auth/rbac';
 import { calculateTimeEntryLaborCost, expenseAffectsJobCost, getTimeEntryOvertimeHours, timeEntryCostFields } from '../utils/timeEntries';
 import { parseDateString } from '../utils/formatters';
+import { useCatalog } from './hooks/useCatalog';
+import { useCustomers } from './hooks/useCustomers';
+import { useEstimates } from './hooks/useEstimates';
+import { useJobs } from './hooks/useJobs';
+import { useTasks } from './hooks/useTasks';
 
 interface DataServiceStatus {
   mode: 'local' | 'supabase';
@@ -62,6 +67,27 @@ const mergeLoadedCollection = <T extends { id: string }>(loaded: T[], current: T
   fallback.forEach(item => byId.set(item.id, item));
   loaded.forEach(item => byId.set(item.id, item));
   return Array.from(byId.values());
+};
+
+type AppAction = (...args: any[]) => any;
+type AppActionMap = Record<string, AppAction>;
+
+const useStableActions = <T extends AppActionMap>(actions: T): T => {
+  const actionsRef = useRef(actions);
+
+  useEffect(() => {
+    actionsRef.current = actions;
+  });
+
+  return useMemo(() => {
+    const stableActions = {} as T;
+    (Object.keys(actions) as Array<keyof T>).forEach(key => {
+      stableActions[key] = ((...args: Parameters<T[typeof key]>) => actionsRef.current[key](...args)) as T[typeof key];
+    });
+    return stableActions;
+    // The action key set is static for AppContext; the ref keeps implementations fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 };
 
 interface AppContextType {
@@ -255,8 +281,14 @@ addChangeOrder: (co: Omit<ChangeOrderType, 'id' | 'createdAt' | 'updatedAt'>) =>
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const DEFAULT_BRANDING: BrandingSettings = {
-  brandName: "Allen's Contractor's",
-  emailFromName: "Allen's Contractor's",
+  brandName: 'Your Company',
+  appName: 'Contractor Workspace',
+  tagline: 'Contractor operating system',
+  emailFromName: 'Your Company',
+  emailFromAddress: '',
+  phone: '',
+  address: '',
+  website: '',
   primaryColor: '#1f3a8a',
   secondaryColor: '#2563eb',
   fontFamily: 'Inter, system-ui, Arial',
@@ -800,113 +832,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({ ...prev, alerts: newAlerts }));
   };
 
-  const recalcJobCosts = (jobId: string) => {
-    setData(prev => {
-      const job = prev.jobs.find(j => j.id === jobId);
-      if (!job) return prev;
-      
-      const jobEntries = prev.timeEntries.filter(t => t.jobId === jobId);
-      const jobExpenses = prev.expenses.filter(e => e.jobId === jobId && expenseAffectsJobCost(e));
-      const laborCost = jobEntries.reduce((sum, t) => sum + t.laborCost, 0);
-      const expenseCost = jobExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const actualCost = laborCost + expenseCost;
-      
-      const updatedJobs = prev.jobs.map(j =>
-        j.id === jobId ? { ...j, actualCost, updatedAt: new Date().toISOString() } : j
-      );
-      void dataService.jobs.update(jobId, { actualCost } as Partial<Job>).catch(() => undefined);
-      
-      return { ...prev, jobs: updatedJobs };
-    });
-  };
-
-  const addJob = (job: Omit<Job, 'id' | 'createdAt' | 'updatedAt' | 'actualCost'>) => {
-    const now = new Date().toISOString();
-    const id = crypto.randomUUID();
-    const newJob: Job = { ...job, id, actualCost: 0, createdAt: now, updatedAt: now };
-    const starterTask: Task = {
-      id: crypto.randomUUID(),
-      title: `Confirm next steps for ${job.name}`,
-      description: 'Review schedule, materials, and first field action.',
-      dueDate: newJob.startDate || now.split('T')[0],
-      jobId: id,
-      customerId: newJob.customerId,
-      estimateId: newJob.estimateId,
-      priority: newJob.status === 'active' ? 'high' : 'medium',
-      status: 'open',
-      taskType: 'task',
-      assignmentRole: 'owner',
-      sourceType: 'job_creation',
-      sourceId: id,
-      createdAt: now,
-      updatedAt: now,
-    };
-    setData(prev => ({ ...prev, jobs: [...prev.jobs, newJob], tasks: [...prev.tasks, starterTask] }));
-    void dataService.jobs.create(newJob).catch(() => undefined);
-    void dataService.tasks.create(starterTask).catch(() => undefined);
-    return id;
-  };
-
-  const updateJob = (id: string, updates: Partial<Job>) => {
-    setData(prev => ({
-      ...prev,
-      jobs: prev.jobs.map(j => j.id === id ? { ...j, ...updates, updatedAt: new Date().toISOString() } : j),
-    }));
-    void dataService.jobs.update(id, updates).catch(() => undefined);
-  };
-
-  const deleteJob = (id: string) => {
-    setData(prev => ({
-      ...prev,
-      jobs: prev.jobs.filter(j => j.id !== id),
-      timeEntries: prev.timeEntries.filter(t => t.jobId !== id),
-      expenses: prev.expenses.filter(e => e.jobId !== id),
-      tasks: prev.tasks.filter(t => t.jobId !== id),
-      invoices: prev.invoices.filter(i => i.jobId !== id),
-      notes: prev.notes.filter(n => n.jobId !== id),
-      photos: prev.photos.filter(p => p.jobId !== id),
-      changeOrders: prev.changeOrders.filter(co => co.jobId !== id),
-      timeline: (prev.timeline || []).filter(t => t.jobId !== id),
-      jobLogs: (prev.jobLogs || []).filter(l => l.jobId !== id),
-      punchLists: (prev.punchLists || []).filter(p => p.jobId !== id),
-      jobIssues: (prev.jobIssues || []).filter(i => i.jobId !== id),
-      fileAttachments: (prev.fileAttachments || []).filter(f => f.jobId !== id),
-      signatureRequests: (prev.signatureRequests || []).filter(request => request.jobId !== id),
-    }));
-    void dataService.jobs.delete(id).catch(() => undefined);
-  };
-
-  const duplicateJob = (id: string) => {
-    const job = data.jobs.find(j => j.id === id);
-    if (!job) return;
-    
-    const newJobId = addJob({
-      name: `${job.name} (Copy)`,
-      customerId: job.customerId,
-      customer: job.customer,
-      customerPhone: job.customerPhone,
-      customerEmail: job.customerEmail,
-      address: job.address,
-      type: job.type,
-      contractAmount: job.contractAmount,
-      estimatedCost: job.estimatedCost,
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: '',
-      status: 'lead',
-      notes: job.notes,
-    });
-    
-    const jobTasks = data.tasks.filter(t => t.jobId === id);
-    jobTasks.forEach(task => {
-      addTask({
-        title: task.title,
-        description: task.description,
-        jobId: newJobId,
-        priority: task.priority,
-        status: 'open',
-      });
-    });
-  };
+  const canSeeOwnerFinancials = canViewOwnerFinancials(role);
+  const taskOps = useTasks({ data, setData });
+  const jobOps = useJobs({ data, setData, addTask: taskOps.addTask, canSeeOwnerFinancials });
+  const { addTask, updateTask, deleteTask } = taskOps;
+  const {
+    recalcJobCosts,
+    addJob,
+    updateJob,
+    deleteJob,
+    duplicateJob,
+    getJobLaborCost,
+    getJobExpenseTotal,
+    getJobChangeOrderTotal,
+    getJobActualCost,
+    getJobProfit,
+    getJobBalance,
+    getJobProgress,
+  } = jobOps;
 
   const addWorker = (worker: Omit<Worker, 'id' | 'createdAt'>) => {
     const id = crypto.randomUUID();
@@ -1120,36 +1063,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(prev => ({
       ...prev,
       companyExpenses: (prev.companyExpenses || []).filter(expense => expense.id !== id),
-    }));
-  };
-
-  const addTask = (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString();
-    const job = task.jobId ? data.jobs.find(item => item.id === task.jobId) : undefined;
-    const newTask: Task = {
-      taskType: 'task',
-      assignmentRole: task.assignedTo ? 'worker' : 'office',
-      ...task,
-      customerId: task.customerId || job?.customerId,
-      estimateId: task.estimateId || job?.estimateId,
-      id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
-    };
-    setData(prev => ({ ...prev, tasks: [...prev.tasks, newTask] }));
-  };
-
-  const updateTask = (id: string, updates: Partial<Task>) => {
-    setData(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(t => t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t),
-    }));
-  };
-
-  const deleteTask = (id: string) => {
-    setData(prev => ({
-      ...prev,
-      tasks: prev.tasks.filter(t => t.id !== id),
     }));
   };
 
@@ -1543,427 +1456,6 @@ const approveChangeOrder = (id: string) => {
     }));
   };
 
-  const getJobLaborCost = (jobId: string) => 
-    !canSeeOwnerFinancials ? 0 :
-    data.timeEntries.filter(t => t.jobId === jobId).reduce((sum, t) => sum + t.laborCost, 0);
-
-  const getJobExpenseTotal = (jobId: string) => 
-    !canSeeOwnerFinancials ? 0 :
-    data.expenses.filter(e => e.jobId === jobId && expenseAffectsJobCost(e)).reduce((sum, e) => sum + e.amount, 0);
-
-  const getJobChangeOrderTotal = (jobId: string) => 
-    data.changeOrders.filter(co => co.jobId === jobId && co.status === 'approved').reduce((sum, co) => sum + co.amount, 0);
-
-  const getJobActualCost = (jobId: string) => {
-    return getJobLaborCost(jobId) + getJobExpenseTotal(jobId);
-  };
-
-  const getJobProfit = (jobId: string) => {
-    if (!canSeeOwnerFinancials) return { profit: 0, margin: 0 };
-    const job = data.jobs.find(j => j.id === jobId);
-    if (!job) return { profit: 0, margin: 0 };
-    
-    const cost = getJobActualCost(jobId);
-    const profit = job.contractAmount - cost;
-    const margin = job.contractAmount > 0 ? (profit / job.contractAmount) * 100 : 0;
-    return { profit, margin };
-  };
-
-  const getJobBalance = (jobId: string) => {
-    if (!canSeeOwnerFinancials) return 0;
-    const jobInvoices = data.invoices.filter(i => i.jobId === jobId);
-    const invoiceIds = jobInvoices.map(i => i.id);
-    const jobPayments = data.payments.filter(p => invoiceIds.includes(p.invoiceId));
-    
-    const totalInvoiced = jobInvoices.reduce((sum, i) => sum + i.amount, 0);
-    const totalPaid = jobPayments.reduce((sum, p) => sum + p.amount, 0);
-    
-    return totalInvoiced - totalPaid;
-  };
-
-  const getJobProgress = (jobId: string) => {
-    const jobTasks = data.tasks.filter(t => t.jobId === jobId);
-    if (jobTasks.length === 0) return 0;
-    
-    const doneTasks = jobTasks.filter(t => t.status === 'done').length;
-    return Math.round((doneTasks / jobTasks.length) * 100);
-  };
-
-  const addCustomer = (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString();
-    const id = crypto.randomUUID();
-    const newCustomer: Customer = { ...customer, id, createdAt: now, updatedAt: now };
-    setData(prev => ({ ...prev, customers: [...prev.customers, newCustomer] }));
-    return id;
-  };
-
-  const updateCustomer = (id: string, updates: Partial<Customer>) => {
-    setData(prev => ({
-      ...prev,
-      customers: prev.customers.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c),
-    }));
-  };
-
-  const deleteCustomer = (id: string) => {
-    setData(prev => ({ ...prev, customers: prev.customers.filter(c => c.id !== id) }));
-  };
-
-  const getCustomerById = (id: string) => data.customers.find(c => c.id === id);
-  const getJobCustomer = (jobId: string) => {
-    const job = data.jobs.find(j => j.id === jobId);
-    return job ? data.customers.find(c => c.id === job.customerId) : undefined;
-  };
-  const getEstimateCustomer = (estimateId: string) => {
-    const estimate = data.estimates.find(e => e.id === estimateId);
-    return estimate ? data.customers.find(c => c.id === estimate.customerId) : undefined;
-  };
-
-  const calculateEstimateTotals = (estimate: Partial<Estimate>) => {
-    const allScopes = estimate.scopes || [];
-    const legacySections = estimate.sections || [];
-    let allItems: EstimateLineItem[] = [];
-    const scopeTotals: Record<string, number> = {};
-    const lineTotal = (item: EstimateLineItem) => (item.quantity || 0) * (item.unitPrice || 0);
-    const isCounted = (item: EstimateLineItem) => !item.isExcluded;
-    
-    allScopes.forEach(scope => {
-      const scopeItems = (scope.sections?.flatMap(s => s.lineItems || []) || []).filter(isCounted);
-      allItems = [...allItems, ...scopeItems];
-      
-      scopeTotals[scope.id] = scopeItems.reduce((sum, i) => sum + lineTotal(i), 0);
-    });
-
-    legacySections.forEach(section => {
-      allItems = [...allItems, ...(section.lineItems || []).filter(isCounted)];
-    });
-    
-    const laborTotal = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((sum, i) => sum + lineTotal(i), 0);
-    const materialTotal = allItems.filter(i => i.category === 'material').reduce((sum, i) => sum + lineTotal(i), 0);
-    const equipmentTotal = allItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + lineTotal(i), 0);
-    const subcontractorTotal = allItems.filter(i => i.category === 'subcontractor').reduce((sum, i) => sum + lineTotal(i), 0);
-    
-    const subtotal = allItems.reduce((sum, i) => sum + lineTotal(i), 0);
-    const markupAmount = subtotal * ((estimate.markupPercent || 0) / 100);
-    const total = subtotal + markupAmount;
-    
-    const projectedLaborHours = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((sum, i) => sum + (i.hours || 0), 0);
-    const projectedMaterialCost = materialTotal;
-    const projectedLaborCost = laborTotal;
-    
-    return { 
-      laborTotal, 
-      materialTotal, 
-      equipmentTotal, 
-      subcontractorTotal,
-      subtotal, 
-      markupAmount, 
-      total, 
-      projectedLaborHours,
-      projectedMaterialCost,
-      projectedLaborCost,
-      marginAmount: 0,
-      marginPercent: 0,
-      scopeTotals
-    };
-  };
-
-  const addEstimate = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt' | 'laborTotal' | 'materialTotal' | 'equipmentTotal' | 'subcontractorTotal' | 'subtotal' | 'markupAmount' | 'total' | 'projectedLaborHours' | 'projectedMaterialCost' | 'projectedLaborCost' | 'marginAmount' | 'marginPercent'>) => {
-    const now = new Date().toISOString();
-    const id = crypto.randomUUID();
-    const totals = calculateEstimateTotals({ ...estimate, markupPercent: estimate.markupPercent || 20 });
-    const newEstimate: Estimate = { 
-      ...estimate, 
-      ...totals, 
-      id, 
-      createdAt: now, 
-      updatedAt: now,
-      taxable: estimate.taxable || 'none'
-    };
-    setData(prev => {
-      const next = { ...prev, estimates: [...prev.estimates, newEstimate] };
-      dataService.local.saveAppData(next);
-      return next;
-    });
-    void dataService.estimates.createWithItems(newEstimate, [
-      ...(newEstimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
-      ...(newEstimate.sections || []).flatMap(section => section.lineItems || []),
-    ]).catch(() => undefined);
-    return id;
-  };
-
-  const updateEstimate = (id: string, updates: Partial<Estimate>) => {
-    setData(prev => {
-      const existing = prev.estimates.find(e => e.id === id);
-      if (!existing) return prev;
-      const merged = { ...existing, ...updates };
-      const totals = calculateEstimateTotals(merged);
-      return {
-        ...prev,
-        estimates: prev.estimates.map(e => e.id === id ? { ...e, ...updates, ...totals, updatedAt: new Date().toISOString() } : e),
-      };
-    });
-    const existing = data.estimates.find(e => e.id === id);
-    if (existing) {
-      const merged = { ...existing, ...updates };
-      const totals = calculateEstimateTotals(merged);
-      const updated = { ...merged, ...totals, updatedAt: new Date().toISOString() };
-      void dataService.estimates.updateWithItems(id, updated, [
-        ...(updated.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
-        ...(updated.sections || []).flatMap(section => section.lineItems || []),
-      ]).catch(() => undefined);
-    }
-  };
-
-  const duplicateEstimate = (id: string) => {
-    const estimate = data.estimates.find(e => e.id === id);
-    if (!estimate) return '';
-
-    const duplicateSections = (sections: NonNullable<Estimate['sections']> = []) => sections.map(section => ({
-      ...section,
-      id: crypto.randomUUID(),
-      lineItems: section.lineItems?.map(item => ({ ...item, id: crypto.randomUUID() })) || [],
-    }));
-    
-    const newId = addEstimate({
-      estimateNumber: `EST-${new Date().getFullYear()}-${String(data.estimates.length + 1).padStart(3, '0')}`,
-      customerId: estimate.customerId,
-      name: `${estimate.name} (Copy)`,
-      address: estimate.address,
-      type: estimate.type,
-      status: 'draft',
-      scopes: estimate.scopes?.map(scope => ({
-        ...scope,
-        id: crypto.randomUUID(),
-        sections: duplicateSections(scope.sections || []),
-      })) || [],
-      sections: duplicateSections(estimate.sections || []),
-      markupPercent: estimate.markupPercent,
-      taxable: estimate.taxable,
-      notes: estimate.notes,
-      validUntil: estimate.validUntil,
-    });
-    return newId;
-  };
-
-  const archiveEstimate = (id: string) => {
-    updateEstimate(id, { status: 'archived', archivedAt: new Date().toISOString() });
-  };
-
-  const deleteEstimate = (id: string) => {
-    setData(prev => ({ ...prev, estimates: prev.estimates.filter(e => e.id !== id) }));
-    void dataService.estimates.delete(id).catch(() => undefined);
-  };
-
-  const convertEstimateToJob = (estimateId: string, options?: { startDate?: string; dueDate?: string; copyLineItems?: boolean; copyPricing?: boolean; copyNotes?: boolean }) => {
-    const estimate = data.estimates.find(e => e.id === estimateId);
-    if (!estimate) return '';
-    
-    const customer = data.customers.find(c => c.id === estimate.customerId);
-    const opt = options || {};
-    const jobId = addJob({
-      name: estimate.name,
-      customerId: estimate.customerId,
-      customer: customer?.name || '',
-      customerPhone: customer?.phone || '',
-      customerEmail: customer?.email || '',
-      address: estimate.address,
-      type: estimate.type,
-      contractAmount: opt.copyPricing !== false ? estimate.total : 0,
-      estimatedCost: opt.copyPricing !== false ? estimate.subtotal : 0,
-      startDate: opt.startDate || new Date().toISOString().split('T')[0],
-      dueDate: opt.dueDate || '',
-      status: 'active',
-      estimateId: estimate.id,
-      notes: opt.copyNotes ? estimate.notes : '',
-    });
-    
-    updateEstimate(estimateId, { status: 'converted', convertedToJobId: jobId });
-    void dataService.jobs.copyEstimateItemsToJob(jobId, estimateId).catch(() => undefined);
-    (estimate.clientAllowances || []).forEach(allowance => {
-      addAllowance({
-        ...allowance,
-        jobId,
-        estimateId,
-        affectsContractorCost: false,
-      });
-    });
-    const estimateItems = [
-      ...(estimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
-      ...(estimate.sections || []).flatMap(section => section.lineItems || []),
-    ];
-    const materialItems = estimateItems.filter(item => item.category === 'material' && !item.isExcluded);
-    if (materialItems.length > 0) {
-      addShoppingList({
-        jobId,
-        jobName: estimate.name,
-        customerId: estimate.customerId,
-        estimateId,
-        title: `${estimate.name} Material List`,
-        status: 'open',
-        notes: 'Created from approved estimate during job conversion.',
-        items: materialItems.map(item => ({
-          id: crypto.randomUUID(),
-          name: item.name,
-          category: 'material' as const,
-          quantity: item.quantity || item.defaultQuantity || 0,
-          unit: item.unit,
-          estimatedCost: (item.quantity || item.defaultQuantity || 0) * (item.unitCost || item.unitPrice || 0),
-          purchased: false,
-          urgent: false,
-          notes: item.notes,
-          linkedPriceBookItemId: item.linkedMaterialId,
-          linkedEstimateLineItemId: item.id,
-          addOnStatus: 'included_expense' as const,
-          allowanceId: item.isAllowance ? item.id : undefined,
-        })),
-      });
-      addMaterialOrder({
-        estimateId,
-        jobId,
-        customerId: estimate.customerId,
-        poNumber: `PO-${Date.now().toString().slice(-6)}`,
-        status: 'draft',
-        items: materialItems.map(item => {
-          const quantity = item.quantity || item.defaultQuantity || 0;
-          const unitPrice = item.unitCost || item.unitPrice || 0;
-          return {
-            id: crypto.randomUUID(),
-            name: item.name,
-            description: item.description,
-            quantity,
-            unit: item.unit,
-            unitPrice,
-            category: 'material' as const,
-            lineTotal: quantity * unitPrice,
-            allowanceId: item.isAllowance ? item.id : undefined,
-          };
-        }),
-        subtotal: materialItems.reduce((sum, item) => {
-          const quantity = item.quantity || item.defaultQuantity || 0;
-          return sum + quantity * (item.unitCost || item.unitPrice || 0);
-        }, 0),
-        total: materialItems.reduce((sum, item) => {
-          const quantity = item.quantity || item.defaultQuantity || 0;
-          return sum + quantity * (item.unitCost || item.unitPrice || 0);
-        }, 0),
-        notes: 'Draft material order created from approved estimate.',
-      });
-    }
-    [
-      { title: 'Collect deposit', priority: 'high' as const, taskType: 'follow_up' as const },
-      { title: 'Order materials', priority: 'high' as const, taskType: 'order' as const },
-      { title: 'Schedule kickoff / inspection', priority: 'medium' as const, taskType: 'inspection' as const },
-      { title: 'Start demo / first work phase', priority: 'medium' as const, taskType: 'task' as const },
-    ].forEach(task => addTask({
-      title: task.title,
-      description: `Auto-created from approved estimate ${estimate.estimateNumber}.`,
-      dueDate: new Date().toISOString().split('T')[0],
-      customerId: estimate.customerId,
-      estimateId,
-      jobId,
-      priority: task.priority,
-      status: 'open',
-      taskType: task.taskType,
-      assignmentRole: 'office',
-      sourceType: 'approved_estimate',
-      sourceId: estimateId,
-    }));
-    return jobId;
-  };
-
-  const addLaborRate = (rate: Omit<LaborRate, 'id'>) => {
-    const id = crypto.randomUUID();
-    const newRate: LaborRate = { ...rate, id };
-    setData(prev => ({ ...prev, laborRates: [...prev.laborRates, newRate] }));
-    return id;
-  };
-
-  const updateLaborRate = (id: string, updates: Partial<LaborRate>) => {
-    setData(prev => ({
-      ...prev,
-      laborRates: prev.laborRates.map(r => r.id === id ? { ...r, ...updates } : r),
-    }));
-  };
-
-  const deleteLaborRate = (id: string) => {
-    setData(prev => ({ ...prev, laborRates: prev.laborRates.filter(r => r.id !== id) }));
-  };
-
-  const addMaterial = (material: Omit<Material, 'id'>) => {
-    const id = crypto.randomUUID();
-    const newMaterial: Material = { ...material, id };
-    setData(prev => ({ ...prev, materials: [...prev.materials, newMaterial] }));
-    return id;
-  };
-
-  const updateMaterial = (id: string, updates: Partial<Material>) => {
-    setData(prev => ({
-      ...prev,
-      materials: prev.materials.map(m => m.id === id ? { ...m, ...updates } : m),
-    }));
-  };
-
-  const deleteMaterial = (id: string) => {
-    setData(prev => ({ ...prev, materials: prev.materials.filter(m => m.id !== id) }));
-  };
-
-  const addAssembly = (assembly: Omit<Assembly, 'id' | 'createdAt'>) => {
-    const id = crypto.randomUUID();
-    const newAssembly: Assembly = { ...assembly, id, createdAt: new Date().toISOString() };
-    setData(prev => ({ ...prev, assemblies: [...prev.assemblies, newAssembly] }));
-    return id;
-  };
-
-  const updateAssembly = (id: string, updates: Partial<Assembly>) => {
-    setData(prev => ({
-      ...prev,
-      assemblies: prev.assemblies.map(a => a.id === id ? { ...a, ...updates } : a),
-    }));
-  };
-
-  const deleteAssembly = (id: string) => {
-    setData(prev => ({ ...prev, assemblies: prev.assemblies.filter(a => a.id !== id) }));
-  };
-
-  const addTemplate = (template: Omit<Template, 'id' | 'createdAt'>) => {
-    const id = crypto.randomUUID();
-    const newTemplate: Template = { ...template, id, createdAt: new Date().toISOString() };
-    setData(prev => ({ ...prev, templates: [...prev.templates, newTemplate] }));
-    return id;
-  };
-
-  const updateTemplate = (id: string, updates: Partial<Template>) => {
-    setData(prev => ({
-      ...prev,
-      templates: prev.templates.map(t => t.id === id ? { ...t, ...updates } : t),
-    }));
-  };
-
-  const deleteTemplate = (id: string) => {
-    setData(prev => ({ ...prev, templates: prev.templates.filter(t => t.id !== id) }));
-  };
-
-  const addProjectTypeTemplate = (template: Omit<ProjectTypeTemplate, 'id' | 'createdAt'>) => {
-    const id = crypto.randomUUID();
-    const newTemplate: ProjectTypeTemplate = { ...template, id, createdAt: new Date().toISOString() };
-    setData(prev => ({ ...prev, projectTypeTemplates: [...prev.projectTypeTemplates, newTemplate] }));
-    return id;
-  };
-
-  const updateProjectTypeTemplate = (id: string, updates: Partial<ProjectTypeTemplate>) => {
-    setData(prev => ({
-      ...prev,
-      projectTypeTemplates: prev.projectTypeTemplates.map(t => t.id === id ? { ...t, ...updates } : t),
-    }));
-  };
-
-  const deleteProjectTypeTemplate = (id: string) => {
-    setData(prev => ({ ...prev, projectTypeTemplates: prev.projectTypeTemplates.filter(t => t.id !== id) }));
-  };
-
-  const getProjectTypeTemplate = (projectType: JobType) =>
-    data.projectTypeTemplates.find(t => t.projectType === projectType);
-
   const addSupplier = (supplier: Omit<Supplier, 'id' | 'createdAt'>) => {
     const id = crypto.randomUUID();
     setData(prev => {
@@ -2255,96 +1747,178 @@ const approveChangeOrder = (id: string) => {
     });
   };
 
-  const visibleData = useMemo(() => sanitizeAppDataForRole(data, profile), [data, profile]);
-  const canSeeOwnerFinancials = canViewOwnerFinancials(role);
+  const {
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    getCustomerById,
+    getJobCustomer,
+    getEstimateCustomer,
+  } = useCustomers({ data, setData });
 
-  return (
-    <AppContext.Provider value={{
+  const {
+    addLaborRate,
+    updateLaborRate,
+    deleteLaborRate,
+    addMaterial,
+    updateMaterial,
+    deleteMaterial,
+    addAssembly,
+    updateAssembly,
+    deleteAssembly,
+    addTemplate,
+    updateTemplate,
+    deleteTemplate,
+    addProjectTypeTemplate,
+    updateProjectTypeTemplate,
+    deleteProjectTypeTemplate,
+    getProjectTypeTemplate,
+  } = useCatalog({ data, setData });
+
+  const {
+    addEstimate,
+    updateEstimate,
+    deleteEstimate,
+    duplicateEstimate,
+    archiveEstimate,
+    convertEstimateToJob,
+  } = useEstimates({
+    data,
+    setData,
+    addJob,
+    addTask,
+    addAllowance,
+    addShoppingList,
+    addMaterialOrder,
+  });
+
+  const visibleData = useMemo(() => sanitizeAppDataForRole(data, profile), [data, profile]);
+  const contextActions = useStableActions({
+    syncCoreDataToSupabase,
+    importLocalDataToSupabase,
+    updateBranding,
+    updateDailyCommandProgress,
+    updateSmtpSettings,
+    sendEmail,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    addEstimate,
+    updateEstimate,
+    deleteEstimate,
+    duplicateEstimate,
+    archiveEstimate,
+    convertEstimateToJob,
+    addLaborRate,
+    updateLaborRate,
+    deleteLaborRate,
+    addMaterial,
+    updateMaterial,
+    deleteMaterial,
+    addAssembly,
+    updateAssembly,
+    deleteAssembly,
+    addTemplate,
+    updateTemplate,
+    deleteTemplate,
+    addProjectTypeTemplate,
+    updateProjectTypeTemplate,
+    deleteProjectTypeTemplate,
+    getProjectTypeTemplate,
+    addJob,
+    updateJob,
+    deleteJob,
+    duplicateJob,
+    addWorker,
+    updateWorker,
+    deleteWorker,
+    addTimeEntry,
+    updateTimeEntry,
+    deleteTimeEntry,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    addCompanyExpense,
+    updateCompanyExpense,
+    deleteCompanyExpense,
+    addTask,
+    updateTask,
+    deleteTask,
+    addInvoice,
+    updateInvoice,
+    deleteInvoice,
+    addPayment,
+    deletePayment,
+    addNote,
+    deleteNote,
+    addPhoto,
+    deletePhoto,
+    addChangeOrder,
+    updateChangeOrder,
+    deleteChangeOrder,
+    approveChangeOrder,
+    addJobTemplate,
+    updateJobTemplate,
+    deleteJobTemplate,
+    createJobFromTemplate,
+    markAlertRead,
+    clearAllAlerts,
+    getJobLaborCost,
+    getJobExpenseTotal,
+    getJobChangeOrderTotal,
+    getJobActualCost,
+    getJobProfit,
+    getJobBalance,
+    getJobProgress,
+    getCustomerById,
+    getJobCustomer,
+    getEstimateCustomer,
+    addTimelineEntry,
+    updateTimelineEntry,
+    deleteTimelineEntry,
+    addJobLog,
+    updateJobLog,
+    deleteJobLog,
+    addPunchListItem,
+    updatePunchListItem,
+    deletePunchListItem,
+    addJobIssue,
+    updateJobIssue,
+    deleteJobIssue,
+    addFileAttachment,
+    updateFileAttachment,
+    deleteFileAttachment,
+    addSignatureRequest,
+    updateSignatureRequest,
+    deleteSignatureRequest,
+    addSupplier,
+    updateSupplier,
+    deleteSupplier,
+    addMaterialOrder,
+    updateMaterialOrder,
+    deleteMaterialOrder,
+    addShoppingList,
+    updateShoppingList,
+    deleteShoppingList,
+    addShoppingListItem,
+    updateShoppingListItem,
+    deleteShoppingListItem,
+    addShoppingReceipt,
+    addAllowance,
+    updateAllowance,
+    deleteAllowance,
+    addAllowanceSelection,
+    updateAllowanceSelection,
+    createAllowanceOverageChangeOrder,
+  });
+
+  const contextValue = useMemo<AppContextType>(() => ({
       data: visibleData,
       setData,
       dataServiceStatus,
-      syncCoreDataToSupabase,
-      importLocalDataToSupabase,
       branding,
-      updateBranding,
       dailyCommandProgress: visibleData.dailyCommandProgress || DEFAULT_DAILY_COMMAND_PROGRESS,
-      updateDailyCommandProgress,
       smtpSettings,
-      updateSmtpSettings,
-      sendEmail,
-      addCustomer,
-      updateCustomer,
-      deleteCustomer,
-      addEstimate,
-      updateEstimate,
-      deleteEstimate,
-      duplicateEstimate,
-      archiveEstimate,
-      convertEstimateToJob,
-      addLaborRate,
-      updateLaborRate,
-      deleteLaborRate,
-      addMaterial,
-      updateMaterial,
-      deleteMaterial,
-      addAssembly,
-      updateAssembly,
-      deleteAssembly,
-      addTemplate,
-      updateTemplate,
-      deleteTemplate,
-      addProjectTypeTemplate,
-      updateProjectTypeTemplate,
-      deleteProjectTypeTemplate,
-      getProjectTypeTemplate,
-      addJob,
-      updateJob,
-      deleteJob,
-      duplicateJob,
-      addWorker,
-      updateWorker,
-      deleteWorker,
-      addTimeEntry,
-      updateTimeEntry,
-      deleteTimeEntry,
-      addExpense,
-      updateExpense,
-      deleteExpense,
-      addCompanyExpense,
-      updateCompanyExpense,
-      deleteCompanyExpense,
-      addTask,
-      updateTask,
-      deleteTask,
-      addInvoice,
-      updateInvoice,
-      deleteInvoice,
-      addPayment,
-      deletePayment,
-      addNote,
-      deleteNote,
-      addPhoto,
-      deletePhoto,
-      addChangeOrder,
-      updateChangeOrder,
-      deleteChangeOrder,
-      approveChangeOrder,
-      addJobTemplate,
-      updateJobTemplate,
-      deleteJobTemplate,
-      createJobFromTemplate,
-      markAlertRead,
-      clearAllAlerts,
-      getJobLaborCost,
-      getJobExpenseTotal,
-      getJobChangeOrderTotal,
-      getJobActualCost,
-      getJobProfit,
-      getJobBalance,
-      getJobProgress,
-      getCustomerById,
-      getJobCustomer,
-      getEstimateCustomer,
       customers: visibleData.customers,
       estimates: visibleData.estimates,
       laborRates: visibleData.laborRates,
@@ -2371,49 +1945,16 @@ const approveChangeOrder = (id: string) => {
       jobIssues: visibleData.jobIssues || [],
       fileAttachments: visibleData.fileAttachments || [],
       signatureRequests: visibleData.signatureRequests || [],
-      addTimelineEntry,
-      updateTimelineEntry,
-      deleteTimelineEntry,
-      addJobLog,
-      updateJobLog,
-      deleteJobLog,
-      addPunchListItem,
-      updatePunchListItem,
-      deletePunchListItem,
-      addJobIssue,
-      updateJobIssue,
-      deleteJobIssue,
-      addFileAttachment,
-      updateFileAttachment,
-      deleteFileAttachment,
-      addSignatureRequest,
-      updateSignatureRequest,
-      deleteSignatureRequest,
       suppliers: visibleData.suppliers || [],
       materialOrders: visibleData.materialOrders || [],
-      addSupplier,
-      updateSupplier,
-      deleteSupplier,
-      addMaterialOrder,
-      updateMaterialOrder,
-      deleteMaterialOrder,
-      addShoppingList,
-      updateShoppingList,
-      deleteShoppingList,
-      addShoppingListItem,
-      updateShoppingListItem,
-      deleteShoppingListItem,
-      addShoppingReceipt,
       shoppingLists: visibleData.shoppingLists || [],
       receipts: visibleData.receipts || [],
-      addAllowance,
-      updateAllowance,
-      deleteAllowance,
-      addAllowanceSelection,
-      updateAllowanceSelection,
-      createAllowanceOverageChangeOrder,
       allowances: visibleData.allowances || [],
-    }}>
+      ...contextActions,
+    }), [branding, contextActions, dataServiceStatus, setData, smtpSettings, visibleData]);
+
+  return (
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

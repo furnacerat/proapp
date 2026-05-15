@@ -162,6 +162,14 @@ export function Settings() {
                 <input className="form-input" value={brandingDraft.brandName} onChange={e => setBrandingField('brandName', e.target.value)} />
               </div>
               <div className="form-group">
+                <label className="form-label">Workspace / App Name</label>
+                <input className="form-input" value={brandingDraft.appName || ''} onChange={e => setBrandingField('appName', e.target.value)} placeholder="Contractor Workspace" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tagline</label>
+                <input className="form-input" value={brandingDraft.tagline || ''} onChange={e => setBrandingField('tagline', e.target.value)} placeholder="Contractor operating system" />
+              </div>
+              <div className="form-group">
                 <label className="form-label">Email From Name</label>
                 <input className="form-input" value={brandingDraft.emailFromName || ''} onChange={e => setBrandingField('emailFromName', e.target.value)} />
               </div>
@@ -169,8 +177,20 @@ export function Settings() {
                 <label className="form-label">Email From Address</label>
                 <input className="form-input" value={brandingDraft.emailFromAddress || ''} onChange={e => setBrandingField('emailFromAddress', e.target.value)} placeholder="info@company.com" />
               </div>
+              <div className="form-group">
+                <label className="form-label">Phone</label>
+                <input className="form-input" value={brandingDraft.phone || ''} onChange={e => setBrandingField('phone', e.target.value)} placeholder="(555) 123-4567" />
+              </div>
             </div>
             <div>
+              <div className="form-group">
+                <label className="form-label">Company Address</label>
+                <textarea className="form-textarea" value={brandingDraft.address || ''} onChange={e => setBrandingField('address', e.target.value)} placeholder="123 Main St, City, ST 00000" rows={3} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Website</label>
+                <input className="form-input" value={brandingDraft.website || ''} onChange={e => setBrandingField('website', e.target.value)} placeholder="https://yourcompany.com" />
+              </div>
               <div className="form-group">
                 <label className="form-label">Font Family</label>
                 <select className="form-select" value={brandingDraft.fontFamily} onChange={e => setBrandingField('fontFamily', e.target.value)}>

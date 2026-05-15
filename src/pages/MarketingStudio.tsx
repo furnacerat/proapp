@@ -87,6 +87,7 @@ const buildCopy = ({
   completionDate,
   cta,
   testimonial,
+  brandName,
 }: {
   channel: MarketingChannel;
   template: MarketingTemplate;
@@ -98,6 +99,7 @@ const buildCopy = ({
   completionDate: string;
   cta: string;
   testimonial: string;
+  brandName: string;
 }) => {
   const projectType = (job?.type || 'remodel').replace('_', ' ');
   const location = city ? ` in ${city}` : '';
@@ -108,8 +110,8 @@ const buildCopy = ({
   const callToAction = cta || 'Message us to talk through your next project.';
 
   if (channel === 'SMS/text message') {
-    if (template === 'Customer Testimonial') return `Hi ${customerName || 'there'}, thank you again for trusting Allen's Contractor's. Would you be open to sharing a quick review or referral? ${callToAction}`;
-    return `Allen's Contractor's just wrapped a ${projectType}${location}. ${callToAction}`;
+    if (template === 'Customer Testimonial') return `Hi ${customerName || 'there'}, thank you again for trusting ${brandName}. Would you be open to sharing a quick review or referral? ${callToAction}`;
+    return `${brandName} just wrapped a ${projectType}${location}. ${callToAction}`;
   }
 
   if (channel === 'Email marketing message') {
@@ -128,7 +130,7 @@ const buildCopy = ({
   }
 
   if (channel === 'Website portfolio blurb') {
-    return `${job?.name || `Completed ${projectType}`} showcases ${scopeLine.toLowerCase()}${location}.${materialLine}${completed} Allen's Contractor's handled the details from planning through final cleanup.`;
+    return `${job?.name || `Completed ${projectType}`} showcases ${scopeLine.toLowerCase()}${location}.${materialLine}${completed} ${brandName} handled the details from planning through final cleanup.`;
   }
 
   if (template === 'Before & After Reveal') {
@@ -144,7 +146,7 @@ const buildCopy = ({
   }
 
   if (template === 'Seasonal Maintenance Reminder') {
-    return `Seasonal reminder from Allen's Contractor's: small maintenance items are easier to handle before they become bigger repairs. If your home needs a punch list, repair, or update${location ? ` in ${city}` : ''}, we can help.\n\n${callToAction}`;
+    return `Seasonal reminder from ${brandName}: small maintenance items are easier to handle before they become bigger repairs. If your home needs a punch list, repair, or update${location ? ` in ${city}` : ''}, we can help.\n\n${callToAction}`;
   }
 
   return `Project spotlight: ${job?.name || `completed ${projectType}`}${location}.${completed} ${scopeLine}.${materialLine}\n\n${callToAction}`;
@@ -161,6 +163,7 @@ export function MarketingStudio() {
   const selectedCustomer = useMemo(() => customers.find(customer => customer.id === selectedJob?.customerId), [customers, selectedJob]);
   const jobPhotos = useMemo(() => photos.filter(photo => photo.jobId === selectedJob?.id), [photos, selectedJob]);
   const jobNotes = useMemo(() => notes.filter(note => note.jobId === selectedJob?.id), [notes, selectedJob]);
+  const brandName = branding.brandName || 'Your Company';
 
   const [template, setTemplate] = useState<MarketingTemplate>('Before & After Reveal');
   const [channel, setChannel] = useState<MarketingChannel>('Facebook post');
@@ -207,8 +210,9 @@ export function MarketingStudio() {
       completionDate,
       cta,
       testimonial,
+      brandName,
     }));
-  }, [channel, template, selectedJob?.id]);
+  }, [brandName, channel, template, selectedJob?.id]);
 
   const generated = () => buildCopy({
     channel,
@@ -221,6 +225,7 @@ export function MarketingStudio() {
     completionDate,
     cta,
     testimonial,
+    brandName,
   });
 
   const handleGenerate = () => {
@@ -282,7 +287,7 @@ export function MarketingStudio() {
   };
 
   const downloadImage = () => {
-    const svg = marketingSvg({ brandingName: branding.brandName || "Allen's Contractor's", projectLabel, city, beforePhoto, afterPhoto, imageMode, logo: branding.logoDataUrl || branding.logoUrl });
+    const svg = marketingSvg({ brandingName: brandName, projectLabel, city, beforePhoto, afterPhoto, imageMode, logo: branding.logoDataUrl || branding.logoUrl });
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -293,7 +298,7 @@ export function MarketingStudio() {
   };
 
   const prepareEmail = () => {
-    const subject = encodeURIComponent(`${branding.brandName || "Allen's Contractor's"} project update`);
+    const subject = encodeURIComponent(`${brandName} project update`);
     window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(copyText)}`;
   };
 
@@ -414,7 +419,7 @@ export function MarketingStudio() {
                 <PhotoPicker label="After Photo" photos={jobPhotos} value={afterPhotoId} onChange={setAfterPhotoId} />
               </div>
               <MarketingPreview
-                brandingName={branding.brandName || "Allen's Contractor's"}
+                brandingName={brandName}
                 logo={branding.logoDataUrl || branding.logoUrl}
                 beforePhoto={beforePhoto}
                 afterPhoto={afterPhoto}
@@ -460,13 +465,13 @@ export function MarketingStudio() {
               <Send size={18} />
             </div>
             <div className="card-body marketing-crm-actions">
-              <button onClick={() => setCopyText(`Hi ${customerFirstName || 'there'}, thanks again for trusting ${branding.brandName || "Allen's Contractor's"} with ${selectedJob?.name || 'your project'}. If you know anyone planning a project, we would be grateful for the referral.`)}>
+              <button onClick={() => setCopyText(`Hi ${customerFirstName || 'there'}, thanks again for trusting ${brandName} with ${selectedJob?.name || 'your project'}. If you know anyone planning a project, we would be grateful for the referral.`)}>
                 <MessageSquare size={16} /> Referral request
               </button>
               <button onClick={() => setCopyText(`Hi ${customerFirstName || 'there'}, just checking in after ${selectedJob?.name || 'the project'}. Is everything still looking good, and is there anything you would like us to follow up on?`)}>
                 <MessageSquare size={16} /> Past customer follow-up
               </button>
-              <button onClick={() => setCopyText(buildCopy({ channel: 'Email marketing message', template: 'Project Spotlight', job: selectedJob, city, customerName: customerFirstName, scope, materials, completionDate, cta, testimonial }))}>
+              <button onClick={() => setCopyText(buildCopy({ channel: 'Email marketing message', template: 'Project Spotlight', job: selectedJob, city, customerName: customerFirstName, scope, materials, completionDate, cta, testimonial, brandName }))}>
                 <Mail size={16} /> Customer list email
               </button>
             </div>

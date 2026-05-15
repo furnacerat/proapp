@@ -1,0 +1,231 @@
+/* Time Entries readability refinements */
+.time-command-page .page-title,
+.time-command-page h1,
+.time-command-page h2,
+.time-command-page h3 {
+  color: #f8fafc;
+}
+
+.time-command-page .page-subtitle,
+.time-command-page p {
+  color: #b6c7dc;
+}
+
+.time-command-page .page-eyebrow {
+  color: #fb923c;
+}
+
+.time-kpi-card {
+  background: rgba(12, 24, 43, 0.94);
+  border-color: rgba(125, 157, 196, 0.26);
+}
+
+.time-kpi-card span {
+  color: #b9d7ff;
+  font-weight: 750;
+}
+
+.time-kpi-card strong {
+  color: #f8fbff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+}
+
+.time-kpi-card small,
+.time-quick-add p {
+  color: #a9c2de;
+}
+
+.time-quick-add,
+.time-table-card,
+.time-group-card {
+  background: rgba(10, 22, 39, 0.94);
+  border-color: rgba(125, 157, 196, 0.22);
+}
+
+.time-quick-add h2 {
+  color: #f8fafc;
+}
+
+.time-table {
+  border-spacing: 0 16px;
+}
+
+.time-table th {
+  padding: 10px 16px;
+  color: #abc2dd;
+}
+
+.time-table td {
+  padding: 18px 16px;
+  background: rgba(15, 31, 52, 0.92);
+  color: #d8e6f5;
+  border-top-color: rgba(148, 163, 184, 0.2);
+  border-bottom-color: rgba(148, 163, 184, 0.2);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.time-table td:first-child {
+  border-left-color: rgba(148, 163, 184, 0.2);
+}
+
+.time-table td:last-child {
+  border-right-color: rgba(148, 163, 184, 0.2);
+}
+
+.time-table tbody tr:hover {
+  transform: none;
+}
+
+.time-table tbody tr:hover td {
+  background: rgba(24, 45, 73, 0.98);
+  border-color: rgba(96, 165, 250, 0.38);
+}
+
+.time-table tr.is-overtime td {
+  background: rgba(91, 26, 35, 0.54);
+  border-color: rgba(251, 113, 133, 0.36);
+}
+
+.time-table tr.is-overtime:hover td {
+  background: rgba(112, 33, 44, 0.68);
+}
+
+.time-notes-cell > span,
+.time-row-detail {
+  color: #bdd2e9;
+}
+
+.time-row-detail {
+  margin-top: 9px;
+}
+
+.time-table tbody tr:hover .time-row-detail {
+  display: none;
+}
+
+.time-inline-pair {
+  gap: 10px;
+}
+
+.time-row-actions {
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .time-table tr {
+    margin-bottom: 18px;
+  }
+
+  .time-table td,
+  .time-table td:first-child,
+  .time-table td:last-child {
+    padding: 16px;
+  }
+}
+
+/* Invoices cash flow command center */
+.invoice-command-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.invoice-command-header,
+.invoice-urgent-panel,
+.invoice-table-card {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.86);
+  box-shadow: 0 20px 60px rgba(2, 6, 23, 0.26);
+}
+
+.invoice-command-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 26px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(34, 197, 94, 0.09)),
+    rgba(15, 23, 42, 0.82);
+}
+
+.invoice-command-page .page-title,
+.invoice-command-page h1,
+.invoice-command-page h2,
+.invoice-command-page h3 {
+  color: #f8fafc;
+}
+
+.invoice-command-page .page-subtitle,
+.invoice-command-page p {
+  color: #b6c7dc;
+}
+
+.invoice-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.invoice-kpi-card {
+  appearance: none;
+  width: 100%;
+  min-height: 136px;
+  padding: 17px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(12, 24, 43, 0.94);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.invoice-kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.48);
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.invoice-kpi-card.paid {
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.invoice-kpi-card.warning {
+  border-color: rgba(251, 191, 36, 0.34);
+}
+
+.invoice-kpi-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  border-radius: 13px;
+  color: #dbeafe;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.55), rgba(16, 185, 129, 0.34));
+}
+
+.invoice-kpi-card span,
+.invoice-kpi-card small,
+.invoice-aging-card span,
+.invoice-urgent-panel p {
+  color: #a9c2de;
+  font-size: 0.78rem;
+}
+
+.invoice-kpi-card strong {
+  display: block;
+  margin: 5px 0 4px;
+  color: #f8fbff;
+  font-size: 1.8rem;
+}
+
+.invoice-kpi-card.paid strong {
+  color: #bbf7d0;
+}
+
+.invoice-kpi-card.warning strong {
+  color: #fde68a;
+}
+

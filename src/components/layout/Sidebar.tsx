@@ -26,6 +26,7 @@ import {
   HardHat,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { dataService } from '../../services/dataService';
 import { canAccessRoute, roleLabels } from '../../auth/rbac';
 
@@ -36,6 +37,8 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, signOut, role } = useAuth();
+  const { branding } = useApp();
+  const shellName = branding.appName || branding.brandName || 'Contractor Workspace';
   const canSee = (to: string) => canAccessRoute(role, to);
   const navLink = (to: string, icon: React.ReactNode, label: string, end = false) => canSee(to) ? (
     <NavLink to={to} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onClose} end={end}>
@@ -50,7 +53,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="sidebar-logo">
           <Briefcase size={24} style={{ flexShrink: 0 }} />
           <span style={{ fontSize: '1rem', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Allen's Contractor's
+            {shellName}
           </span>
         </div>
       </div>

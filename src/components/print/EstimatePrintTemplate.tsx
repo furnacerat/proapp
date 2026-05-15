@@ -29,6 +29,7 @@ export const EstimatePrintTemplate: React.FC<Props> = ({ data, settings = DEFAUL
           <div className="print-company-name">{company.brandName}</div>
           {company.phone && <div className="print-company-contact">{company.phone}</div>}
           {company.emailFromAddress && <div className="print-company-contact">{company.emailFromAddress}</div>}
+          {company.website && <div className="print-company-contact">{company.website}</div>}
           {company.address && <div className="print-company-contact">{company.address}</div>}
         </div>
 

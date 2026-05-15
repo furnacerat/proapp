@@ -54,6 +54,7 @@ export function JobDetail() {
   } = useApp();
   const { session } = useAuth();
   const { showToast } = useToast();
+  const brandName = branding.brandName || 'Your Company';
   
   const job = jobs.find(j => j.id === id);
   const [activeTab, setActiveTab] = useState('overview');
@@ -114,6 +115,7 @@ export function JobDetail() {
   // Add timeline entry
   const handleAddTimelineEntry = () => {
     if (!timelineForm.title) { showToast('Enter a title', 'error'); return; }
+    if (!job) return;
     addTimelineEntry({ jobId: job.id, type: timelineForm.type, title: timelineForm.title, description: timelineForm.description, timestamp: new Date().toISOString() });
     showToast('Timeline entry added');
     setTimelineForm({ type: 'note', title: '', description: '' });
@@ -123,6 +125,7 @@ export function JobDetail() {
   // Add daily log
   const handleAddJobLog = () => {
     if (!jobLogForm.workCompleted) { showToast('Enter work completed', 'error'); return; }
+    if (!job) return;
     addJobLog({ jobId: job.id, date: jobLogForm.date, workCompleted: jobLogForm.workCompleted, workers: jobLogForm.workers.split(',').map(w => w.trim()).filter(Boolean), issues: jobLogForm.issues, notes: jobLogForm.notes, hoursWorked: parseFloat(jobLogForm.hoursWorked) || 0 });
     showToast('Daily log added');
     setJobLogForm({ date: new Date().toISOString().split('T')[0], workCompleted: '', workers: '', issues: '', notes: '', hoursWorked: '0' });
@@ -132,6 +135,7 @@ export function JobDetail() {
   // Add punch list item
   const handleAddPunchListItem = () => {
     if (!punchListForm.description) { showToast('Enter description', 'error'); return; }
+    if (!job) return;
     addPunchListItem({ jobId: job.id, description: punchListForm.description, status: punchListForm.status });
     showToast('Punch list item added');
     setPunchListForm({ description: '', status: 'open' });
@@ -146,6 +150,7 @@ export function JobDetail() {
   // Add issue
   const handleAddIssue = () => {
     if (!issueForm.title) { showToast('Enter issue title', 'error'); return; }
+    if (!job) return;
     addJobIssue({ jobId: job.id, title: issueForm.title, description: issueForm.description, severity: issueForm.severity, status: issueForm.status, estimatedCost: issueForm.estimatedCost ? parseFloat(issueForm.estimatedCost) : undefined, estimatedHours: issueForm.estimatedHours || undefined });
     showToast('Issue logged');
     setIssueForm({ title: '', description: '', severity: 'medium', status: 'open', estimatedCost: '', estimatedHours: '' });
@@ -1089,7 +1094,7 @@ export function JobDetail() {
                             {inv.status !== 'paid' && <button className="btn btn-sm btn-secondary" onClick={() => setShowModal('payment')}>Pay</button>}
                             <button className="btn btn-sm btn-secondary btn-icon" onClick={() => handleEmailWithFallback(
                               `Invoice ${inv.invoiceNumber}: ${job.name}`,
-                              `Hi,\n\nPlease find attached Invoice ${inv.invoiceNumber} for ${job.name}.\n\nAmount: ${formatCurrency(inv.amount)}\nDue: ${formatCurrency(inv.amount - paid)}\n\nThank you for your business!\n\nAllen's`,
+                              `Hi,\n\nPlease find attached Invoice ${inv.invoiceNumber} for ${job.name}.\n\nAmount: ${formatCurrency(inv.amount)}\nDue: ${formatCurrency(inv.amount - paid)}\n\nThank you for your business!\n\n${brandName}`,
                               job.customerEmail
                             )} title="Email Invoice"><Send size={14} /></button>
                             <button className="btn btn-sm btn-secondary btn-icon" onClick={handlePrint} title="Print Invoice"><FileText size={14} /></button>
@@ -1124,7 +1129,7 @@ export function JobDetail() {
                         <div className="flex gap-2">
                           <button className="btn btn-sm btn-secondary btn-icon" onClick={() => handleEmailWithFallback(
                             `Change Order: ${job.name}`,
-                            `Hi,\n\nA change order has been submitted for ${job.name}.\n\nDescription: ${co.description}\nAmount: ${formatCurrency(co.amount)}\n\nPlease review and let us know if you have any questions.\n\nThanks,\nAllen's`,
+                            `Hi,\n\nA change order has been submitted for ${job.name}.\n\nDescription: ${co.description}\nAmount: ${formatCurrency(co.amount)}\n\nPlease review and let us know if you have any questions.\n\nThanks,\n${brandName}`,
                             job.customerEmail
                           )} title="Email Change Order"><Send size={14} /></button>
                           <button className="btn btn-sm btn-secondary btn-icon" onClick={handlePrint} title="Print"><FileText size={14} /></button>

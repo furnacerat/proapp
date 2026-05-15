@@ -1786,7 +1786,7 @@ export function EstimateBuilder() {
     });
 
     if (sendMethod === 'sms') {
-      const content = `${branding.brandName || 'Allens'}: Your estimate "${current.name}" is ready. Total: ${formatCurrency(calculateTotals.total)}.`;
+      const content = `${branding.brandName || 'Your Company'}: Your estimate "${current.name}" is ready. Total: ${formatCurrency(calculateTotals.total)}.`;
       const phone = String(currentCustomer?.phone || '').replace(/[^\d+]/g, '');
       const bodySeparator = /iPad|iPhone|iPod/i.test(navigator.userAgent) ? '&' : '?';
       window.location.href = `sms:${phone}${bodySeparator}body=${encodeURIComponent(content)}`;
@@ -3020,7 +3020,7 @@ export function EstimateBuilder() {
           </div>
           <div className="send-preview">
             {sendMethod === 'sms'
-              ? `${branding.brandName || 'Allens'}: Your estimate "${formData.name}" is ready. Total: ${formatCurrency(calculateTotals.total)}.`
+              ? `${branding.brandName || 'Your Company'}: Your estimate "${formData.name}" is ready. Total: ${formatCurrency(calculateTotals.total)}.`
               : `Estimate email will be sent to ${customer?.email || 'the customer email on file'}.`}
           </div>
         </div>

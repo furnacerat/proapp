@@ -245,7 +245,7 @@ export function Invoices() {
 
   const invoiceSmsMessage = (invoice: InvoiceSummary) => {
     const dueText = invoice.dueDate ? ` Due ${formatDate(invoice.dueDate)}.` : '';
-    return `${branding.brandName || 'Allens'}: Invoice ${invoice.invoiceNumber} has a balance of ${formatCurrency(invoice.balance)}.${dueText}`;
+    return `${branding.brandName || 'Your Company'}: Invoice ${invoice.invoiceNumber} has a balance of ${formatCurrency(invoice.balance)}.${dueText}`;
   };
 
   const handleSendInvoice = async () => {

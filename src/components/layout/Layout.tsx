@@ -13,11 +13,20 @@ export function Layout({ children }: LayoutProps) {
   const { branding } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const shellName = branding.appName || branding.brandName || 'Contractor Workspace';
 
   // Close sidebar automatically on route change
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    document.title = shellName;
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (themeColor && branding.primaryColor) themeColor.content = branding.primaryColor;
+    const appleTitle = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+    if (appleTitle) appleTitle.content = shellName;
+  }, [branding.primaryColor, shellName]);
 
   return (
     <div className="app-layout">
@@ -36,7 +45,7 @@ export function Layout({ children }: LayoutProps) {
           ) : branding?.logoUrl ? (
             <img src={branding.logoUrl} alt="logo" className="logo" />
           ) : null}
-          <strong>{branding?.brandName || "Allen's Contractor's"}</strong>
+          <strong>{shellName}</strong>
         </div>
       </header>
 

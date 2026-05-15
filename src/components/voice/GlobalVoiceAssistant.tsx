@@ -113,7 +113,7 @@ const extractItemsText = (text: string, job?: Job | null) => {
   let items = match || text;
   if (job) {
     [job.name, job.address, job.customer].filter(Boolean).forEach(value => {
-      items = items.replace(new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), ' ');
+      if (value) items = items.replace(new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), ' ');
     });
   }
   return cleanItemText(items);
@@ -229,7 +229,7 @@ export function GlobalVoiceAssistant() {
     streamRef.current = null;
   };
 
-  const authHeader = () => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  const authHeader = (): Record<string, string> => session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 
   const canRunIntent = (intent: VoiceIntent) => {
     if (intent === 'create_shopping_list') return canAccessRoute(role, '/shopping-lists');

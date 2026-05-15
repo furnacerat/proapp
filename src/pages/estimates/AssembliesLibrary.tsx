@@ -107,7 +107,7 @@ export function AssembliesLibrary() {
     let otherTotal = 0;
     
     assemblyItems.forEach(item => {
-      const itemTotal = item.quantity * item.unitPrice;
+      const itemTotal = (item.quantity || 0) * item.unitPrice;
       if (item.category === 'material' || item.category === 'allowance') {
         materialTotal += itemTotal;
       } else if (item.category === 'labor') {
@@ -424,7 +424,7 @@ export function AssembliesLibrary() {
                         <div>Item name</div><div>Cost</div><div>Labor</div><div>Total</div>
                       </div>
                       {(selectedAssembly.items || []).map((item, index) => {
-                        const lineTotal = item.quantity * item.unitPrice;
+                        const lineTotal = (item.quantity || 0) * item.unitPrice;
                         return (
                           <div key={`${item.name}-${index}`} className="assembly-item-line">
                             <div>
@@ -610,7 +610,7 @@ export function AssembliesLibrary() {
                     <input
                       className="form-input text-center"
                       type="number"
-                      value={item.quantity}
+                      value={item.quantity ?? ''}
                       onChange={e => updateItem(index, { quantity: parseFloat(e.target.value) || 0 })}
                       placeholder="1"
                     />

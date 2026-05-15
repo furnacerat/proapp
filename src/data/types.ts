@@ -88,17 +88,6 @@ export interface Material {
   isActive: boolean;
 }
 
-export interface Assembly {
-  id: string;
-  name: string;
-  description?: string;
-  category: string;
-  laborHours: number;
-  laborRateId?: string;
-  items: AssemblyItem[];
-  createdAt: string;
-}
-
 export interface AssemblyItem {
   name: string;
   description?: string;
@@ -121,7 +110,7 @@ export interface Assembly {
   name: string;
   description?: string;
   category: string;
-  unit: string;
+  unit?: string;
   laborHours: number;
   laborRateId?: string;
   items: AssemblyItem[];
@@ -132,6 +121,7 @@ export interface Assembly {
   createdAt: string;
   updatedAt?: string;
 }
+
 
 // ============ ESTIMATE TEMPLATES ============
 
@@ -880,8 +870,13 @@ export interface SmtpSettings {
 // Branding configuration for emails, invoices, estimates, etc.
 export interface BrandingSettings {
   brandName: string;
+  appName?: string;
+  tagline?: string;
   emailFromName?: string;
   emailFromAddress?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
   primaryColor?: string;
   secondaryColor?: string;
   fontFamily?: string;
