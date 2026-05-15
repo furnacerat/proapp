@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, formatTime, parseDateString } from '../utils/formatters';
 import { getJobInsights } from '../utils/insights';
 import { JOB_STATUSES, EXPENSE_CATEGORIES, INVOICE_TYPES, CHANGE_ORDER_STATUSES, PHOTO_CATEGORIES, TASK_STATUSES, PRIORITIES, PunchListStatus, IssueStatus, IssueSeverity } from '../data/types';
@@ -12,13 +13,32 @@ import {
   ArrowLeft, MapPin, Trash2, Plus, Camera, FileText, Clock, Receipt, CheckSquare, DollarSign, 
   AlertTriangle, TrendingUp, Wrench, Edit, Copy, Upload, AlertCircle, Clipboard, Activity,
   CheckCircle, XCircle, PlayCircle, PauseCircle, Save, Image, File, MessageSquare, Users, ListChecks,
-  Flag, Paperclip, Eye, Calendar, Send, ShoppingCart
+  Flag, Paperclip, Eye, Calendar, Send, ShoppingCart, Sparkles, Loader2
 } from 'lucide-react';
 import BrandHeader from '../components/BrandHeader';
 
+interface ChangeOrderCandidate {
+  title: string;
+  description: string;
+  amount: number;
+  confidence: number;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  evidence: string[];
+  recommendedAction: string;
+  clientMessage: string;
+}
+
+interface ChangeOrderDetectionResult {
+  summary: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  candidates: ChangeOrderCandidate[];
+  questions: string[];
+  warnings: string[];
+}
+
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
-  const { jobs, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, branding,
+  const { jobs, estimates, workers, timeEntries, expenses, tasks, invoices, payments, notes, photos, changeOrders, branding,
     updateJob, deleteJob, duplicateJob,
     addTimeEntry, deleteTimeEntry, addExpense, deleteExpense,
     addTask, deleteTask, addInvoice, updateInvoice, deleteInvoice, addPayment, addNote, deleteNote, addPhoto, deletePhoto,
@@ -32,6 +52,7 @@ export function JobDetail() {
     addFileAttachment, updateFileAttachment, deleteFileAttachment,
     allowances, materialOrders, shoppingLists, addAllowance, deleteAllowance, addAllowanceSelection, updateAllowanceSelection, createAllowanceOverageChangeOrder,
   } = useApp();
+  const { session } = useAuth();
   const { showToast } = useToast();
   
   const job = jobs.find(j => j.id === id);
@@ -75,6 +96,9 @@ export function JobDetail() {
   const [photoCategory, setPhotoCategory] = useState<'before' | 'after' | 'progress' | 'issue' | 'other'>('progress');
   const [photoUrl, setPhotoUrl] = useState('');
   const [photoDescription, setPhotoDescription] = useState('');
+  const [changeOrderDetectorPrompt, setChangeOrderDetectorPrompt] = useState('');
+  const [changeOrderDetection, setChangeOrderDetection] = useState<ChangeOrderDetectionResult | null>(null);
+  const [isDetectingChangeOrders, setIsDetectingChangeOrders] = useState(false);
 
   const handlePrint = () => window.print();
 
@@ -148,6 +172,7 @@ export function JobDetail() {
   const jobAllowances = useMemo(() => (allowances || []).filter(a => a.jobId === id), [allowances, id]);
   const jobMaterialOrders = useMemo(() => (materialOrders || []).filter(o => o.jobId === id), [materialOrders, id]);
   const jobShoppingLists = useMemo(() => (shoppingLists || []).filter(l => l.jobId === id), [shoppingLists, id]);
+  const linkedEstimate = useMemo(() => job?.estimateId ? estimates.find(e => e.id === job.estimateId) : undefined, [estimates, job?.estimateId]);
 
   const profit = useMemo(() => getJobProfit(id!), [id, job, getJobProfit]);
   const balance = useMemo(() => getJobBalance(id!), [id, jobInvoices, payments]);
@@ -175,6 +200,217 @@ export function JobDetail() {
   const changeOrderTotal = getJobChangeOrderTotal(job.id);
   const actualCost = getJobActualCost(job.id);
   const budgetUsage = job.contractAmount > 0 ? (actualCost / job.contractAmount) * 100 : 0;
+
+  const compactText = (value: unknown, maxLength = 600) => String(value || '').slice(0, maxLength);
+
+  const buildEstimateScopeContext = () => {
+    if (!linkedEstimate) return null;
+    const sections = [
+      ...(linkedEstimate.scopes || []).flatMap(scope => (scope.sections || []).map(section => ({ scope: scope.name, section }))),
+      ...(linkedEstimate.sections || []).map(section => ({ scope: 'Base scope', section })),
+    ];
+
+    return {
+      estimateNumber: linkedEstimate.estimateNumber,
+      name: linkedEstimate.name,
+      status: linkedEstimate.status,
+      total: linkedEstimate.total,
+      notes: compactText(linkedEstimate.notes, 1200),
+      exclusions: linkedEstimate.exclusions || [],
+      allowances: linkedEstimate.allowances || [],
+      sections: sections.slice(0, 20).map(({ scope, section }) => ({
+        scope,
+        name: section.name,
+        description: compactText(section.description),
+        items: (section.lineItems || []).slice(0, 25).map(item => ({
+          name: item.name,
+          description: compactText(item.description),
+          quantity: item.quantity,
+          unit: item.unit,
+          category: item.category,
+          total: item.total,
+          notes: compactText(item.notes || item.internalNotes),
+          isOptional: item.isOptional,
+          isExcluded: item.isExcluded,
+          isAllowance: item.isAllowance,
+        })),
+      })),
+    };
+  };
+
+  const handleDetectChangeOrders = async () => {
+    if (branding.smartFeaturesEnabled === false) {
+      showToast('Smart Mode is turned off', 'error');
+      return;
+    }
+
+    setIsDetectingChangeOrders(true);
+    try {
+      const response = await fetch('/api/change-orders/detect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          customPrompt: changeOrderDetectorPrompt,
+          job: {
+            name: job.name,
+            customer: job.customer,
+            address: job.address,
+            type: job.type,
+            status: job.status,
+            contractAmount: job.contractAmount,
+            estimatedCost: job.estimatedCost,
+            startDate: job.startDate,
+            dueDate: job.dueDate,
+            notes: compactText(job.notes, 1200),
+          },
+          estimate: buildEstimateScopeContext(),
+          metrics: {
+            actualCost,
+            budgetUsage,
+            totalLaborCost,
+            totalExpenses,
+            changeOrderTotal,
+            profit: profit.profit,
+            profitMargin: profit.margin,
+            progress,
+            balanceDue: balance,
+          },
+          existingChangeOrders: jobChangeOrders.slice(-25).map(order => ({
+            description: order.description,
+            amount: order.amount,
+            status: order.status,
+            approvedAt: order.approvedAt,
+          })),
+          dailyLogs: jobLogEntries.slice(-30).map(log => ({
+            date: log.date,
+            workCompleted: compactText(log.workCompleted),
+            workers: log.workers,
+            issues: compactText(log.issues),
+            notes: compactText(log.notes),
+            hoursWorked: log.hoursWorked,
+          })),
+          issues: jobIssueEntries.slice(-25).map(issue => ({
+            title: issue.title,
+            description: compactText(issue.description),
+            severity: issue.severity,
+            status: issue.status,
+            estimatedCost: issue.estimatedCost,
+            estimatedHours: issue.estimatedHours,
+          })),
+          punchList: jobPunchList.slice(-25).map(item => ({
+            description: compactText(item.description),
+            status: item.status,
+          })),
+          notes: jobNotes.slice(-25).map(note => ({
+            content: compactText(note.content, 1000),
+            createdAt: note.createdAt,
+          })),
+          tasks: jobTasks.slice(-35).map(task => ({
+            title: task.title,
+            description: compactText(task.description),
+            status: task.status,
+            priority: task.priority,
+            dueDate: task.dueDate,
+          })),
+          expenses: jobExpenses.slice(-50).map(expense => ({
+            date: expense.date,
+            vendor: expense.vendor,
+            category: expense.category,
+            amount: expense.amount,
+            notes: compactText(expense.notes),
+          })),
+          allowances: jobAllowances.slice(0, 20).map(allowance => ({
+            name: allowance.name,
+            category: allowance.category,
+            allowanceAmount: allowance.allowanceAmount,
+            usedAmount: allowance.usedAmount,
+            remainingAmount: allowance.remainingAmount,
+            status: allowance.status,
+            clientResponsible: allowance.clientResponsible,
+            selections: allowance.selections.slice(-12).map(selection => ({
+              itemName: selection.itemName,
+              vendor: selection.vendor,
+              quantity: selection.quantity,
+              unitCost: selection.unitCost,
+              total: selection.total,
+              date: selection.date,
+              notes: compactText(selection.notes),
+              status: selection.status,
+            })),
+          })),
+          materialOrders: jobMaterialOrders.slice(-15).map(order => ({
+            poNumber: order.poNumber,
+            supplierName: order.supplierName,
+            status: order.status,
+            total: order.total,
+            expectedDate: order.expectedDate,
+            items: order.items.slice(0, 20).map(item => ({
+              name: item.name,
+              description: compactText(item.description),
+              category: item.category,
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: item.unitPrice,
+              lineTotal: item.lineTotal,
+              orderedQuantity: item.orderedQuantity,
+              receivedQuantity: item.receivedQuantity,
+              costTreatment: item.costTreatment,
+            })),
+          })),
+          shoppingLists: jobShoppingLists.slice(-15).map(list => ({
+            title: list.title,
+            status: list.status,
+            store: list.store,
+            supplierName: list.supplierName,
+            items: list.items.slice(0, 20).map(item => ({
+              name: item.name,
+              category: item.category,
+              quantity: item.quantity,
+              unit: item.unit,
+              estimatedCost: item.estimatedCost,
+              actualCost: item.actualCost,
+              purchased: item.purchased,
+              addOnStatus: item.addOnStatus,
+              notes: compactText(item.notes),
+            })),
+          })),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Change order detection failed');
+      setChangeOrderDetection(data);
+      showToast(data.candidates?.length ? 'Change order risks detected' : 'No change order risks found');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Change order detection failed', 'error');
+    } finally {
+      setIsDetectingChangeOrders(false);
+    }
+  };
+
+  const createDetectedChangeOrder = (candidate: ChangeOrderCandidate) => {
+    const evidence = candidate.evidence.length ? `\n\nEvidence:\n${candidate.evidence.map(item => `- ${item}`).join('\n')}` : '';
+    const recommendedAction = candidate.recommendedAction ? `\n\nRecommended action: ${candidate.recommendedAction}` : '';
+    addChangeOrder({
+      jobId: job.id,
+      description: `${candidate.title}\n\n${candidate.description}${evidence}${recommendedAction}`,
+      amount: Number(candidate.amount) || 0,
+      status: 'pending',
+    });
+    showToast('Pending change order created');
+    setActiveTab('changeorders');
+  };
+
+  const copyDetectedClientMessage = async (message: string) => {
+    try {
+      await navigator.clipboard.writeText(message);
+      showToast('Client message copied');
+    } catch {
+      showToast('Could not copy message', 'error');
+    }
+  };
 
   const handleAddTimeEntry = () => {
     if (!timeEntryForm.workerId) { showToast('Select a worker', 'error'); return; }
@@ -322,6 +558,7 @@ export function JobDetail() {
       completed: 'badge-emerald', closed: 'badge-slate', pending: 'badge-yellow', rejected: 'badge-red',
       open: 'badge-blue', in_progress: 'badge-yellow', blocked: 'badge-red', done: 'badge-green',
       draft: 'badge-gray', sent: 'badge-blue', paid: 'badge-green', partial: 'badge-yellow', overdue: 'badge-red',
+      low: 'badge-gray', medium: 'badge-blue', high: 'badge-orange', urgent: 'badge-red', critical: 'badge-red',
     };
     return map[status] || 'badge-gray';
   };
@@ -438,6 +675,97 @@ export function JobDetail() {
             ))}
           </div>
         )}
+
+        <div className="card mb-6 change-order-detector">
+          <div className="card-header">
+            <div>
+              <h3 className="card-title flex items-center gap-2"><Sparkles size={18} /> Change Order Detector</h3>
+              <p className="text-sm text-muted mt-1">Scan scope, logs, issues, expenses, allowances, and orders for billable changes.</p>
+            </div>
+            <button className="btn btn-primary" onClick={handleDetectChangeOrders} disabled={isDetectingChangeOrders || branding.smartFeaturesEnabled === false}>
+              {isDetectingChangeOrders ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {isDetectingChangeOrders ? 'Scanning...' : 'Scan Job'}
+            </button>
+          </div>
+          <div className="card-body">
+            {branding.smartFeaturesEnabled === false ? (
+              <div className="change-order-detector-disabled">
+                <AlertTriangle size={18} />
+                Smart Mode is off. Turn it on in branding settings to use AI change order detection.
+              </div>
+            ) : (
+              <>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  value={changeOrderDetectorPrompt}
+                  onChange={e => setChangeOrderDetectorPrompt(e.target.value)}
+                  placeholder="Optional: tell the detector what changed, what the client asked for, or which area to inspect."
+                />
+                <div className="change-order-detector-signals">
+                  <span>{jobLogEntries.length} logs</span>
+                  <span>{jobIssueEntries.length} issues</span>
+                  <span>{jobExpenses.length} expenses</span>
+                  <span>{jobAllowances.length} allowances</span>
+                  <span>{jobChangeOrders.length} existing changes</span>
+                </div>
+
+                {changeOrderDetection && (
+                  <div className="change-order-detection-result">
+                    <div className={`change-order-risk ${changeOrderDetection.riskLevel}`}>
+                      <strong>{changeOrderDetection.riskLevel} risk</strong>
+                      <span>{changeOrderDetection.summary}</span>
+                    </div>
+
+                    {changeOrderDetection.candidates.length === 0 ? (
+                      <div className="empty-state compact">
+                        <h3>No change orders detected</h3>
+                        <p>The current job activity does not show clear out-of-scope work yet.</p>
+                      </div>
+                    ) : (
+                      <div className="change-order-candidates">
+                        {changeOrderDetection.candidates.map((candidate, index) => (
+                          <div className="change-order-candidate" key={`${candidate.title}-${index}`}>
+                            <div className="change-order-candidate-header">
+                              <div>
+                                <h4>{candidate.title}</h4>
+                                <span className={`badge ${getStatusColor(candidate.priority)}`}>{candidate.priority}</span>
+                              </div>
+                              <div className="change-order-candidate-amount">
+                                <strong>{formatCurrency(candidate.amount)}</strong>
+                                <span>{Math.round(candidate.confidence * 100)}% confidence</span>
+                              </div>
+                            </div>
+                            <p>{candidate.description}</p>
+                            {candidate.evidence.length > 0 && (
+                              <ul className="change-order-evidence">
+                                {candidate.evidence.map((item, evidenceIndex) => <li key={evidenceIndex}>{item}</li>)}
+                              </ul>
+                            )}
+                            <div className="change-order-recommendation">
+                              <strong>Next step:</strong> {candidate.recommendedAction}
+                            </div>
+                            <div className="change-order-candidate-actions">
+                              <button className="btn btn-sm btn-primary" onClick={() => createDetectedChangeOrder(candidate)}>Create Pending Change</button>
+                              <button className="btn btn-sm btn-secondary" onClick={() => copyDetectedClientMessage(candidate.clientMessage)}><Copy size={14} /> Copy Client Message</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(changeOrderDetection.questions.length > 0 || changeOrderDetection.warnings.length > 0) && (
+                      <div className="change-order-detector-notes">
+                        {changeOrderDetection.questions.map((question, index) => <span key={`q-${index}`}>{question}</span>)}
+                        {changeOrderDetection.warnings.map((warning, index) => <span key={`w-${index}`}>{warning}</span>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
 
         <div className="tabs mb-4">
           <select 

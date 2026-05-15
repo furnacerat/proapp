@@ -2046,6 +2046,143 @@ body {
   color: var(--danger);
 }
 
+.change-order-detector .card-header {
+  align-items: flex-start;
+}
+
+.change-order-detector textarea {
+  min-height: 72px;
+}
+
+.change-order-detector-disabled {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.change-order-detector-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.change-order-detector-signals span,
+.change-order-detector-notes span {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.change-order-detection-result {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.change-order-risk {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+}
+
+.change-order-risk strong {
+  text-transform: capitalize;
+}
+
+.change-order-risk.high,
+.change-order-risk.critical {
+  border-left-color: var(--danger);
+}
+
+.change-order-risk.medium {
+  border-left-color: var(--warning);
+}
+
+.change-order-candidates {
+  display: grid;
+  gap: 12px;
+}
+
+.change-order-candidate {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+
+.change-order-candidate-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.change-order-candidate-header h4 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.change-order-candidate-amount {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.change-order-candidate-amount strong {
+  font-size: 1.1rem;
+}
+
+.change-order-candidate-amount span,
+.change-order-recommendation {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.change-order-evidence {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.change-order-candidate-actions,
+.change-order-detector-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .list-item {
   display: flex;
   align-items: center;
