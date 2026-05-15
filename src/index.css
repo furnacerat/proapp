@@ -8052,6 +8052,145 @@ body {
   margin-top: 16px;
 }
 
+.eb-copilot {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.eb-copilotGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.eb-copilotPrompt {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.eb-copilotActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.eb-copilotContext {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.eb-copilotContext div {
+  display: grid;
+  align-content: center;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.eb-copilotContext strong {
+  color: #0f172a;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.eb-copilotContext span {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.eb-copilotDraft {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.eb-copilotDraftHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.eb-copilotDraftHeader h3 {
+  margin: 0 0 5px;
+  color: #0f172a;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.eb-copilotDraftHeader span {
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.eb-copilotSections {
+  display: grid;
+  gap: 10px;
+}
+
+.eb-copilotSection {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.eb-copilotSection > div {
+  display: grid;
+  gap: 3px;
+}
+
+.eb-copilotSection strong {
+  color: #0f172a;
+  font-size: 0.94rem;
+}
+
+.eb-copilotSection > div span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.eb-copilotSection ul {
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.eb-copilotSection li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #334155;
+  font-size: 0.84rem;
+}
+
+.eb-copilotSection li span:first-child {
+  font-weight: 750;
+}
+
+.eb-copilotSection li span:last-child {
+  flex: 0 0 auto;
+  color: #475569;
+}
+
 .eb-voiceCapture {
   border-color: rgba(20, 184, 166, 0.26);
   background:
@@ -8245,6 +8384,7 @@ body {
 
   .eb-typeGrid,
   .eb-detailsGrid,
+  .eb-copilotGrid,
   .eb-voiceGrid,
   .eb-builderActions,
   .eb-profitGrid {
@@ -8254,6 +8394,7 @@ body {
   .eb-suggestionItem,
   .eb-assemblyOption,
   .eb-priceOption,
+  .eb-copilotDraftHeader,
   .eb-guidedPrompt,
   .eb-guidedPromptCopy,
   .eb-guidedFooter {
@@ -8262,12 +8403,22 @@ body {
   }
 
   .eb-guidedPromptActions,
+  .eb-copilotActions,
   .eb-voiceControls,
   .eb-guidedChoices,
   .eb-guidedChoices.two,
   .eb-guidedFooter > div {
     width: 100%;
     grid-template-columns: 1fr;
+  }
+
+  .eb-copilotContext {
+    grid-template-columns: 1fr;
+  }
+
+  .eb-copilotSection li {
+    flex-direction: column;
+    gap: 3px;
   }
 
   .eb-voiceButton {

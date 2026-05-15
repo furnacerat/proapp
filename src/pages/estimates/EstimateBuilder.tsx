@@ -74,6 +74,31 @@ interface VoiceParsedSection {
   deleteTerms: string[];
 }
 
+interface EstimateCopilotItem {
+  name: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  category: EstimateLineCategory;
+  clientVisible: boolean;
+  notes: string;
+}
+
+interface EstimateCopilotSection {
+  name: string;
+  description: string;
+  items: EstimateCopilotItem[];
+}
+
+interface EstimateCopilotResult {
+  summary: string;
+  confidence: number;
+  sections: EstimateCopilotSection[];
+  warnings: string[];
+  questions: string[];
+}
+
 const isAffirmative = (value: GuidedAnswerValue | undefined) => value === true || value === 'yes';
 const answerNumber = (value: GuidedAnswerValue | undefined, fallback = 0) => {
   const parsed = typeof value === 'number' ? value : parseFloat(String(value || ''));
@@ -230,6 +255,9 @@ export function EstimateBuilder() {
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [isVoiceTranscribing, setIsVoiceTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const [copilotPrompt, setCopilotPrompt] = useState('');
+  const [copilotResult, setCopilotResult] = useState<EstimateCopilotResult | null>(null);
+  const [isCopilotLoading, setIsCopilotLoading] = useState(false);
   const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<string[]>([]);
   const [editingItem, setEditingItem] = useState<{ item?: EstimateLineItem; sectionId: string } | null>(null);
   const [newItemForm, setNewItemForm] = useState({
@@ -1802,6 +1830,137 @@ export function EstimateBuilder() {
     : [],
   [smartEnabled, formData.type, materials, laborRates, projectTypeTemplates, jobs, expenses, timeEntries]);
 
+  const runEstimateCopilot = async () => {
+    if (!smartEnabled) {
+      showToast('Smart Mode is turned off in settings', 'warning');
+      return;
+    }
+
+    const prompt = copilotPrompt.trim();
+    const notes = formData.notes.trim();
+    const transcript = voiceTranscript.trim();
+    if (!prompt && !notes && !transcript) {
+      showToast('Add scope notes, job walk notes, or a Copilot request first', 'warning');
+      return;
+    }
+
+    setIsCopilotLoading(true);
+    setCopilotResult(null);
+
+    try {
+      const response = await fetch('/api/estimates/copilot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          prompt,
+          estimate: {
+            name: formData.name,
+            projectType: formData.type,
+            address: formData.address,
+            markupPercent: parseFloat(formData.markupPercent) || defaultMarkup,
+            notes: formData.notes,
+            currentItems: allEstimateItems.filter(item => !item.isExcluded).map(item => ({
+              name: item.name,
+              description: item.description,
+              quantity: item.quantity,
+              unit: item.unit,
+              unitCost: getItemCost(item),
+              category: item.category,
+              isLabor: item.isLabor || item.category === 'labor',
+            })),
+          },
+          voiceTranscript,
+          materials: (materials || []).filter(material => material.isActive !== false).slice(0, 80).map(material => ({
+            name: material.name,
+            description: material.description || material.category || material.supplier || '',
+            quantity: 1,
+            unit: material.unit || 'ea',
+            unitCost: material.currentPrice ?? material.unitPrice ?? 0,
+            category: material.category || 'material',
+            isLabor: false,
+          })),
+          laborRates: (laborRates || []).filter(rate => rate.isActive !== false).slice(0, 60).map(rate => ({
+            name: rate.name,
+            description: rate.trade || '',
+            quantity: 1,
+            unit: 'hr',
+            unitCost: rate.hourlyRate || 0,
+            category: 'labor',
+            isLabor: true,
+          })),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Estimate Copilot failed');
+
+      setCopilotResult(data as EstimateCopilotResult);
+      showToast('Estimate Copilot draft ready');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Estimate Copilot failed', 'error');
+    } finally {
+      setIsCopilotLoading(false);
+    }
+  };
+
+  const applyCopilotDraft = () => {
+    if (!copilotResult || copilotResult.sections.length === 0) {
+      showToast('Run Estimate Copilot before applying a draft', 'warning');
+      return;
+    }
+
+    const sections: EstimateSection[] = copilotResult.sections
+      .map((section, sectionIndex) => ({
+        id: crypto.randomUUID(),
+        name: section.name || `Copilot Section ${sectionIndex + 1}`,
+        description: section.description,
+        sortOrder: sectionIndex,
+        lineItems: (section.items || []).map((item, itemIndex) => normalizeLineItem({
+          id: crypto.randomUUID(),
+          sourceType: 'smartScope',
+          name: item.name || `Copilot item ${itemIndex + 1}`,
+          description: item.description,
+          quantity: Number.isFinite(Number(item.quantity)) ? Number(item.quantity) : 1,
+          unit: item.unit || (item.category === 'labor' ? 'hr' : 'ea'),
+          unitCost: Number.isFinite(Number(item.unitCost)) ? Number(item.unitCost) : 0,
+          unitPrice: Number.isFinite(Number(item.unitCost)) ? Number(item.unitCost) : 0,
+          category: item.category,
+          type: item.category === 'allowance' ? 'other' : item.category,
+          isLabor: item.category === 'labor',
+          hours: item.category === 'labor' ? Number(item.quantity || 0) : undefined,
+          clientVisible: item.clientVisible !== false,
+          internalNotes: 'Added by Estimate Copilot. Review quantities and pricing before sending.',
+          notes: item.notes || copilotResult.summary,
+          sortOrder: itemIndex,
+          total: Number(item.quantity || 0) * Number(item.unitCost || 0),
+        }, 'smartScope')),
+      }))
+      .filter(section => section.lineItems.length > 0);
+
+    if (sections.length === 0) {
+      showToast('Copilot did not return line items to apply', 'warning');
+      return;
+    }
+
+    const scopeId = crypto.randomUUID();
+    const copilotScope: EstimateScope = {
+      id: scopeId,
+      name: `${projectType?.label || 'Estimate'} Copilot Draft`,
+      projectType: formData.type as JobType,
+      sections,
+      subtotal: sections.reduce((sum, section) => sum + section.lineItems.reduce((sectionSum, item) => sectionSum + getItemCostTotal(item), 0), 0),
+      isOptional: false,
+      sortOrder: scopes.length,
+    };
+
+    setScopes([...scopes, copilotScope]);
+    setActiveScopeId(scopeId);
+    setActiveSectionId(sections[0]?.id || null);
+    showToast('Copilot draft added to estimate');
+  };
+
   const suggestionToLineItem = (suggestion: typeof estimateSuggestions[number]): EstimateLineItem => normalizeLineItem({
     id: crypto.randomUUID(),
     sourceType: suggestion.linkedMaterialId || suggestion.linkedLaborRateId ? 'priceBook' : 'manual',
@@ -2171,6 +2330,93 @@ export function EstimateBuilder() {
               </div>
             </div>
           )}
+
+          <div className="eb-section eb-copilot">
+            <div className="eb-sectionHeader">
+              <div>
+                <p className="eb-sectionEyebrow">Estimate Copilot</p>
+                <h2>Draft scope with AI</h2>
+              </div>
+              <span className="eb-sectionPill">{smartEnabled ? 'Ready' : 'Smart Mode Off'}</span>
+            </div>
+            <div className="eb-copilotGrid">
+              <div>
+                <textarea
+                  className="form-textarea eb-copilotPrompt"
+                  value={copilotPrompt}
+                  onChange={event => setCopilotPrompt(event.target.value)}
+                  disabled={!smartEnabled || isCopilotLoading}
+                  placeholder="Ask Copilot to draft scope from notes, add missing labor/materials, or review this estimate for gaps."
+                />
+                <div className="eb-copilotActions">
+                  <button className="eb-actionBtn eb-actionBtnPrimary" onClick={runEstimateCopilot} disabled={!smartEnabled || isCopilotLoading}>
+                    {isCopilotLoading ? <Loader2 size={16} /> : <Zap size={16} />}
+                    <span>{isCopilotLoading ? 'Drafting...' : 'Run Copilot'}</span>
+                  </button>
+                  <button className="eb-actionBtn" onClick={() => setCopilotPrompt('Review this estimate for missing labor, materials, allowances, and customer questions.')} disabled={!smartEnabled || isCopilotLoading}>
+                    <Search size={16} /><span>Review Gaps</span>
+                  </button>
+                  {copilotResult && (
+                    <button className="eb-actionBtn" onClick={() => setCopilotResult(null)}>
+                      <X size={16} /><span>Clear Draft</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="eb-copilotContext">
+                <div><strong>{allEstimateItems.filter(item => !item.isExcluded).length}</strong><span>current items</span></div>
+                <div><strong>{materials?.filter(material => material.isActive !== false).length || 0}</strong><span>price book materials</span></div>
+                <div><strong>{laborRates?.filter(rate => rate.isActive !== false).length || 0}</strong><span>labor rates</span></div>
+                <div><strong>{voiceTranscript.trim() ? 'Yes' : 'No'}</strong><span>job walk notes</span></div>
+              </div>
+            </div>
+
+            {!smartEnabled && (
+              <div className="eb-voiceNotice warning">Turn Smart Mode on in Settings to use Estimate Copilot.</div>
+            )}
+
+            {copilotResult && (
+              <div className="eb-copilotDraft">
+                <div className="eb-copilotDraftHeader">
+                  <div>
+                    <h3>{copilotResult.summary}</h3>
+                    <span>{copilotResult.sections.reduce((sum, section) => sum + section.items.length, 0)} draft items / {Math.round(copilotResult.confidence * 100)}% confidence</span>
+                  </div>
+                  <button className="eb-actionBtn eb-actionBtnPrimary" onClick={applyCopilotDraft}>
+                    <ListPlus size={16} /><span>Apply Draft</span>
+                  </button>
+                </div>
+                {(copilotResult.warnings.length > 0 || copilotResult.questions.length > 0) && (
+                  <div className="eb-guidedSignals">
+                    {copilotResult.warnings.map(warning => (
+                      <div className="eb-guidedSignal warning" key={warning}><AlertTriangle size={15} />{warning}</div>
+                    ))}
+                    {copilotResult.questions.map(question => (
+                      <div className="eb-guidedSignal suggestion" key={question}><CheckCircle size={15} />{question}</div>
+                    ))}
+                  </div>
+                )}
+                <div className="eb-copilotSections">
+                  {copilotResult.sections.map(section => (
+                    <div className="eb-copilotSection" key={section.name}>
+                      <div>
+                        <strong>{section.name}</strong>
+                        {section.description && <span>{section.description}</span>}
+                      </div>
+                      <ul>
+                        {section.items.map(item => (
+                          <li key={`${section.name}-${item.name}`}>
+                            <span>{item.name}</span>
+                            <span>{item.quantity} {item.unit} x {formatCurrency(item.unitCost)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="eb-section eb-voiceCapture">
             <div className="eb-sectionHeader">
