@@ -3100,20 +3100,20 @@ body {
   justify-content: space-between;
   gap: 18px;
   padding: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, rgba(18, 58, 95, 0.08), rgba(16, 185, 129, 0.06));
+  border: 1px solid rgba(18, 58, 95, 0.16);
   border-radius: 14px;
 }
 
 .smart-toggle-row strong,
 .smart-toggle-row .font-bold,
 .smart-setting-tile strong {
-  color: var(--text-primary);
+  color: #0f172a;
 }
 
 .smart-toggle-row .text-muted,
 .smart-setting-tile span {
-  color: var(--text-secondary);
+  color: #475569;
 }
 
 .smart-toggle-row input {
@@ -3191,9 +3191,10 @@ body {
 
 .smart-setting-tile {
   padding: 14px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc, #eef6ff);
+  border: 1px solid #cbd5e1;
   border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
 }
 
 .smart-setting-tile strong,
@@ -3216,14 +3217,14 @@ body {
   gap: 16px;
   align-items: center;
   padding: 14px;
-  border: 1px solid rgba(16, 185, 129, 0.22);
+  border: 1px solid rgba(16, 185, 129, 0.34);
   border-radius: 14px;
-  background: rgba(16, 185, 129, 0.06);
+  background: linear-gradient(135deg, #f0fdf4, #f8fafc);
 }
 
 .cleanup-score-row.needs-work {
-  border-color: rgba(245, 158, 11, 0.28);
-  background: rgba(245, 158, 11, 0.07);
+  border-color: rgba(245, 158, 11, 0.42);
+  background: linear-gradient(135deg, #fffbeb, #f8fafc);
 }
 
 .cleanup-score-ring {
@@ -3253,7 +3254,7 @@ body {
 
 .cleanup-score-row p {
   margin: 0;
-  color: var(--text-secondary);
+  color: #475569;
 }
 
 .cleanup-score-stats {
@@ -3269,16 +3270,16 @@ body {
   align-items: center;
   gap: 5px;
   padding: 6px 9px;
-  border: 1px solid var(--border-light);
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
-  color: var(--text-secondary);
-  background: var(--bg-primary);
+  color: #475569;
+  background: #ffffff;
   font-size: 0.78rem;
   white-space: nowrap;
 }
 
 .cleanup-score-stats strong {
-  color: var(--text-primary);
+  color: #0f172a;
 }
 
 .cleanup-suggestions {
@@ -3293,10 +3294,10 @@ body {
   gap: 14px;
   align-items: flex-start;
   padding: 14px;
-  border: 1px solid var(--border-light);
+  border: 1px solid #cbd5e1;
   border-left: 4px solid var(--primary);
   border-radius: var(--radius);
-  background: var(--bg-primary);
+  background: #ffffff;
 }
 
 .cleanup-suggestion.warning {
@@ -3310,15 +3311,16 @@ body {
 .cleanup-suggestion h4 {
   margin: 8px 0 5px;
   font-size: 1rem;
+  color: #0f172a;
 }
 
 .cleanup-suggestion p {
   margin: 0 0 6px;
-  color: var(--text-secondary);
+  color: #475569;
 }
 
 .cleanup-suggestion small {
-  color: var(--text-muted);
+  color: #64748b;
 }
 
 .chart-bar-row {
