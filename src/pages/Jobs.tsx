@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
+import { getJobHealthScore } from '../utils/insights';
 import { JOB_STATUSES, JOB_TYPES } from '../data/types';
 import type { ExpenseCategory, Job, JobStatus, JobType, ShoppingListItemCategory } from '../data/types';
 import { useToast } from '../components/common/Toast';
@@ -67,11 +68,16 @@ export function Jobs() {
     jobs,
     tasks,
     expenses,
+    timeEntries,
     invoices,
+    payments,
     notes,
+    changeOrders,
     materialOrders,
     shoppingLists,
     allowances,
+    jobIssues,
+    punchLists,
     suppliers,
     addJob,
     updateJob,
@@ -120,11 +126,32 @@ export function Jobs() {
     const doneTasks = jobTasks.filter(task => task.status === 'done').length;
     const blockedTasks = jobTasks.filter(task => task.status === 'blocked');
     const jobExpenses = expenses.filter(expense => expense.jobId === job.id);
+    const jobTimeEntries = timeEntries.filter(entry => entry.jobId === job.id);
+    const jobInvoices = invoices.filter(invoice => invoice.jobId === job.id);
+    const jobPayments = payments.filter(payment => jobInvoices.some(invoice => invoice.id === payment.invoiceId));
+    const jobChangeOrders = changeOrders.filter(order => order.jobId === job.id);
+    const jobIssuesForJob = (jobIssues || []).filter(issue => issue.jobId === job.id);
+    const jobPunchList = (punchLists || []).filter(item => item.jobId === job.id);
+    const jobAllowances = allowances.filter(allowance => allowance.jobId === job.id);
     const jobOrders = materialOrders.filter(order => order.jobId === job.id);
     const jobShoppingLists = shoppingLists.filter(list => list.jobId === job.id);
     const progress = getJobProgress(job.id);
     const actualCost = getJobActualCost(job.id);
     const profitInfo = getJobProfit(job.id);
+    const health = getJobHealthScore(job, {
+      expenses: jobExpenses,
+      timeEntries: jobTimeEntries,
+      tasks: jobTasks,
+      invoices: jobInvoices,
+      payments: jobPayments,
+      changeOrders: jobChangeOrders,
+      issues: jobIssuesForJob,
+      punchList: jobPunchList,
+      materialOrders: jobOrders,
+      shoppingLists: jobShoppingLists,
+      allowances: jobAllowances,
+      progress,
+    });
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const due = job.dueDate ? parseDateString(job.dueDate) : null;
@@ -145,6 +172,7 @@ export function Jobs() {
       jobExpenses,
       jobOrders,
       jobShoppingLists,
+      health,
       alerts: [
         ...(overBudget ? [{ type: 'budget', label: 'Over budget', detail: `${formatCurrency(actualCost - job.estimatedCost)} over estimate` }] : []),
         ...(missingMaterials ? [{ type: 'materials', label: 'Missing materials', detail: 'No order or shopping list linked' }] : []),
@@ -152,7 +180,7 @@ export function Jobs() {
         ...blockedTasks.slice(0, 1).map(task => ({ type: 'blocked', label: 'Delayed task', detail: task.title })),
       ],
     };
-  }), [jobs, tasks, expenses, materialOrders, shoppingLists, getJobProgress, getJobActualCost, getJobProfit]);
+  }), [jobs, tasks, expenses, timeEntries, invoices, payments, changeOrders, jobIssues, punchLists, allowances, materialOrders, shoppingLists, getJobProgress, getJobActualCost, getJobProfit]);
 
   const filteredSummaries = useMemo(() => {
     const currentFilter = pipelineFilters.find(filter => filter.id === pipelineFilter);
@@ -483,7 +511,10 @@ export function Jobs() {
                   </div>
                   <p>{summary.job.customer || 'No customer'} • {summary.job.type.replace('_', ' ')}</p>
                 </div>
-                <div className="job-due-pill"><CalendarDays size={14} /> {summary.job.dueDate ? formatDate(summary.job.dueDate) : 'No due date'}</div>
+                <div className="job-card-right">
+                  <div className={`job-health-pill ${summary.health.status}`}>{summary.health.score} {summary.health.label}</div>
+                  <div className="job-due-pill"><CalendarDays size={14} /> {summary.job.dueDate ? formatDate(summary.job.dueDate) : 'No due date'}</div>
+                </div>
               </div>
 
               <div className="job-progress-row">
@@ -532,6 +563,17 @@ export function Jobs() {
               <Metric label="Estimated Total" value={formatCurrency(selectedJob.contractAmount)} />
               <Metric label="Actual Cost" value={formatCurrency(selectedSummary.actualCost)} />
               <Metric label="Profit" value={formatCurrency(selectedSummary.profit)} tone={selectedSummary.profit >= 0 ? 'positive' : 'negative'} />
+            </div>
+
+            <div className={`job-detail-health ${selectedSummary.health.status}`}>
+              <div className="job-detail-health-score">
+                <strong>{selectedSummary.health.score}</strong>
+                <span>{selectedSummary.health.label}</span>
+              </div>
+              <div>
+                <small>Job Health</small>
+                <p>{selectedSummary.health.summary}</p>
+              </div>
             </div>
 
             <div className="job-detail-progress">

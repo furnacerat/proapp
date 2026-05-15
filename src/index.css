@@ -2046,6 +2046,96 @@ body {
   color: var(--danger);
 }
 
+.job-health-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  padding: 18px;
+  border-left: 4px solid var(--success);
+}
+
+.job-health-card.watch {
+  border-left-color: var(--warning);
+}
+
+.job-health-card.at_risk,
+.job-health-card.critical {
+  border-left-color: var(--danger);
+}
+
+.job-health-score {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.job-health-score h3 {
+  margin: 3px 0;
+  font-size: 1.25rem;
+}
+
+.job-health-score p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.job-health-ring {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, var(--bg-secondary) 58%, transparent 59%),
+    conic-gradient(var(--primary) var(--score), var(--border-light) 0);
+}
+
+.job-health-ring strong {
+  font-size: 1.35rem;
+}
+
+.job-health-factors {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.job-health-factor {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+}
+
+.job-health-factor span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.job-health-factor strong {
+  color: var(--success);
+}
+
+.job-health-factor.watch strong {
+  color: var(--warning);
+}
+
+.job-health-factor.at_risk strong,
+.job-health-factor.critical strong {
+  color: var(--danger);
+}
+
+.job-health-factor small {
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
 .change-order-detector .card-header {
   align-items: flex-start;
 }
@@ -11159,6 +11249,13 @@ body {
   flex-wrap: wrap;
 }
 
+.job-card-right {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .job-card-title-row h3,
 .job-detail-hero h2 {
   margin: 0;
@@ -11182,6 +11279,30 @@ body {
   color: #e5f0ff;
   background: rgba(148, 163, 184, 0.2);
   font-size: 0.78rem;
+}
+
+.job-health-pill {
+  padding: 7px 10px;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 999px;
+  color: #bbf7d0;
+  background: rgba(5, 150, 105, 0.18);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.job-health-pill.watch {
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.22);
+}
+
+.job-health-pill.at_risk,
+.job-health-pill.critical {
+  border-color: rgba(251, 113, 133, 0.36);
+  color: #fecdd3;
+  background: rgba(127, 29, 29, 0.24);
 }
 
 .job-progress-row {
@@ -11290,6 +11411,58 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 16px;
+}
+
+.job-detail-health {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 14px;
+  background: rgba(5, 150, 105, 0.13);
+}
+
+.job-detail-health.watch {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.job-detail-health.at_risk,
+.job-detail-health.critical {
+  border-color: rgba(251, 113, 133, 0.34);
+  background: rgba(127, 29, 29, 0.2);
+}
+
+.job-detail-health-score {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  color: #ecfdf5;
+  background: rgba(2, 8, 23, 0.38);
+}
+
+.job-detail-health-score strong {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.job-detail-health-score span,
+.job-detail-health small {
+  color: #b9d4f0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.job-detail-health p {
+  margin: 3px 0 0;
+  color: #f8fbff;
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .job-detail-metric,

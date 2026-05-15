@@ -1,4 +1,4 @@
-import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance, CompanyExpense } from '../data/types';
+import { Job, Expense, TimeEntry, Worker, Invoice, Payment, Task, Estimate, JobType, Material, LaborRate, ProjectTypeTemplate, EstimateLineItem, EstimateLineCategory, MaterialOrder, ShoppingList, Allowance, CompanyExpense, ChangeOrder, JobIssue, PunchListItem } from '../data/types';
 import { formatCurrency, parseDateString } from './formatters';
 import { expenseAffectsJobCost } from './timeEntries';
 
@@ -57,6 +57,22 @@ export interface EstimateSuggestion {
   reason: string;
 }
 
+export interface JobHealthFactor {
+  id: string;
+  label: string;
+  status: 'healthy' | 'watch' | 'at_risk' | 'critical';
+  impact: number;
+  description: string;
+}
+
+export interface JobHealthScore {
+  score: number;
+  status: 'healthy' | 'watch' | 'at_risk' | 'critical';
+  label: string;
+  summary: string;
+  factors: JobHealthFactor[];
+}
+
 const dayMs = 24 * 60 * 60 * 1000;
 
 function daysSince(date?: string) {
@@ -76,6 +92,225 @@ function getActualJobCost(job: Job, expenses: Expense[], timeEntries: TimeEntry[
   const expenseTotal = expenses.filter(expense => expense.jobId === job.id && expenseAffectsJobCost(expense)).reduce((sum, expense) => sum + expense.amount, 0);
   const laborTotal = timeEntries.filter(entry => entry.jobId === job.id).reduce((sum, entry) => sum + entry.laborCost, 0);
   return expenseTotal + laborTotal;
+}
+
+const getHealthStatus = (score: number): JobHealthScore['status'] => {
+  if (score < 45) return 'critical';
+  if (score < 65) return 'at_risk';
+  if (score < 82) return 'watch';
+  return 'healthy';
+};
+
+const getHealthLabel = (status: JobHealthScore['status']) => {
+  if (status === 'critical') return 'Critical';
+  if (status === 'at_risk') return 'At Risk';
+  if (status === 'watch') return 'Watch';
+  return 'Healthy';
+};
+
+const getOpenInvoiceBalance = (invoices: Invoice[], payments: Payment[]) => {
+  const paidByInvoice = getPaidByInvoice(payments);
+  return invoices.reduce((sum, invoice) => {
+    if (invoice.status === 'paid') return sum;
+    return sum + Math.max(0, (invoice.total ?? invoice.amount) - (paidByInvoice.get(invoice.id) || 0));
+  }, 0);
+};
+
+export function getJobHealthScore(
+  job: Job,
+  options: {
+    expenses?: Expense[];
+    timeEntries?: TimeEntry[];
+    tasks?: Task[];
+    invoices?: Invoice[];
+    payments?: Payment[];
+    changeOrders?: ChangeOrder[];
+    issues?: JobIssue[];
+    punchList?: PunchListItem[];
+    materialOrders?: MaterialOrder[];
+    shoppingLists?: ShoppingList[];
+    allowances?: Allowance[];
+    progress?: number;
+  } = {},
+): JobHealthScore {
+  const expenses = options.expenses || [];
+  const timeEntries = options.timeEntries || [];
+  const tasks = options.tasks || [];
+  const invoices = options.invoices || [];
+  const payments = options.payments || [];
+  const changeOrders = options.changeOrders || [];
+  const issues = options.issues || [];
+  const punchList = options.punchList || [];
+  const materialOrders = options.materialOrders || [];
+  const shoppingLists = options.shoppingLists || [];
+  const allowances = options.allowances || [];
+  const progress = options.progress ?? 0;
+  const today = startOfToday();
+  const isClosed = ['completed', 'closed'].includes(job.status);
+  const actualCost = getActualJobCost(job, expenses, timeEntries) || Number(job.actualCost || 0);
+  const budgetBase = job.estimatedCost > 0 ? job.estimatedCost : job.contractAmount;
+  const budgetUsage = budgetBase > 0 ? (actualCost / budgetBase) * 100 : 0;
+  const profit = job.contractAmount - actualCost;
+  const margin = job.contractAmount > 0 ? (profit / job.contractAmount) * 100 : 0;
+  const factors: JobHealthFactor[] = [];
+
+  const addFactor = (factor: JobHealthFactor) => factors.push(factor);
+
+  const dueDate = job.dueDate ? parseDateString(job.dueDate) : null;
+  dueDate?.setHours(0, 0, 0, 0);
+  const daysPastDue = dueDate ? Math.floor((today.getTime() - dueDate.getTime()) / dayMs) : 0;
+  if (!isClosed && dueDate && daysPastDue > 0) {
+    addFactor({
+      id: 'schedule-overdue',
+      label: 'Schedule',
+      status: daysPastDue >= 14 ? 'critical' : 'at_risk',
+      impact: -Math.min(25, 10 + daysPastDue * 2),
+      description: `Due date passed ${daysPastDue} day${daysPastDue === 1 ? '' : 's'} ago.`,
+    });
+  } else if (!isClosed && dueDate && daysPastDue >= -7 && progress < 80) {
+    addFactor({
+      id: 'schedule-due-soon',
+      label: 'Schedule',
+      status: 'watch',
+      impact: -8,
+      description: `Due soon with ${progress}% task progress.`,
+    });
+  } else {
+    addFactor({ id: 'schedule-ok', label: 'Schedule', status: 'healthy', impact: 0, description: 'Schedule is not currently overdue.' });
+  }
+
+  if (budgetUsage > 100) {
+    addFactor({
+      id: 'budget-over',
+      label: 'Budget',
+      status: budgetUsage > 115 ? 'critical' : 'at_risk',
+      impact: -Math.min(25, 10 + (budgetUsage - 100) * 0.6),
+      description: `${Math.round(budgetUsage)}% of estimated cost has been used.`,
+    });
+  } else if (budgetUsage >= 85) {
+    addFactor({
+      id: 'budget-near',
+      label: 'Budget',
+      status: 'watch',
+      impact: -10,
+      description: `${Math.round(budgetUsage)}% of estimated cost has been used.`,
+    });
+  } else {
+    addFactor({ id: 'budget-ok', label: 'Budget', status: 'healthy', impact: 0, description: `${Math.round(budgetUsage)}% of estimated cost has been used.` });
+  }
+
+  if (margin < 0) {
+    addFactor({ id: 'profit-loss', label: 'Profit', status: 'critical', impact: -20, description: `Projected loss of ${formatCurrency(Math.abs(profit))}.` });
+  } else if (margin < 10 && job.contractAmount > 0) {
+    addFactor({ id: 'profit-low', label: 'Profit', status: 'at_risk', impact: -12, description: `${Math.round(margin)}% projected margin.` });
+  } else if (margin < 18 && job.contractAmount > 0) {
+    addFactor({ id: 'profit-watch', label: 'Profit', status: 'watch', impact: -6, description: `${Math.round(margin)}% projected margin.` });
+  } else {
+    addFactor({ id: 'profit-ok', label: 'Profit', status: 'healthy', impact: 0, description: `${Math.round(margin)}% projected margin.` });
+  }
+
+  const overdueTasks = tasks.filter(task => task.dueDate && task.status !== 'done' && parseDateString(task.dueDate) < today);
+  const blockedTasks = tasks.filter(task => task.status === 'blocked');
+  if (blockedTasks.length || overdueTasks.length) {
+    addFactor({
+      id: 'task-risk',
+      label: 'Tasks',
+      status: blockedTasks.length ? 'at_risk' : 'watch',
+      impact: -Math.min(18, blockedTasks.length * 7 + overdueTasks.length * 4),
+      description: `${blockedTasks.length} blocked and ${overdueTasks.length} overdue task${overdueTasks.length === 1 ? '' : 's'}.`,
+    });
+  } else {
+    addFactor({ id: 'tasks-ok', label: 'Tasks', status: 'healthy', impact: 0, description: `${tasks.filter(task => task.status !== 'done').length} open task${tasks.filter(task => task.status !== 'done').length === 1 ? '' : 's'}.` });
+  }
+
+  const openIssues = issues.filter(issue => issue.status !== 'resolved');
+  const severeIssues = openIssues.filter(issue => issue.severity === 'critical' || issue.severity === 'high');
+  const openPunchItems = punchList.filter(item => item.status !== 'done');
+  if (severeIssues.length || openPunchItems.length >= 5) {
+    addFactor({
+      id: 'field-risk',
+      label: 'Field Risk',
+      status: severeIssues.some(issue => issue.severity === 'critical') ? 'critical' : 'at_risk',
+      impact: -Math.min(18, severeIssues.length * 6 + Math.floor(openPunchItems.length / 2)),
+      description: `${severeIssues.length} high severity issue${severeIssues.length === 1 ? '' : 's'} and ${openPunchItems.length} open punch item${openPunchItems.length === 1 ? '' : 's'}.`,
+    });
+  } else {
+    addFactor({ id: 'field-ok', label: 'Field Risk', status: 'healthy', impact: 0, description: `${openIssues.length} open issue${openIssues.length === 1 ? '' : 's'} logged.` });
+  }
+
+  const overdueInvoices = invoices.filter(invoice => invoice.status !== 'paid' && invoice.dueDate && parseDateString(invoice.dueDate) < today);
+  const openBalance = getOpenInvoiceBalance(invoices, payments);
+  if (overdueInvoices.length && openBalance > 0) {
+    addFactor({
+      id: 'payment-overdue',
+      label: 'Billing',
+      status: 'at_risk',
+      impact: -Math.min(15, 7 + overdueInvoices.length * 3),
+      description: `${formatCurrency(openBalance)} open balance with ${overdueInvoices.length} overdue invoice${overdueInvoices.length === 1 ? '' : 's'}.`,
+    });
+  } else {
+    addFactor({ id: 'billing-ok', label: 'Billing', status: 'healthy', impact: 0, description: openBalance > 0 ? `${formatCurrency(openBalance)} open balance, not overdue.` : 'No overdue invoice balance.' });
+  }
+
+  const pendingChangeTotal = changeOrders.filter(order => order.status === 'pending').reduce((sum, order) => sum + order.amount, 0);
+  const rejectedChanges = changeOrders.filter(order => order.status === 'rejected').length;
+  const overAllowances = allowances.filter(allowance => allowance.remainingAmount < 0);
+  if (pendingChangeTotal > 0 || rejectedChanges || overAllowances.length) {
+    addFactor({
+      id: 'scope-risk',
+      label: 'Scope',
+      status: pendingChangeTotal > job.contractAmount * 0.1 || rejectedChanges ? 'at_risk' : 'watch',
+      impact: -Math.min(16, (pendingChangeTotal > 0 ? 6 : 0) + rejectedChanges * 5 + overAllowances.length * 4),
+      description: `${formatCurrency(pendingChangeTotal)} pending changes, ${rejectedChanges} rejected, ${overAllowances.length} allowance overage${overAllowances.length === 1 ? '' : 's'}.`,
+    });
+  } else {
+    addFactor({ id: 'scope-ok', label: 'Scope', status: 'healthy', impact: 0, description: 'No pending scope or allowance risks.' });
+  }
+
+  const needsMaterialPlan = ['approved', 'scheduled', 'active', 'awaiting_materials'].includes(job.status) && materialOrders.length === 0 && shoppingLists.length === 0;
+  const lateOrders = materialOrders.filter(order => !['received', 'cancelled'].includes(order.status) && order.expectedDate && parseDateString(order.expectedDate) < today);
+  if (needsMaterialPlan || lateOrders.length) {
+    addFactor({
+      id: 'material-risk',
+      label: 'Materials',
+      status: lateOrders.length ? 'at_risk' : 'watch',
+      impact: -Math.min(12, (needsMaterialPlan ? 8 : 0) + lateOrders.length * 4),
+      description: needsMaterialPlan ? 'No material order or shopping list is linked.' : `${lateOrders.length} material order${lateOrders.length === 1 ? '' : 's'} past expected date.`,
+    });
+  } else {
+    addFactor({ id: 'materials-ok', label: 'Materials', status: 'healthy', impact: 0, description: `${materialOrders.length + shoppingLists.length} material plan item${materialOrders.length + shoppingLists.length === 1 ? '' : 's'} linked.` });
+  }
+
+  const lastActivity = [job.updatedAt, ...timeEntries.map(entry => entry.date), ...expenses.map(expense => expense.date)]
+    .filter(Boolean)
+    .sort((a, b) => parseDateString(b).getTime() - parseDateString(a).getTime())[0];
+  const idleDays = daysSince(lastActivity);
+  if (job.status === 'active' && idleDays >= 7) {
+    addFactor({
+      id: 'activity-stale',
+      label: 'Activity',
+      status: idleDays >= 14 ? 'at_risk' : 'watch',
+      impact: -Math.min(12, 5 + Math.floor(idleDays / 3)),
+      description: `No time, expense, or job update activity for ${idleDays} days.`,
+    });
+  } else {
+    addFactor({ id: 'activity-ok', label: 'Activity', status: 'healthy', impact: 0, description: idleDays < 999 ? `Last activity ${idleDays} day${idleDays === 1 ? '' : 's'} ago.` : 'No activity history yet.' });
+  }
+
+  const score = Math.max(0, Math.min(100, Math.round(100 + factors.reduce((sum, factor) => sum + factor.impact, 0))));
+  const status = getHealthStatus(score);
+  const problemFactors = factors.filter(factor => factor.impact < 0).sort((a, b) => a.impact - b.impact);
+  const summary = problemFactors.length
+    ? `${problemFactors[0].label} is the biggest drag: ${problemFactors[0].description}`
+    : 'No major operational risks detected.';
+
+  return {
+    score,
+    status,
+    label: getHealthLabel(status),
+    summary,
+    factors: factors.sort((a, b) => a.impact - b.impact),
+  };
 }
 
 const startOfToday = () => {

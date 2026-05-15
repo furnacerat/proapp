@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type CSSProperties } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, formatTime, parseDateString } from '../utils/formatters';
-import { getJobInsights } from '../utils/insights';
+import { getJobHealthScore, getJobInsights } from '../utils/insights';
 import { JOB_STATUSES, EXPENSE_CATEGORIES, INVOICE_TYPES, CHANGE_ORDER_STATUSES, PHOTO_CATEGORIES, TASK_STATUSES, PRIORITIES, PunchListStatus, IssueStatus, IssueSeverity } from '../data/types';
 import type { JobTimelineEntry, JobLog, PunchListItem, JobIssue, FileAttachment, AllowanceCategory, AllowanceSelectionStatus } from '../data/types';
 import { useToast } from '../components/common/Toast';
@@ -178,6 +178,20 @@ export function JobDetail() {
   const balance = useMemo(() => getJobBalance(id!), [id, jobInvoices, payments]);
   const progress = useMemo(() => getJobProgress(id!), [id, jobTasks]);
   const insights = useMemo(() => job ? getJobInsights(job, jobExpenses, jobTimeEntries) : [], [job, jobExpenses, jobTimeEntries]);
+  const healthScore = useMemo(() => job ? getJobHealthScore(job, {
+    expenses: jobExpenses,
+    timeEntries: jobTimeEntries,
+    tasks: jobTasks,
+    invoices: jobInvoices,
+    payments,
+    changeOrders: jobChangeOrders,
+    issues: jobIssueEntries,
+    punchList: jobPunchList,
+    materialOrders: jobMaterialOrders,
+    shoppingLists: jobShoppingLists,
+    allowances: jobAllowances,
+    progress,
+  }) : null, [job, jobExpenses, jobTimeEntries, jobTasks, jobInvoices, payments, jobChangeOrders, jobIssueEntries, jobPunchList, jobMaterialOrders, jobShoppingLists, jobAllowances, progress]);
 
   if (!job) {
     return (
@@ -664,6 +678,30 @@ export function JobDetail() {
             </div>
           </div>
         </div>
+
+        {healthScore && (
+          <div className={`card mb-6 job-health-card ${healthScore.status}`}>
+            <div className="job-health-score">
+              <div className="job-health-ring" style={{ '--score': `${healthScore.score}%` } as CSSProperties}>
+                <strong>{healthScore.score}</strong>
+              </div>
+              <div>
+                <div className="text-xs text-muted uppercase">Job Health</div>
+                <h3>{healthScore.label}</h3>
+                <p>{healthScore.summary}</p>
+              </div>
+            </div>
+            <div className="job-health-factors">
+              {healthScore.factors.slice(0, 4).map(factor => (
+                <div key={factor.id} className={`job-health-factor ${factor.status}`}>
+                  <span>{factor.label}</span>
+                  <strong>{factor.impact < 0 ? factor.impact : 'OK'}</strong>
+                  <small>{factor.description}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {insights.length > 0 && (
           <div className="flex gap-2 mb-4 overflow-x-auto">

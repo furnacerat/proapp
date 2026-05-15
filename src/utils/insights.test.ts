@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { generateInsights, generateSmartNextActions, getEstimateSuggestions, getPerformanceInsights } from './insights';
+import { generateInsights, generateSmartNextActions, getEstimateSuggestions, getJobHealthScore, getPerformanceInsights } from './insights';
 import { makeEstimate, makeExpense, makeInvoice, makeJob, makeMaterial, makePayment, makeTask, makeTimeEntry, makeWorker } from '../test/factories';
 
 describe('insights', () => {
@@ -114,6 +114,65 @@ describe('insights', () => {
       netCashFlow: -650,
     });
     expect(performance.cashFlowBalance).toBe(-650);
+  });
+
+  it('scores job health from schedule, budget, task, billing, and scope risks', () => {
+    const job = makeJob({
+      id: 'job-risk',
+      contractAmount: 1000,
+      estimatedCost: 700,
+      dueDate: '2026-02-01',
+      updatedAt: '2026-01-10T00:00:00.000Z',
+      status: 'active',
+    });
+
+    const health = getJobHealthScore(job, {
+      expenses: [makeExpense({ id: 'expense-risk', jobId: 'job-risk', amount: 850 })],
+      tasks: [makeTask({ id: 'task-risk', jobId: 'job-risk', status: 'blocked', dueDate: '2026-02-01' })],
+      invoices: [makeInvoice({ id: 'invoice-risk', jobId: 'job-risk', amount: 500, total: 500, dueDate: '2026-02-01', status: 'sent' })],
+      payments: [],
+      changeOrders: [{ id: 'co-risk', jobId: 'job-risk', description: 'Extra framing', amount: 250, status: 'pending', createdAt: '2026-02-10T00:00:00.000Z', updatedAt: '2026-02-10T00:00:00.000Z' }],
+      progress: 30,
+    });
+
+    expect(health.status).toBe('critical');
+    expect(health.score).toBeLessThan(45);
+    expect(health.factors.map(factor => factor.id)).toEqual(expect.arrayContaining([
+      'schedule-overdue',
+      'budget-over',
+      'task-risk',
+      'payment-overdue',
+      'scope-risk',
+    ]));
+  });
+
+  it('keeps healthy jobs high when there are no operational risks', () => {
+    const health = getJobHealthScore(makeJob({
+      id: 'job-healthy',
+      contractAmount: 1000,
+      estimatedCost: 700,
+      dueDate: '2026-03-15',
+      updatedAt: '2026-02-14T00:00:00.000Z',
+      status: 'active',
+    }), {
+      expenses: [makeExpense({ id: 'expense-healthy', jobId: 'job-healthy', amount: 200 })],
+      tasks: [makeTask({ id: 'task-healthy', jobId: 'job-healthy', status: 'done', dueDate: '2026-02-10' })],
+      progress: 100,
+      materialOrders: [{
+        id: 'order-healthy',
+        poNumber: 'PO-HEALTH',
+        status: 'received',
+        items: [],
+        subtotal: 0,
+        total: 0,
+        expectedDate: '2026-02-10',
+        createdAt: '2026-02-01T00:00:00.000Z',
+      }],
+    });
+
+    expect(health.status).toBe('healthy');
+    expect(health.score).toBeGreaterThanOrEqual(90);
+    expect(health.summary).toBe('No major operational risks detected.');
   });
 
   it('deduplicates smart estimate suggestions while combining template, history, labor, and material sources', () => {
