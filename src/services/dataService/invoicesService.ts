@@ -6,6 +6,7 @@ import { jobsService } from './jobsService';
 import { estimatesService } from './estimatesService';
 import { paymentsService } from './paymentsService';
 import { TABLES } from './tables';
+import { calculateTax } from '../../utils/tax';
 
 const base = createCollectionService<Invoice>('invoices', TABLES.invoices);
 const now = () => new Date().toISOString();
@@ -13,12 +14,12 @@ const now = () => new Date().toISOString();
 const normalizeInvoice = (invoice: Invoice): Invoice => {
   const subtotal = Number(invoice.subtotal ?? invoice.amount ?? 0);
   const tax = Number(invoice.tax ?? 0);
-  const total = Number(invoice.total ?? invoice.amount ?? subtotal + tax);
+  const total = Number(invoice.total ?? subtotal + tax);
   const paidAmount = Number(invoice.paidAmount ?? 0);
   const balanceDue = Number(invoice.balanceDue ?? Math.max(total - paidAmount, 0));
   return {
     ...invoice,
-    amount: Number(invoice.amount ?? total),
+    amount: total,
     subtotal,
     tax,
     total,
@@ -146,13 +147,25 @@ export const invoicesService = {
     const job = await jobsService.getById(jobId, mode);
     if (!job) return null;
     const createdAt = now();
+    const estimate = job.estimateId ? await estimatesService.getById(job.estimateId, mode) : null;
+    const taxable = options.taxable ?? estimate?.taxable ?? 'none';
+    const taxRate = options.taxRate ?? getLocalAppData()?.branding?.defaultTaxRate ?? 0;
+    const defaultSubtotal = estimate ? estimate.subtotal + estimate.markupAmount : job.contractAmount;
+    const subtotal = Number(options.subtotal ?? options.amount ?? defaultSubtotal);
+    const tax = options.tax ?? calculateTax(subtotal, taxable, taxRate);
+    const total = options.total ?? subtotal + tax;
     return this.createWithItems({
       id: crypto.randomUUID(),
       invoiceNumber: options.invoiceNumber || `INV-${Date.now()}`,
       customerId: options.customerId || job.customerId,
       estimateId: options.estimateId || job.estimateId,
       jobId,
-      amount: options.amount ?? job.contractAmount,
+      amount: total,
+      subtotal,
+      tax,
+      taxRate,
+      taxable,
+      total,
       type: options.type || 'progress',
       dueDate: options.dueDate || createdAt.split('T')[0],
       status: options.status || 'draft',
@@ -166,13 +179,24 @@ export const invoicesService = {
     const estimate = await estimatesService.getById(estimateId, mode);
     if (!estimate) return null;
     const createdAt = now();
+    const taxable = options.taxable ?? estimate.taxable ?? 'none';
+    const taxRate = options.taxRate ?? getLocalAppData()?.branding?.defaultTaxRate ?? 0;
+    const defaultSubtotal = estimate.subtotal + estimate.markupAmount;
+    const subtotal = Number(options.subtotal ?? options.amount ?? defaultSubtotal);
+    const tax = options.tax ?? calculateTax(subtotal, taxable, taxRate);
+    const total = options.total ?? subtotal + tax;
     return this.createWithItems({
       id: crypto.randomUUID(),
       invoiceNumber: options.invoiceNumber || `INV-${Date.now()}`,
       customerId: options.customerId || estimate.customerId,
       estimateId,
       jobId: options.jobId || '',
-      amount: options.amount ?? estimate.total,
+      amount: total,
+      subtotal,
+      tax,
+      taxRate,
+      taxable,
+      total,
       type: options.type || 'deposit',
       dueDate: options.dueDate || createdAt.split('T')[0],
       status: options.status || 'draft',

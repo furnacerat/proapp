@@ -6,6 +6,7 @@ import { useToast } from '../components/common/Toast';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { Modal } from '../components/common/Modal';
 import { formatCurrency, formatDate, parseDateString } from '../utils/formatters';
+import { getCustomerAccountBalances } from '../utils/calculations';
 import { dataService } from '../services/dataService';
 import { createPortalAccess } from '../services/portalService';
 import type { Customer, Estimate, Invoice, Job, SignatureDocumentType } from '../data/types';
@@ -64,6 +65,8 @@ interface CustomerSummary {
   estimates: Estimate[];
   jobs: Job[];
   invoices: Invoice[];
+  accountBalance: number;
+  accountCredit: number;
   balanceDue: number;
   lifetimeValue: number;
   activeJobs: Job[];
@@ -112,11 +115,6 @@ const matchesCustomer = (customer: Customer, job: Job) => {
   if (job.customerId) return job.customerId === customer.id;
   const customerName = customer.name.toLowerCase();
   return job.customer?.toLowerCase() === customerName || job.customerEmail?.toLowerCase() === customer.email?.toLowerCase();
-};
-
-const getInvoiceBalance = (invoice: Invoice, payments: { invoiceId: string; amount: number }[]) => {
-  const paid = payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0);
-  return Math.max(invoice.amount - paid, 0);
 };
 
 export function Customers() {
@@ -197,11 +195,20 @@ export function Customers() {
     refreshCustomers();
   }, []);
 
+  const getInvoiceLinkedBalance = (invoice: Invoice) => {
+    const paid = payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0);
+    return Math.max((invoice.balanceDue ?? (invoice.total ?? invoice.amount) - paid), 0);
+  };
+
+  const customerAccounts = useMemo(() => getCustomerAccountBalances(invoices, payments, jobs), [invoices, jobs, payments]);
+
   const summaries = useMemo<CustomerSummary[]>(() => customers.map(customer => {
     const customerEstimates = estimates.filter(estimate => estimate.customerId === customer.id);
     const customerJobs = jobs.filter(job => matchesCustomer(customer, job));
-    const customerInvoices = invoices.filter(invoice => customerJobs.some(job => job.id === invoice.jobId));
-    const balanceDue = customerInvoices.reduce((sum, invoice) => sum + getInvoiceBalance(invoice, payments), 0);
+    const customerInvoices = invoices.filter(invoice => invoice.customerId === customer.id || customerJobs.some(job => job.id === invoice.jobId));
+    const accountBalance = customerAccounts[customer.id]?.balance || 0;
+    const accountCredit = customerAccounts[customer.id]?.credit || 0;
+    const balanceDue = Math.max(accountBalance, 0);
     const lifetimeValue = customerJobs.reduce((sum, job) => sum + job.contractAmount, 0);
     const activeJobs = customerJobs.filter(job => activeJobStatuses.has(job.status));
     const openEstimates = customerEstimates.filter(estimate => openEstimateStatuses.has(estimate.status) && !estimate.convertedToJobId);
@@ -216,13 +223,15 @@ export function Customers() {
       estimates: customerEstimates,
       jobs: customerJobs,
       invoices: customerInvoices,
+      accountBalance,
+      accountCredit,
       balanceDue,
       lifetimeValue,
       activeJobs,
       openEstimates,
       status,
     };
-  }), [customers, estimates, jobs, invoices, payments]);
+  }), [customerAccounts, customers, estimates, jobs, invoices]);
 
   const filteredSummaries = useMemo(() => {
     const s = search.toLowerCase();
@@ -258,11 +267,12 @@ export function Customers() {
     const activeJobsCount = summaries.reduce((sum, summary) => sum + summary.activeJobs.length, 0);
     const openEstimatesCount = summaries.reduce((sum, summary) => sum + summary.openEstimates.length, 0);
     const outstandingBalance = summaries.reduce((sum, summary) => sum + summary.balanceDue, 0);
+    const accountCredits = summaries.reduce((sum, summary) => sum + summary.accountCredit, 0);
     return [
       { label: 'Total Customers', value: customers.length.toString(), sub: `${filteredSummaries.length} visible`, icon: Users },
       { label: 'Active Jobs', value: activeJobsCount.toString(), sub: 'In production or scheduled', icon: BriefcaseBusiness },
       { label: 'Open Estimates', value: openEstimatesCount.toString(), sub: 'Draft, sent, or approved', icon: ClipboardList },
-      { label: 'Outstanding Balance', value: formatCurrency(outstandingBalance), sub: 'Across customer invoices', icon: BadgeDollarSign },
+      { label: 'Outstanding Balance', value: formatCurrency(outstandingBalance), sub: accountCredits > 0 ? `${formatCurrency(accountCredits)} customer credit` : 'Across customer accounts', icon: BadgeDollarSign },
     ];
   }, [customers.length, filteredSummaries.length, summaries]);
 
@@ -541,7 +551,7 @@ export function Customers() {
               status: invoice.status,
               amount: invoice.amount,
               dueDate: invoice.dueDate,
-              balance: getInvoiceBalance(invoice, payments),
+              balance: getInvoiceLinkedBalance(invoice),
             })),
             recentNotes: noteEntries.slice(-8),
           },
@@ -758,7 +768,7 @@ export function Customers() {
                   <div className="customer-card-stats">
                     <span><strong>{summary.estimates.length}</strong> estimates</span>
                     <span><strong>{summary.jobs.length}</strong> jobs</span>
-                    <span><strong>{formatCurrency(summary.balanceDue)}</strong> due</span>
+                    <span><strong>{formatCurrency(summary.accountCredit > 0 ? summary.accountCredit : summary.balanceDue)}</strong> {summary.accountCredit > 0 ? 'credit' : 'due'}</span>
                   </div>
                   <div className="customer-card-actions" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
                     <a className="customer-icon-btn" href={summary.customer.phone ? `tel:${summary.customer.phone}` : undefined} title="Call"><Phone size={16} /></a>
@@ -883,6 +893,7 @@ export function Customers() {
               <div className="customer-detail-metrics">
                 <Metric label="Lifetime Value" value={formatCurrency(selectedSummary.lifetimeValue)} />
                 <Metric label="Balance Due" value={formatCurrency(selectedSummary.balanceDue)} tone={selectedSummary.balanceDue > 0 ? 'warning' : 'good'} />
+                {selectedSummary.accountCredit > 0 && <Metric label="Account Credit" value={formatCurrency(selectedSummary.accountCredit)} tone="good" />}
                 <Metric label="Active Jobs" value={selectedSummary.activeJobs.length.toString()} />
                 <Metric label="Open Estimates" value={selectedSummary.openEstimates.length.toString()} />
               </div>
@@ -961,7 +972,7 @@ export function Customers() {
                 {activeTab === 'invoices' && (
                   <RecordList empty="No invoices for this customer yet.">
                     {selectedSummary.invoices.map(invoice => {
-                      const balance = getInvoiceBalance(invoice, payments);
+                      const balance = getInvoiceLinkedBalance(invoice);
                       return (
                         <div className="customer-record" key={invoice.id}>
                           <div>

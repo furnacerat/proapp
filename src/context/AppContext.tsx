@@ -5,6 +5,7 @@ import { dataService } from '../services/dataService';
 import { useAuth } from './AuthContext';
 import { canViewOwnerFinancials, sanitizeAppDataForRole } from '../auth/rbac';
 import { calculateTimeEntryLaborCost, expenseAffectsJobCost, getTimeEntryOvertimeHours, timeEntryCostFields } from '../utils/timeEntries';
+import { calculateTax } from '../utils/tax';
 import { parseDateString } from '../utils/formatters';
 import { useCatalog } from './hooks/useCatalog';
 import { useCustomers } from './hooks/useCustomers';
@@ -296,6 +297,7 @@ const DEFAULT_BRANDING: BrandingSettings = {
   logoDataUrl: '',
   termsText: '',
   termsUrl: '',
+  defaultTaxRate: 0,
   smartFeaturesEnabled: true,
 };
 
@@ -1068,10 +1070,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addInvoice = (invoice: Omit<Invoice, 'id' | 'createdAt'>) => {
     const job = data.jobs.find(j => j.id === invoice.jobId);
+    const estimate = data.estimates.find(item => item.id === (invoice.estimateId || job?.estimateId));
+    const taxable = invoice.taxable ?? estimate?.taxable ?? 'none';
+    const taxRate = invoice.taxRate ?? branding.defaultTaxRate ?? 0;
+    const subtotal = Number(invoice.subtotal ?? invoice.amount ?? 0);
+    const tax = invoice.tax ?? calculateTax(subtotal, taxable, taxRate);
+    const total = invoice.total ?? subtotal + tax;
     const newInvoice: Invoice = {
       ...invoice,
       customerId: invoice.customerId || job?.customerId,
       estimateId: invoice.estimateId || job?.estimateId,
+      amount: total,
+      subtotal,
+      tax,
+      taxRate,
+      taxable,
+      total,
+      balanceDue: invoice.balanceDue ?? Math.max(total - (invoice.paidAmount || 0), 0),
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
     };

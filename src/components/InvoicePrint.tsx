@@ -14,7 +14,9 @@ type Props = {
 
 const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
-  const balance = invoice.amount - totalPaid
+  const subtotal = invoice.subtotal ?? Math.max(invoice.amount - (invoice.tax ?? 0), 0)
+  const total = invoice.total ?? invoice.amount
+  const balance = total - totalPaid
   const brandName = branding?.brandName || 'Your Company'
   const logo = branding?.logoDataUrl || branding?.logoUrl
 
@@ -67,7 +69,7 @@ const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => 
         <tbody>
           <tr style={{ borderBottom: '1px solid #eee' }}>
             <td style={{ padding: '12px 0', fontSize: 14 }}>Contract Amount</td>
-            <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 14 }}>{formatCurrency(invoice.amount)}</td>
+            <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 14 }}>{formatCurrency(subtotal)}</td>
           </tr>
         </tbody>
       </table>
@@ -75,8 +77,18 @@ const InvoicePrint: React.FC<Props> = ({ invoice, job, payments, branding }) => 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
         <div style={{ width: 240 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+            <span style={{ color: '#777' }}>Subtotal</span>
+            <span style={{ fontWeight: 700, fontSize: 18 }}>{formatCurrency(subtotal)}</span>
+          </div>
+          {!!invoice.tax && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+              <span style={{ color: '#777' }}>Tax</span>
+              <span style={{ fontWeight: 600 }}>{formatCurrency(invoice.tax)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
             <span style={{ color: '#777' }}>Amount Due</span>
-            <span style={{ fontWeight: 700, fontSize: 18 }}>{formatCurrency(invoice.amount)}</span>
+            <span style={{ fontWeight: 700, fontSize: 18 }}>{formatCurrency(total)}</span>
           </div>
           {totalPaid > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>

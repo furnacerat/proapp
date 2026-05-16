@@ -2,6 +2,8 @@ import { Job, TimeEntry, Expense, Worker, Invoice, Payment, Task } from '../data
 import { formatCurrency, parseDateString } from './formatters';
 import { expenseAffectsJobCost } from './timeEntries';
 
+const finalizedInvoiceStatuses = new Set<Invoice['status']>(['sent', 'paid', 'partial', 'partially_paid', 'overdue']);
+
 export function calculateProjectedProfit(job: Job): number {
   return job.contractAmount - job.actualCost;
 }
@@ -12,7 +14,7 @@ export function calculateProfitMargin(job: Job): number {
 }
 
 export function calculateBalanceDue(invoices: Invoice[], payments: Payment[]): number {
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.amount, 0);
+  const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.total ?? inv.amount), 0);
   const totalPaid = payments.reduce((sum, pay) => sum + pay.amount, 0);
   return totalInvoiced - totalPaid;
 }
@@ -28,13 +30,17 @@ export function getWorkerOwed(workerId: string, workers: Worker[], timeEntries: 
   if (!worker) return 0;
 
   const entries = timeEntries.filter(t => t.workerId === workerId);
+  if (worker.payType === 'flat' && worker.flatRate) {
+    const workedDates = new Set(entries.map(entry => entry.date));
+    return workedDates.size * worker.flatRate;
+  }
+
   if (entries.some(entry => entry.laborCost !== undefined)) {
     return entries.reduce((sum, entry) => sum + entry.laborCost, 0);
   }
   const hours = entries.reduce((sum, entry) => sum + entry.totalHours, 0);
 
   if (worker.payType === 'hourly' && worker.hourlyRate) return hours * worker.hourlyRate;
-  if (worker.payType === 'flat' && worker.flatRate) return entries.length * worker.flatRate;
   return 0;
 }
 
@@ -90,7 +96,12 @@ export function getThisWeekPayments(invoices: Invoice[], payments: Payment[]): n
 }
 
 export function getOutstandingBalance(invoices: Invoice[], payments: Payment[]): number {
-  const invoiceMap = new Map(invoices.map(inv => [inv.id, inv.amount]));
+  const customerAccounts = getCustomerAccountBalances(invoices, payments);
+  if (Object.keys(customerAccounts).length > 0) {
+    return Object.values(customerAccounts).reduce((sum, account) => sum + account.balance, 0);
+  }
+
+  const invoiceMap = new Map(invoices.map(inv => [inv.id, inv.total ?? inv.amount]));
   const paymentMap = new Map< string, number >();
   
   payments.forEach(p => {
@@ -104,6 +115,43 @@ export function getOutstandingBalance(invoices: Invoice[], payments: Payment[]):
   });
   
   return total;
+}
+
+export function getCustomerAccountBalances(
+  invoices: Invoice[],
+  payments: Payment[],
+  jobs: Pick<Job, 'id' | 'customerId'>[] = []
+): Record<string, { invoiced: number; paid: number; balance: number; credit: number }> {
+  const jobCustomerMap = new Map(jobs.map(job => [job.id, job.customerId]));
+  const invoiceCustomerMap = new Map<string, string>();
+  const balances: Record<string, { invoiced: number; paid: number; balance: number; credit: number }> = {};
+
+  const ensureBalance = (customerId?: string) => {
+    if (!customerId) return null;
+    balances[customerId] ||= { invoiced: 0, paid: 0, balance: 0, credit: 0 };
+    return balances[customerId];
+  };
+
+  invoices.forEach(invoice => {
+    const customerId = invoice.customerId || jobCustomerMap.get(invoice.jobId);
+    if (customerId) invoiceCustomerMap.set(invoice.id, customerId);
+    if (!customerId || !finalizedInvoiceStatuses.has(invoice.status)) return;
+    const account = ensureBalance(customerId);
+    if (account) account.invoiced += invoice.total ?? invoice.amount;
+  });
+
+  payments.forEach(payment => {
+    const customerId = payment.customerId || invoiceCustomerMap.get(payment.invoiceId) || jobCustomerMap.get(payment.jobId || '');
+    const account = ensureBalance(customerId);
+    if (account) account.paid += payment.amount;
+  });
+
+  Object.values(balances).forEach(account => {
+    account.balance = account.invoiced - account.paid;
+    account.credit = Math.max(account.paid - account.invoiced, 0);
+  });
+
+  return balances;
 }
 
 export function getActiveJobs(jobs: Job[]): Job[] {
@@ -204,12 +252,12 @@ export function getUnpaidInvoices(
   return invoices
     .filter(inv => {
       const paid = paymentMap.get(inv.id) || 0;
-      return paid < inv.amount;
+      return paid < (inv.total ?? inv.amount);
     })
     .map(inv => ({
       invoice: inv,
       jobName: '',
-      balance: inv.amount - (paymentMap.get(inv.id) || 0),
+      balance: (inv.total ?? inv.amount) - (paymentMap.get(inv.id) || 0),
     }));
 }
 

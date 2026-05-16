@@ -339,6 +339,7 @@ export interface EstimateExclusion {
 }
 
 export type EstimateTaxable = 'none' | 'materials' | 'labor' | 'all';
+export type EstimatePricingMode = 'markup' | 'margin';
 
 export interface EstimateScope {
   id: string;
@@ -365,8 +366,11 @@ export interface Estimate {
   equipmentTotal: number;
   subcontractorTotal: number;
   subtotal: number;
+  pricingMode?: EstimatePricingMode;
   markupPercent: number;
   markupAmount: number;
+  tax?: number;
+  taxRate?: number;
   total: number;
   projectedLaborHours: number;
   projectedMaterialCost: number;
@@ -513,6 +517,8 @@ export interface Invoice {
   amount: number;
   subtotal?: number;
   tax?: number;
+  taxRate?: number;
+  taxable?: EstimateTaxable;
   total?: number;
   paidAmount?: number;
   balanceDue?: number;

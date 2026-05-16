@@ -4,13 +4,14 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
 import { ESTIMATE_STATUSES, JOB_TYPES } from '../../data/types';
-import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, Assembly, Material, LaborRate, Template, TemplateItem, Allowance, AllowanceCategory, LineItemQuantityMode } from '../../data/types';
+import type { Estimate, EstimateScope, EstimateSection, EstimateLineItem, EstimateLineCategory, Customer, JobType, EstimateStatus, EstimatePricingMode, EstimateTaxable, Assembly, Material, LaborRate, Template, TemplateItem, Allowance, AllowanceCategory, LineItemQuantityMode } from '../../data/types';
 import { useToast } from '../../components/common/Toast';
 import { Modal } from '../../components/common/Modal';
 import { getEstimateSuggestions } from '../../utils/insights';
 import { getPriceAgeDays, isPriceOutdated } from '../../utils/pricing';
 import { PrintTemplateModal } from '../../components/print/PrintTemplateModal';
 import { buildClientEstimatePrintData } from '../../utils/buildPrintData';
+import { calculateTax } from '../../utils/tax';
 import { renderEmailAll } from '../../utils/emailTemplates';
 import { lookupPricing, type PricingLookupResult } from '../../services/pricingLookupService';
 import { scorePricingResult } from '../../utils/priceMatching';
@@ -218,7 +219,9 @@ export function EstimateBuilder() {
     address: estimate?.address || requestedCustomer?.address || '',
     status: estimate?.status || 'draft',
     type: estimate?.type || 'remodel',
+    pricingMode: (estimate?.pricingMode || 'markup') as EstimatePricingMode,
     markupPercent: estimate?.markupPercent?.toString() || '20',
+    taxable: (estimate?.taxable || 'none') as EstimateTaxable,
     notes: estimate?.notes || '',
     validUntil: estimate?.validUntil || '',
   });
@@ -297,7 +300,9 @@ export function EstimateBuilder() {
       address: estimate.address || '',
       status: estimate.status || 'draft',
       type: estimate.type || 'remodel',
+      pricingMode: estimate.pricingMode || 'markup',
       markupPercent: estimate.markupPercent?.toString() || '20',
+      taxable: estimate.taxable || 'none',
       notes: estimate.notes || '',
       validUntil: estimate.validUntil || '',
     });
@@ -325,6 +330,17 @@ export function EstimateBuilder() {
   }, []);
 
   const defaultMarkup = parseFloat(formData.markupPercent) || 0;
+  const pricingMode = formData.pricingMode || 'markup';
+  const pricingPercentLabel = pricingMode === 'margin' ? 'Margin %' : 'Markup %';
+  const pricingSummaryLabel = pricingMode === 'margin' ? 'Target Margin' : 'Markup';
+  const getPricedTotal = (costTotal: number, percent: number) => {
+    if (pricingMode === 'margin') {
+      const safeMargin = Math.min(Math.max(percent, 0), 99.9);
+      return costTotal / (1 - safeMargin / 100);
+    }
+
+    return costTotal * (1 + percent / 100);
+  };
 
   const quantityValue = (quantity: number | null | undefined) => Number.isFinite(Number(quantity)) ? Number(quantity) : 0;
 
@@ -363,7 +379,7 @@ export function EstimateBuilder() {
   };
 
   const getItemPriceTotal = (item: EstimateLineItem) => {
-    return getItemCostTotal(item) * (1 + getItemMarkup(item) / 100);
+    return getPricedTotal(getItemCostTotal(item), getItemMarkup(item));
   };
 
   const normalizeLineItem = (item: EstimateLineItem, sourceType: EstimateLineItem['sourceType'] = item.sourceType || 'manual'): EstimateLineItem => {
@@ -373,7 +389,7 @@ export function EstimateBuilder() {
     const markupPercent = item.markupPercent ?? defaultMarkup;
     const quantityMode = item.quantityMode || (item.isOptional ? 'optional' : item.quantity === null ? 'user_required' : 'fixed');
     const costTotal = quantityValue(item.quantity) * unitCost;
-    const priceTotal = costTotal * (1 + markupPercent / 100);
+    const priceTotal = getPricedTotal(costTotal, markupPercent);
 
     return {
       ...item,
@@ -1038,16 +1054,18 @@ export function EstimateBuilder() {
       customerId: formData.customerId,
       status: formData.status as EstimateStatus,
       type: formData.type as JobType,
+      pricingMode: formData.pricingMode as EstimatePricingMode,
       markupPercent: parseFloat(formData.markupPercent) || 0,
+      taxable: formData.taxable as EstimateTaxable,
       scopes,
       sections: legacySections,
       clientAllowances: estimateAllowances,
-      taxable: estimate?.taxable || 'none',
       createdAt: estimate?.createdAt || now,
       updatedAt: estimate?.updatedAt || now,
       projectedLaborHours: totals.laborHours,
       projectedMaterialCost: totals.materialTotal,
       projectedLaborCost: totals.laborTotal,
+      taxRate: branding.defaultTaxRate || 0,
       marginPercent: totals.profitPercent,
       marginAmount: totals.profit,
       ...totals,
@@ -1084,23 +1102,25 @@ export function EstimateBuilder() {
     const subcontractorTotal = allItems.filter(i => i.category === 'subcontractor').reduce((s, i) => s + getItemCostTotal(i), 0);
 
     const subtotal = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
-    const total = allItems.reduce((s, i) => s + getItemPriceTotal(i), 0);
-    const markupAmount = total - subtotal;
+    const preTaxTotal = allItems.reduce((s, i) => s + getItemPriceTotal(i), 0);
+    const markupAmount = preTaxTotal - subtotal;
+    const tax = calculateTax(preTaxTotal, formData.taxable as EstimateTaxable, branding.defaultTaxRate);
+    const total = preTaxTotal + tax;
     const laborHours = allItems.filter(i => i.isLabor || i.category === 'labor').reduce((s, i) => s + (i.hours || 0), 0);
 
     const internalCost = laborTotal + materialTotal + equipmentTotal + subcontractorTotal;
-    const profit = total - internalCost;
-    const profitPercent = total > 0 ? (profit / total) * 100 : 0;
+    const profit = preTaxTotal - internalCost;
+    const profitPercent = preTaxTotal > 0 ? (profit / preTaxTotal) * 100 : 0;
 
-    return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, markupAmount, total, laborHours, internalCost, profit, profitPercent };
-  }, [scopes, legacySections, formData.markupPercent]);
+    return { laborTotal, materialTotal, equipmentTotal, subcontractorTotal, subtotal, markupAmount, tax, total, laborHours, internalCost, profit, profitPercent };
+  }, [scopes, legacySections, formData.markupPercent, formData.pricingMode, formData.taxable, branding.defaultTaxRate]);
 
   const allEstimateItems = useMemo(() => {
     const items: EstimateLineItem[] = [];
     scopes.forEach(scope => scope.sections?.forEach(section => section.lineItems?.forEach(item => items.push(normalizeLineItem(item)))));
     legacySections.forEach(section => section.lineItems?.forEach(item => items.push(normalizeLineItem(item))));
     return items;
-  }, [scopes, legacySections, formData.markupPercent]);
+  }, [scopes, legacySections, formData.markupPercent, formData.pricingMode]);
 
   const groupedItems = useMemo(() => {
     const groups: Record<string, EstimateLineItem[]> = { labor: [], material: [], equipment: [], subcontractor: [], other: [] };
@@ -1119,7 +1139,7 @@ export function EstimateBuilder() {
     if (visibleItems.some(item => getItemCost(item) === 0)) warnings.push('This estimate has items with $0 cost');
     if (visibleItems.some(itemNeedsQuantity)) warnings.push('This item needs a quantity before the estimate is complete.');
     if (visibleItems.some(item => (item.category === 'labor' || item.isLabor) && !(item.hours || item.quantity))) warnings.push('Labor is missing hours');
-    if (defaultMarkupValue < 15) warnings.push('Markup is below your default target');
+    if (defaultMarkupValue < 15) warnings.push(`${pricingSummaryLabel} is below your default target`);
     if (visibleItems.some(item => item.clientVisible === false)) warnings.push('This estimate has items hidden from client view');
     if (visibleItems.some(item => {
       if (item.linkedMaterialId) {
@@ -1134,7 +1154,7 @@ export function EstimateBuilder() {
     })) warnings.push('Price Book rate has changed since an item was added');
 
     return warnings;
-  }, [allEstimateItems, formData.markupPercent, materials, laborRates]);
+  }, [allEstimateItems, formData.markupPercent, pricingSummaryLabel, materials, laborRates]);
 
   // Add scope
   const addScope = (name: string) => {
@@ -1721,11 +1741,13 @@ export function EstimateBuilder() {
       estimateNumber: `EST-${new Date().getFullYear()}-${String(estimates.length + 1).padStart(3, '0')}`,
       status: formData.status as EstimateStatus,
       type: formData.type as JobType,
+      pricingMode: formData.pricingMode as EstimatePricingMode,
       markupPercent: parseFloat(formData.markupPercent) || 0,
+      taxable: formData.taxable as EstimateTaxable,
+      taxRate: branding.defaultTaxRate || 0,
       scopes,
       sections: legacySections,
       clientAllowances: estimateAllowances,
-      taxable: 'none',
       ...totals,
     } as any);
     navigate(`/estimates/${newId}`);
@@ -2518,8 +2540,24 @@ export function EstimateBuilder() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Markup %</label>
+                <label className="form-label">Pricing Mode</label>
+                <select className="form-select" value={formData.pricingMode} onChange={e => setFormData({...formData, pricingMode: e.target.value as EstimatePricingMode})}>
+                  <option value="markup">Markup</option>
+                  <option value="margin">Target Margin</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{pricingPercentLabel}</label>
                 <input className="form-input" type="number" min="0" step="0.1" value={formData.markupPercent} onChange={e => setFormData({...formData, markupPercent: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Taxable</label>
+                <select className="form-select" value={formData.taxable} onChange={e => setFormData({...formData, taxable: e.target.value as EstimateTaxable})}>
+                  <option value="none">No tax</option>
+                  <option value="all">Apply tax</option>
+                  <option value="materials">Materials taxable</option>
+                  <option value="labor">Labor taxable</option>
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Valid Until</label>
@@ -2624,7 +2662,7 @@ export function EstimateBuilder() {
                                 <div className="eb-noItems">No items yet</div>
                               ) : (
                                 <table className="eb-itemsTable">
-                                  <thead><tr><th>Item</th><th>Qty</th><th>Unit</th>{!clientView && <th>Cost</th>}{!clientView && <th>Markup</th>}<th>Total</th><th></th></tr></thead>
+                                  <thead><tr><th>Item</th><th>Qty</th><th>Unit</th>{!clientView && <th>Cost</th>}{!clientView && <th>{pricingMode === 'margin' ? 'Margin' : 'Markup'}</th>}<th>Total</th><th></th></tr></thead>
                                   <tbody>
                                     {section.lineItems?.map(rawItem => {
                                       const item = normalizeLineItem(rawItem);
@@ -2749,8 +2787,13 @@ export function EstimateBuilder() {
 
             {/* Markup */}
             <div className="eb-summaryMarkup">
-              <div className="eb-summaryLine"><span>Markup ({formData.markupPercent}%)</span><span>{formatCurrency(calculateTotals.markupAmount)}</span></div>
+              <div className="eb-summaryLine"><span>{pricingSummaryLabel} ({formData.markupPercent}%)</span><span>{formatCurrency(calculateTotals.markupAmount)}</span></div>
             </div>
+            {calculateTotals.tax > 0 && (
+              <div className="eb-summaryMarkup">
+                <div className="eb-summaryLine"><span>Tax ({branding.defaultTaxRate || 0}%)</span><span>{formatCurrency(calculateTotals.tax)}</span></div>
+              </div>
+            )}
 
             <div className="eb-summaryDivider" />
 
@@ -2905,7 +2948,7 @@ export function EstimateBuilder() {
               <input className="form-input" value={newItemForm.materialType} onChange={e => setNewItemForm({...newItemForm, materialType: e.target.value})} placeholder="e.g., LVP, tile, paint" />
             </div>
             <div className="form-group">
-              <label className="form-label">Markup %</label>
+              <label className="form-label">{pricingPercentLabel}</label>
               <input className="form-input" type="number" value={newItemForm.markupPercent} onChange={e => setNewItemForm({...newItemForm, markupPercent: e.target.value})} placeholder={String(defaultMarkup)} />
             </div>
           </div>
@@ -2919,7 +2962,10 @@ export function EstimateBuilder() {
           </div>
           <div className="eb-itemFormTotal">
             <span>Line Total:</span>
-            <span>{formatCurrency((parseFloat(newItemForm.quantity) || 0) * (parseFloat(newItemForm.unitPrice) || 0))}</span>
+            <span>{formatCurrency(getPricedTotal(
+              (parseFloat(newItemForm.quantity) || 0) * (parseFloat(newItemForm.unitPrice) || 0),
+              newItemForm.markupPercent ? parseFloat(newItemForm.markupPercent) || 0 : defaultMarkup,
+            ))}</span>
           </div>
         </div>
         <div className="modal-footer" style={{padding: 0, borderTop: 'none'}}>
@@ -2976,7 +3022,7 @@ export function EstimateBuilder() {
             <div className="eb-priceList">
               {filteredTemplates.map(template => {
                 const templateCost = (template.items || []).reduce((sum, item) => sum + ((item.quantity || 1) * (item.unitPrice || 0)), 0);
-                const estimatedPrice = templateCost * (1 + (template.markupPercent || defaultMarkup) / 100);
+                const estimatedPrice = getPricedTotal(templateCost, template.markupPercent || defaultMarkup);
                 return (
                   <button key={template.id} className="eb-priceOption" onClick={() => handleSelectTemplate(template)}>
                     <div className="eb-priceOptionMain">
@@ -2986,7 +3032,7 @@ export function EstimateBuilder() {
                         <div className="eb-assemblyOptionDesc">{template.scope || 'Template starting point'}</div>
                         <div className="eb-priceOptionMeta">
                           <span>{template.items?.length || 0} line items</span>
-                          <span>{template.markupPercent || defaultMarkup}% markup</span>
+                          <span>{template.markupPercent || defaultMarkup}% {pricingMode === 'margin' ? 'margin' : 'markup'}</span>
                           {template.laborAssumptions && <span>Labor included</span>}
                         </div>
                       </div>

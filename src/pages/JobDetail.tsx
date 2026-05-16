@@ -216,7 +216,7 @@ export function JobDetail() {
 
   const totalLaborCost = getJobLaborCost(job.id);
   const totalExpenses = getJobExpenseTotal(job.id);
-  const changeOrderTotal = getJobChangeOrderTotal(job.id);
+  const approvedChangeOrderRevenue = getJobChangeOrderTotal(job.id);
   const actualCost = getJobActualCost(job.id);
   const budgetUsage = job.contractAmount > 0 ? (actualCost / job.contractAmount) * 100 : 0;
 
@@ -291,7 +291,7 @@ export function JobDetail() {
             budgetUsage,
             totalLaborCost,
             totalExpenses,
-            changeOrderTotal,
+            changeOrderTotal: approvedChangeOrderRevenue,
             profit: profit.profit,
             profitMargin: profit.margin,
             progress,
@@ -651,13 +651,16 @@ export function JobDetail() {
 
         <div className="grid-4 gap-4 mb-6">
           <div className="card">
-            <div className="text-xs text-muted uppercase">Contract</div>
+            <div className="text-xs text-muted uppercase">Contract Revenue</div>
             <div className="text-2xl font-bold">{formatCurrency(job.contractAmount)}</div>
+            {approvedChangeOrderRevenue > 0 && (
+              <div className="text-xs text-muted">Includes {formatCurrency(approvedChangeOrderRevenue)} approved change orders</div>
+            )}
           </div>
           <div className="card">
             <div className="text-xs text-muted uppercase">Actual Cost</div>
             <div className="text-2xl font-bold">{formatCurrency(actualCost)}</div>
-            <div className="text-xs text-muted">{formatCurrency(totalLaborCost + totalExpenses)} + {formatCurrency(changeOrderTotal)}</div>
+            <div className="text-xs text-muted">Labor {formatCurrency(totalLaborCost)} + expenses {formatCurrency(totalExpenses)}</div>
           </div>
           <div className="card">
             <div className="text-xs text-muted uppercase">Profit</div>
@@ -839,7 +842,7 @@ export function JobDetail() {
                   <div><span className="text-muted">Start:</span> {formatDate(job.startDate)}</div>
                   <div><span className="text-muted">Due:</span> {formatDate(job.dueDate)}</div>
                   <div><span className="text-muted">Progress:</span> {progress}%</div>
-                  <div><span className="text-muted">Change Orders:</span> {formatCurrency(changeOrderTotal)}</div>
+                  <div><span className="text-muted">Approved Change Orders:</span> {formatCurrency(approvedChangeOrderRevenue)}</div>
                   <div><span className="text-muted">Orders:</span> {jobMaterialOrders.length}</div>
                   <div><span className="text-muted">Shopping Lists:</span> {jobShoppingLists.length}</div>
                 </div>

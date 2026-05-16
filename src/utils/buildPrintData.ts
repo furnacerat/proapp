@@ -18,6 +18,7 @@
  */
 
 import type { Invoice, Payment, Job, BrandingSettings, Estimate, Customer } from '../data/types'
+import { calculateTax } from './tax'
 import type {
   PrintInvoiceData,
   PrintEstimateData,
@@ -82,8 +83,8 @@ export const buildClientInvoiceData = (
       description: job?.name ? `${invoice.type === 'deposit' ? 'Deposit — ' : invoice.type === 'progress' ? 'Progress Payment — ' : invoice.type === 'final' ? 'Final Payment — ' : ''}${job.name}` : 'Contract Amount',
       quantity: 1,
       unit: 'LS',
-      unitPrice: invoice.amount,
-      total: invoice.amount,
+      unitPrice: invoice.subtotal ?? invoice.amount,
+      total: invoice.subtotal ?? invoice.amount,
     },
   ]
 
@@ -203,26 +204,19 @@ export const buildClientEstimatePrintData = (
     })
   })
 
-  // WHITELISTED financial totals — apply markup to get client-facing totals
+  // WHITELISTED financial totals — apply markup or target margin to get client-facing totals
   // We compute from first principles so we never expose intermediate cost breakdowns
   const rawSubtotal = lineItems.reduce((sum, item) => sum + item.total, 0)
-  const markupMultiplier = 1 + (estimate.markupPercent ?? 0) / 100
-  // If line items already have markup baked in (unitPrice × qty = post-markup),
-  // use the raw sum directly. Otherwise apply markup.
-  // Convention in this app: estimate line item totals already reflect unit price
-  // (set by user), and markup is applied on top at the estimate level.
+  const pricingMode = estimate.pricingMode || 'markup'
+  const pricingPercent = estimate.markupPercent ?? 0
   const subtotal = rawSubtotal
-  const markupAmount = rawSubtotal * ((estimate.markupPercent ?? 0) / 100)
-  const total = rawSubtotal + markupAmount
+  const total = pricingMode === 'margin'
+    ? rawSubtotal / (1 - Math.min(Math.max(pricingPercent, 0), 99.9) / 100)
+    : rawSubtotal * (1 + pricingPercent / 100)
+  const markupAmount = total - rawSubtotal
 
-  // Tax (client-visible if applicable)
-  let tax: number | undefined
-  if (estimate.taxable && estimate.taxable !== 'none') {
-    // We don't know the tax rate here, so we use whatever the estimate stored
-    // The estimate total field reflects the actual computed value
-    // Use stored total if available to be precise
-    tax = undefined // Tax rate not part of safe estimate fields — omit unless explicitly stored
-  }
+  const tax = calculateTax(total, estimate.taxable, estimate.taxRate ?? branding?.defaultTaxRate)
+  const finalTotal = total + tax
 
   return {
     type: 'estimate',
@@ -249,8 +243,8 @@ export const buildClientEstimatePrintData = (
     lineItems,
     // WHITELISTED financial totals (client-facing only)
     subtotal,
-    total,
-    tax,
+    total: finalTotal,
+    tax: tax || undefined,
     // WHITELISTED optional client-visible fields
     notes: settings.showNotes ? estimate.notes : undefined,
     terms: settings.showPaymentTerms

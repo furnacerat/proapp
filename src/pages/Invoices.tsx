@@ -91,7 +91,8 @@ export function Invoices() {
       const job = jobs.find(item => item.id === invoice.jobId);
       const customer = customers.find(item => item.id === invoice.customerId || item.id === job?.customerId);
       const paid = payments.filter(payment => payment.invoiceId === invoice.id).reduce((sum, payment) => sum + payment.amount, 0);
-      const balance = Math.max(0, invoice.amount - paid);
+      const invoiceTotal = invoice.total ?? invoice.amount;
+      const balance = Math.max(0, invoiceTotal - paid);
       const dueDate = invoice.dueDate ? parseDateString(invoice.dueDate) : now;
       dueDate.setHours(0, 0, 0, 0);
       const daysPastDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -139,7 +140,7 @@ export function Invoices() {
     return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
   }, [filteredInvoices, groupMode]);
 
-  const totalInvoiced = invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+  const totalInvoiced = invoices.reduce((sum, invoice) => sum + (invoice.total ?? invoice.amount), 0);
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const outstanding = invoiceSummaries.reduce((sum, invoice) => sum + invoice.balance, 0);
   const overdueInvoices = invoiceSummaries.filter(invoice => invoice.balance > 0 && invoice.effectiveStatus === 'overdue');
@@ -304,6 +305,11 @@ export function Invoices() {
       jobId: invoice.jobId,
       invoiceNumber: `${invoice.invoiceNumber}-COPY`,
       amount: invoice.amount,
+      subtotal: invoice.subtotal,
+      tax: invoice.tax,
+      taxRate: invoice.taxRate,
+      taxable: invoice.taxable,
+      total: invoice.total,
       type: invoice.type,
       dueDate: invoice.dueDate,
       status: 'draft',
@@ -403,7 +409,7 @@ export function Invoices() {
         ) : (
           <div className="invoice-group-list">
             {groupedInvoices.length === 0 ? <div className="invoice-empty">No invoices</div> : groupedInvoices.map(group => {
-              const total = group.invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+              const total = group.invoices.reduce((sum, invoice) => sum + (invoice.total ?? invoice.amount), 0);
               const balance = group.invoices.reduce((sum, invoice) => sum + invoice.balance, 0);
               return (
                 <div key={group.key} className="invoice-group-card">
@@ -553,7 +559,7 @@ function InvoiceTable({
               <td data-label="Invoice #" className="invoice-number">{invoice.invoiceNumber}</td>
               <td data-label="Job"><Link to={`/jobs/${invoice.jobId}`}>{invoice.jobName}</Link><small>{invoice.customer}</small></td>
               <td data-label="Type"><span className="badge badge-gray">{invoice.type.replace('_', ' ')}</span></td>
-              <td data-label="Amount">{formatCurrency(invoice.amount)}</td>
+              <td data-label="Amount">{formatCurrency(invoice.total ?? invoice.amount)}</td>
               <td data-label="Paid" className="invoice-paid">{formatCurrency(invoice.paid)}</td>
               <td data-label="Balance" className="invoice-balance">{formatCurrency(invoice.balance)}</td>
               <td data-label="Status"><span className={`badge ${invoice.effectiveStatus === 'paid' ? 'badge-green' : invoice.effectiveStatus === 'overdue' ? 'badge-red' : invoice.effectiveStatus === 'partial' ? 'badge-yellow' : 'badge-blue'}`}>{invoice.effectiveStatus.replace('_', ' ')}</span></td>
