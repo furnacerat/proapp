@@ -4,6 +4,8 @@ import { TABLES } from './tables';
 
 type MigrationKey = keyof typeof TABLES;
 
+const asArray = <T,>(items?: T[] | null): T[] => Array.isArray(items) ? items : [];
+
 const supabaseErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
@@ -15,10 +17,10 @@ const supabaseErrorMessage = (error: unknown) => {
 
 export const collectionFromData = (data: AppData, key: MigrationKey): RecordWithId[] => {
   if (key === 'estimateItems') {
-    return data.estimates.flatMap(estimate =>
+    return asArray(data.estimates).flatMap(estimate =>
       [
-        ...(estimate.sections || []).flatMap(section => section.lineItems || []),
-        ...(estimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+        ...asArray(estimate.sections).flatMap(section => asArray(section.lineItems)),
+        ...asArray(estimate.scopes).flatMap(scope => asArray(scope.sections).flatMap(section => asArray(section.lineItems))),
       ].map(item => ({
         ...item,
         estimateId: estimate.id,
@@ -28,12 +30,12 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
   }
 
   if (key === 'jobItems') {
-    return data.jobs.flatMap(job => {
-      const estimate = job.estimateId ? data.estimates.find(item => item.id === job.estimateId) : undefined;
+    return asArray(data.jobs).flatMap(job => {
+      const estimate = job.estimateId ? asArray(data.estimates).find(item => item.id === job.estimateId) : undefined;
       if (!estimate) return [];
       const estimateItems = [
-        ...(estimate.sections || []).flatMap(section => section.lineItems || []),
-        ...(estimate.scopes || []).flatMap(scope => scope.sections.flatMap(section => section.lineItems || [])),
+        ...asArray(estimate.sections).flatMap(section => asArray(section.lineItems)),
+        ...asArray(estimate.scopes).flatMap(scope => asArray(scope.sections).flatMap(section => asArray(section.lineItems))),
       ];
       return estimateItems.map(item => ({
         id: `${job.id}-${item.id}`,
@@ -55,8 +57,8 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
   }
 
   if (key === 'invoiceItems') {
-    return data.invoices.flatMap(invoice => {
-      const items = ((invoice as any).items || []) as RecordWithId[];
+    return asArray(data.invoices).flatMap(invoice => {
+      const items = asArray((invoice as any).items) as RecordWithId[];
       if (items.length) {
         return items.map(item => ({
           ...item,
@@ -86,8 +88,8 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
   }
 
   if (key === 'shoppingListItems') {
-    return (data.shoppingLists || []).flatMap(list =>
-      (list.items || []).map(item => ({
+    return asArray(data.shoppingLists).flatMap(list =>
+      asArray(list.items).map(item => ({
         ...item,
         shoppingListId: list.id,
         jobId: list.jobId,
@@ -98,8 +100,8 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
   }
 
   if (key === 'materialOrderItems') {
-    return (data.materialOrders || []).flatMap(order =>
-      order.items.map(item => ({
+    return asArray(data.materialOrders).flatMap(order =>
+      asArray(order.items).map(item => ({
         ...item,
         materialOrderId: order.id,
         jobId: order.jobId,
@@ -111,8 +113,8 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
   }
 
   if (key === 'allowanceSelections') {
-    return (data.allowances || []).flatMap(allowance =>
-      allowance.selections.map(selection => ({
+    return asArray(data.allowances).flatMap(allowance =>
+      asArray(allowance.selections).map(selection => ({
         ...selection,
         allowanceId: allowance.id,
         jobId: allowance.jobId,
@@ -121,7 +123,7 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
     ) as RecordWithId[];
   }
 
-  if (key === 'jobPhotos') return (data.photos || []) as RecordWithId[];
+  if (key === 'jobPhotos') return asArray(data.photos) as RecordWithId[];
   if (key === 'activityLog') {
     const dailyProgressRecord = data.dailyCommandProgress ? [{
       id: DAILY_COMMAND_PROGRESS_RECORD_ID,
@@ -131,12 +133,12 @@ export const collectionFromData = (data: AppData, key: MigrationKey): RecordWith
       timestamp: data.dailyCommandProgress.updatedAt || new Date().toISOString(),
       metadata: { dailyCommandProgress: data.dailyCommandProgress },
     }] : [];
-    return [...(data.timeline || []), ...dailyProgressRecord] as RecordWithId[];
+    return [...asArray(data.timeline), ...dailyProgressRecord] as RecordWithId[];
   }
-  if (key === 'materialOrders') return (data.materialOrders || []) as RecordWithId[];
-  if (key === 'timeEntries') return data.timeEntries as RecordWithId[];
+  if (key === 'materialOrders') return asArray(data.materialOrders) as RecordWithId[];
+  if (key === 'timeEntries') return asArray(data.timeEntries) as RecordWithId[];
 
-  return ((data as any)[key] || []) as RecordWithId[];
+  return asArray((data as any)[key]) as RecordWithId[];
 };
 
 export const previewLocalMigration = (data: AppData = getLocalAppData() as AppData) => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DAILY_COMMAND_PROGRESS_RECORD_ID } from '../../data/types';
-import { collectionFromData } from './migrationHelper';
+import { collectionFromData, previewLocalMigration } from './migrationHelper';
 import { installMemoryLocalStorage, seedLocalAppData } from '../../test/factories';
 
 describe('migrationHelper', () => {
@@ -35,5 +35,22 @@ describe('migrationHelper', () => {
         },
       },
     });
+  });
+
+  it('previews migration counts when imported records are missing nested arrays', () => {
+    installMemoryLocalStorage();
+    const data = seedLocalAppData({
+      estimates: [{ id: 'estimate-1', name: 'Legacy estimate' } as any],
+      jobs: [{ id: 'job-1', name: 'Legacy job', estimateId: 'estimate-1' } as any],
+      materialOrders: [{ id: 'order-1', jobId: 'job-1' } as any],
+      shoppingLists: [{ id: 'shopping-1', jobId: 'job-1' } as any],
+      allowances: [{ id: 'allowance-1', jobId: 'job-1' } as any],
+      invoices: [{ id: 'invoice-1', invoiceNumber: 'INV-1', amount: 100 } as any],
+    });
+
+    expect(() => previewLocalMigration(data)).not.toThrow();
+    expect(collectionFromData(data, 'materialOrderItems')).toEqual([]);
+    expect(collectionFromData(data, 'shoppingListItems')).toEqual([]);
+    expect(collectionFromData(data, 'allowanceSelections')).toEqual([]);
   });
 });
