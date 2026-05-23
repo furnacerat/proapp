@@ -2437,9 +2437,13 @@
   height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  color: #eff6ff;
-  background: linear-gradient(135deg, #2563eb, #0891b2);
+  overflow: hidden;
+}
+
+.auth-logo img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 
 .auth-eyebrow {

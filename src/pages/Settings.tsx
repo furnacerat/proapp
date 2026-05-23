@@ -162,10 +162,6 @@ export function Settings() {
                 <input className="form-input" value={brandingDraft.brandName} onChange={e => setBrandingField('brandName', e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Workspace / App Name</label>
-                <input className="form-input" value={brandingDraft.appName || ''} onChange={e => setBrandingField('appName', e.target.value)} placeholder="Contractor Workspace" />
-              </div>
-              <div className="form-group">
                 <label className="form-label">Tagline</label>
                 <input className="form-input" value={brandingDraft.tagline || ''} onChange={e => setBrandingField('tagline', e.target.value)} placeholder="Contractor operating system" />
               </div>

@@ -12,6 +12,7 @@ import { useCustomers } from './hooks/useCustomers';
 import { useEstimates } from './hooks/useEstimates';
 import { useJobs } from './hooks/useJobs';
 import { useTasks } from './hooks/useTasks';
+import { APP_NAME } from '../config/appIdentity';
 
 interface DataServiceStatus {
   mode: 'local' | 'supabase';
@@ -283,7 +284,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const DEFAULT_BRANDING: BrandingSettings = {
   brandName: 'Your Company',
-  appName: 'Contractor Workspace',
+  appName: APP_NAME,
   tagline: 'Contractor operating system',
   emailFromName: 'Your Company',
   emailFromAddress: '',
@@ -320,7 +321,7 @@ const DEFAULT_DAILY_COMMAND_PROGRESS: DailyCommandProgress = {
 const normalizeAppData = (raw: AppData): AppData => {
   const data = {
     ...raw,
-    branding: { ...DEFAULT_BRANDING, ...(raw.branding || {}) },
+    branding: { ...DEFAULT_BRANDING, ...(raw.branding || {}), appName: APP_NAME },
     smtpSettings: { ...DEFAULT_SMTP_SETTINGS, ...(raw.smtpSettings || {}) },
     dailyCommandProgress: { ...DEFAULT_DAILY_COMMAND_PROGRESS, ...(raw.dailyCommandProgress || {}) },
     photos: raw.photos || [],
@@ -625,7 +626,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateBranding = (updates: Partial<BrandingSettings>) => {
     setData(prev => {
-      const nextBranding = { ...DEFAULT_BRANDING, ...(prev.branding || branding), ...updates };
+      const nextBranding = { ...DEFAULT_BRANDING, ...(prev.branding || branding), ...updates, appName: APP_NAME };
       setBranding(nextBranding);
       return normalizeAppData({ ...prev, branding: nextBranding });
     });

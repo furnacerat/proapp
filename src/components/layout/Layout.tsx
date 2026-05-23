@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { Sidebar } from './Sidebar';
 import { Menu } from 'lucide-react';
 import { GlobalVoiceAssistant } from '../voice/GlobalVoiceAssistant';
+import { APP_LOGO_SRC, APP_NAME } from '../../config/appIdentity';
 
 interface LayoutProps {
   children: ReactNode;
@@ -13,7 +14,7 @@ export function Layout({ children }: LayoutProps) {
   const { branding } = useApp();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
-  const shellName = branding.appName || branding.brandName || 'Contractor Workspace';
+  const shellName = APP_NAME;
 
   // Close sidebar automatically on route change
   useEffect(() => {
@@ -40,11 +41,7 @@ export function Layout({ children }: LayoutProps) {
           <Menu size={24} />
         </button>
         <div className="mobile-brand">
-          {branding?.logoDataUrl ? (
-            <img src={branding.logoDataUrl} alt="logo" className="logo" />
-          ) : branding?.logoUrl ? (
-            <img src={branding.logoUrl} alt="logo" className="logo" />
-          ) : null}
+          <img src={APP_LOGO_SRC} alt="" className="app-logo" />
           <strong>{shellName}</strong>
         </div>
       </header>

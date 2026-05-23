@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="metal1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#b5b5b5"/>
+      <stop offset="100%" stop-color="#6e6e6e"/>
+    </linearGradient>
+    <linearGradient id="metal2" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#dcdcdc"/>
+      <stop offset="50%" stop-color="#8a8a8a"/>
+      <stop offset="100%" stop-color="#4a4a4a"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff8a00"/>
+      <stop offset="100%" stop-color="#d96a00"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#metal2)" d="M256 10l180 70v150c0 140-100 230-180 272-80-42-180-132-180-272V80z"/>
+  <path fill="#2b2b2b" d="M256 40l150 58v120c0 110-80 185-150 225-70-40-150-115-150-225V98z"/>
+  <circle cx="256" cy="170" r="95" fill="url(#metal1)"/>
+  <g fill="#6e6e6e">
+    <path d="M256 75l12 25h-24z"/>
+    <path d="M331 95l-10 23-17-17z"/>
+    <path d="M380 150l-23 10v-24z"/>
+    <path d="M331 245l-17-17 10-23z"/>
+    <path d="M256 265l-12-25h24z"/>
+    <path d="M181 245l10-23 17 17z"/>
+    <path d="M132 150l23-10v24z"/>
+    <path d="M181 95l17 17-10 23z"/>
+  </g>
+  <path fill="#3a3a3a" d="M206 185h100v60H206z"/>
+  <path fill="#ffffff" d="M246 205h20v20h-20z"/>
+  <path fill="#3a3a3a" d="M256 115l70 55H186z"/>
+  <path fill="url(#orange)" d="M106 260h300v80c0 90-70 150-150 195-80-45-150-105-150-195z"/>
+  <g transform="translate(0,20) scale(0.85)">
+    <path fill="url(#metal1)" d="M180 330l140-40 10 30-140 40z"/>
+    <rect x="310" y="280" width="25" height="140" rx="8" fill="#ff8a00"/>
+    <rect x="310" y="380" width="25" height="40" rx="8" fill="#1a1a1a"/>
+  </g>
+  <rect x="80" y="300" width="352" height="70" rx="10" fill="#000000"/>
+  <text x="110" y="345" font-family="Arial Black" font-size="42" fill="#ffffff">Contractors</text>
+  <text x="330" y="345" font-family="Arial Black" font-size="42" fill="#ff8a00">Ops</text>
+</svg>

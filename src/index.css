@@ -101,6 +101,13 @@ body {
   letter-spacing: -0.02em;
 }
 
+.app-logo {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
 .sidebar-nav {
   flex: 1;
   padding: 16px 0;
@@ -2672,8 +2679,9 @@ body {
     font-weight: 600;
   }
   
-  .mobile-brand .logo {
-    height: 28px;
+  .mobile-brand .app-logo {
+    width: 32px;
+    height: 32px;
   }
 
   .sidebar {

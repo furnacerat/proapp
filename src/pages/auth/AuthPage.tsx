@@ -1,8 +1,9 @@
 import React, { FormEvent, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Briefcase, Lock, Mail } from 'lucide-react';
+import { Lock, Mail } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
+import { APP_LOGO_SRC } from '../../config/appIdentity';
 
 type AuthMode = 'login' | 'signup' | 'forgot';
 
@@ -69,7 +70,7 @@ export function AuthPage({ mode }: AuthPageProps) {
     <main className="auth-page">
       <section className="auth-panel">
         <div className="auth-brand">
-          <div className="auth-logo"><Briefcase size={24} /></div>
+          <div className="auth-logo"><img src={APP_LOGO_SRC} alt="" /></div>
           <div>
             <p className="auth-eyebrow">{copy.eyebrow}</p>
             <h1>{copy.title}</h1>

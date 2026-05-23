@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { APP_NAME, APP_SHORT_NAME } from './src/config/appIdentity'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -8,10 +9,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg'],
+      includeAssets: ['app-logo.svg', 'favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'Contractor Workspace',
-        short_name: 'Workspace',
+        name: APP_NAME,
+        short_name: APP_SHORT_NAME,
         description: 'Offline-ready contractor operations workspace for jobs, estimates, invoices, and field work.',
         theme_color: '#123A5F',
         background_color: '#F4F7FB',
@@ -21,7 +22,7 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/favicon.svg',
+            src: '/app-logo.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',
